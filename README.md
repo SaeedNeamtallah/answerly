@@ -225,3 +225,69 @@ RAGMind/
 
 ## 📄 License
 This project is licensed under the **MIT License**.
+
+---
+
+## SaaS Auth and Data Isolation Contract v1
+
+This contract is the single source of truth for Phase 6 (SaaS transformation). It must be approved by both contributors before implementation.
+
+### 1) Current User Shape
+
+The authenticated user object must always include:
+- user_id
+- email
+- role
+
+### 2) JWT Claims
+
+The access token must always include these claims:
+- user_id
+- email
+- role
+- exp
+
+### 3) Data Access Rule (Mandatory)
+
+Project-level access is never allowed by project_id alone.
+
+All ownership-sensitive access must be scoped by:
+- current user identity (user_id from token)
+- target resource owner relation (project_id that belongs to this user)
+
+In short:
+- No open get-or-create pattern for projects.
+- No project/asset/chunk access without ownership check.
+
+### 4) HTTP Error Contract
+
+Use these status codes consistently:
+- 401 Unauthorized: missing, invalid, or expired token
+- 403 Forbidden: resource exists but is not owned by current user
+- 404 Not Found: resource does not exist
+
+### 5) Route Protection Policy
+
+Public endpoints:
+- GET /health
+- GET /
+
+Protected endpoints:
+- All project routes
+- All document routes
+- All query routes
+- Stats routes
+- Bot config routes
+
+### 6) Model Layer Contract
+
+Ownership-sensitive model methods must accept user_id.
+
+Any legacy method that allows access by project_id alone must be removed or replaced with user-scoped methods.
+
+### 7) Team Agreement
+
+Both contributors must explicitly confirm this exact version before coding auth and data isolation.
+
+Recommended confirmation text:
+- Approved: SaaS Auth and Data Isolation Contract v1

@@ -92,9 +92,6 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
-# Alembic
-alembic.ini
-
 # Other
 *.bak
 *.old
