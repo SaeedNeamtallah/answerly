@@ -9,6 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from backend.database import get_db
 from backend.controllers.document_controller import DocumentController
+from backend.dependencies import CurrentUser, get_current_user
 from backend.tasks.file_processing import process_document_task
 from backend.celery_app import celery_app
 
@@ -38,8 +39,8 @@ class AssetResponse(BaseModel):
 async def upload_document(
     project_id: int,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     document_controller: DocumentController = Depends(DocumentController)
 ):
     """
@@ -52,8 +53,9 @@ async def upload_document(
         file_size = len(file_content)
 
         # Upload document
-        asset = await document_controller.upload_document(
+        asset = await document_controller.upload_document_for_user(
             db=db,
+            user_id=current_user.user_id,
             project_id=project_id,
             file_content=file_content,
             filename=file.filename,
@@ -74,14 +76,15 @@ async def upload_document(
 @router.get("/projects/{project_id}/documents", response_model=List[AssetResponse])
 async def list_project_documents(
     project_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     document_controller: DocumentController = Depends(DocumentController)
 ):
     """List all documents in project."""
     try:
-        documents = await document_controller.list_project_documents(
+        documents = await document_controller.list_user_project_documents(
             db=db,
+            user_id=current_user.user_id,
             project_id=project_id
         )
         return documents
@@ -92,13 +95,17 @@ async def list_project_documents(
 @router.get("/documents/{asset_id}", response_model=AssetResponse)
 async def get_document(
     asset_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     document_controller: DocumentController = Depends(DocumentController)
 ):
     """Get document by ID."""
     try:
-        document = await document_controller.get_document(db=db, asset_id=asset_id)
+        document = await document_controller.get_user_document(
+            db=db,
+            user_id=current_user.user_id,
+            asset_id=asset_id,
+        )
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         return document
@@ -111,14 +118,18 @@ async def get_document(
 @router.post("/documents/{asset_id}/process")
 async def process_document(
     asset_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     document_controller: DocumentController = Depends(DocumentController)
 ):
     """Manually trigger document processing via Celery."""
     try:
         # Verify asset exists
-        document = await document_controller.get_document(db=db, asset_id=asset_id)
+        document = await document_controller.get_user_document(
+            db=db,
+            user_id=current_user.user_id,
+            asset_id=asset_id,
+        )
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
@@ -136,13 +147,17 @@ async def process_document(
 @router.delete("/documents/{asset_id}", status_code=204)
 async def delete_document(
     asset_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     document_controller: DocumentController = Depends(DocumentController)
 ):
     """Delete document."""
     try:
-        deleted = await document_controller.delete_document(db=db, asset_id=asset_id)
+        deleted = await document_controller.delete_user_document(
+            db=db,
+            user_id=current_user.user_id,
+            asset_id=asset_id,
+        )
         if not deleted:
             raise HTTPException(status_code=404, detail="Document not found")
         return None

@@ -11,6 +11,7 @@ from backend.config import settings
 from backend.runtime_config import get_runtime_value
 from backend.database import get_db
 from backend.controllers.query_controller import QueryController
+from backend.dependencies import CurrentUser, get_current_user
 
 router = APIRouter(tags=["Query"])
 
@@ -41,8 +42,8 @@ class QueryResponse(BaseModel):
 async def query_project(
     project_id: int,
     query_data: QueryRequest,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     query_controller: QueryController = Depends(QueryController)
 ):
     """
@@ -52,6 +53,7 @@ async def query_project(
     try:
         result = await query_controller.answer_query(
             db=db,
+            user_id=current_user.user_id,
             project_id=project_id,
             query=query_data.query,
             top_k=max(
@@ -80,6 +82,7 @@ async def query_project_stream(
     project_id: int,
     query_data: QueryRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     query_controller: QueryController = Depends(QueryController)
 ):
     """
@@ -101,6 +104,7 @@ async def query_project_stream(
     return StreamingResponse(
         query_controller.answer_query_stream(
             db=db,
+            user_id=current_user.user_id,
             project_id=project_id,
             query=query_data.query,
             top_k=top_k,

@@ -108,7 +108,23 @@ class PGVectorProvider(VectorDBInterface):
                 # Apply filters
                 if filter_dict:
                     if 'project_id' in filter_dict:
-                        query = query.where(Chunk.project_id == filter_dict['project_id'])
+                        project_id = int(filter_dict['project_id'])
+                        user_id = filter_dict.get('user_id')
+                        if user_id is None:
+                            logger.warning(
+                                "search called with project_id=%s without user_id; returning empty result",
+                                project_id,
+                            )
+                            return []
+
+                        query = (
+                            query
+                            .join(Project, Project.id == Chunk.project_id)
+                            .where(
+                                Chunk.project_id == project_id,
+                                Project.user_id == int(user_id),
+                            )
+                        )
                     if 'asset_id' in filter_dict:
                         query = query.where(Chunk.asset_id == filter_dict['asset_id'])
                 
@@ -157,7 +173,28 @@ class PGVectorProvider(VectorDBInterface):
         try:
             async with async_session_maker() as session:
                 project_id = kwargs.get('project_id')
+                user_id = kwargs.get('user_id')
                 if project_id:
+                    if user_id is None:
+                        logger.warning(
+                            "Skipping delete_collection for project_id=%s because user_id is missing",
+                            project_id,
+                        )
+                        return False
+
+                    ownership_stmt = select(Project.id).where(
+                        Project.id == project_id,
+                        Project.user_id == int(user_id),
+                    )
+                    ownership_result = await session.execute(ownership_stmt)
+                    if ownership_result.scalar_one_or_none() is None:
+                        logger.warning(
+                            "Skipping delete_collection: project_id=%s is not owned by user_id=%s",
+                            project_id,
+                            user_id,
+                        )
+                        return False
+
                     stmt = delete(Chunk).where(Chunk.project_id == project_id)
                     await session.execute(stmt)
                     await session.commit()
@@ -185,8 +222,19 @@ class PGVectorProvider(VectorDBInterface):
         try:
             async with async_session_maker() as session:
                 project_id = kwargs.get('project_id')
+                user_id = kwargs.get('user_id')
                 if project_id:
-                    stmt = select(Project).where(Project.id == project_id)
+                    if user_id is None:
+                        logger.warning(
+                            "collection_exists called with project_id=%s but without user_id",
+                            project_id,
+                        )
+                        return False
+
+                    stmt = select(Project.id).where(
+                        Project.id == project_id,
+                        Project.user_id == int(user_id),
+                    )
                     result = await session.execute(stmt)
                     return result.scalar_one_or_none() is not None
                 return False

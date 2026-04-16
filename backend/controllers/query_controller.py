@@ -25,6 +25,7 @@ class QueryController:
     async def answer_query(
         self,
         db: AsyncSession,
+        user_id: int,
         project_id: int,
         query: str,
         top_k: int = 5,
@@ -50,7 +51,9 @@ class QueryController:
             logger.info(f"Processing query for project {project_id}: {query[:50]}...")
             
             similar_chunks = await self.query_service.search_similar_chunks(
+                db=db,
                 query=query,
+                user_id=user_id,
                 project_id=project_id,
                 top_k=top_k,
                 asset_id=asset_id
@@ -82,6 +85,7 @@ class QueryController:
     async def answer_query_stream(
         self,
         db: AsyncSession,
+        user_id: int,
         project_id: int,
         query: str,
         top_k: int = 5,
@@ -98,7 +102,9 @@ class QueryController:
             )
 
             similar_chunks = await self.query_service.search_similar_chunks(
+                db=db,
                 query=query,
+                user_id=user_id,
                 project_id=project_id,
                 top_k=top_k,
                 asset_id=asset_id,

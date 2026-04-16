@@ -9,8 +9,9 @@ from backend.providers.llm.factory import LLMProviderFactory
 from backend.runtime_config import get_runtime_value
 from backend.config import settings
 from backend.database.connection import async_session_maker
-from backend.database.models import Chunk
+from backend.database.models import Chunk, Project, Asset
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 import re
 
@@ -29,7 +30,9 @@ class QueryService:
     
     async def search_similar_chunks(
         self,
+        db: AsyncSession,
         query: str,
+        user_id: int,
         project_id: int,
         top_k: int = 5,
         asset_id: Optional[int] = None
@@ -38,7 +41,9 @@ class QueryService:
         Search for chunks similar to query.
         
         Args:
+            db: Database session
             query: Search query
+            user_id: Owner user ID
             project_id: Project ID to search within
             top_k: Number of results to return
             asset_id: Optional asset ID to filter by
@@ -51,11 +56,18 @@ class QueryService:
             if get_runtime_value("query_rewrite_enabled", settings.query_rewrite_enabled):
                 query_text = await self._rewrite_query(query)
 
+            await self._ensure_user_scope(
+                db=db,
+                user_id=user_id,
+                project_id=project_id,
+                asset_id=asset_id,
+            )
+
             # Generate query embedding
             query_embedding = await self.embedding_service.generate_single_embedding(query_text)
             
             # Build filter
-            filter_dict = {'project_id': project_id}
+            filter_dict = {'project_id': project_id, 'user_id': user_id}
             if asset_id:
                 filter_dict['asset_id'] = asset_id
             
@@ -100,6 +112,30 @@ class QueryService:
         except Exception as e:
             logger.error(f"Error searching chunks: {str(e)}")
             raise
+
+    async def _ensure_user_scope(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        project_id: int,
+        asset_id: Optional[int],
+    ) -> None:
+        project_stmt = select(Project.id).where(
+            Project.id == project_id,
+            Project.user_id == user_id,
+        )
+        project_result = await db.execute(project_stmt)
+        if project_result.scalar_one_or_none() is None:
+            raise ValueError(f"Project not found for this user: {project_id}")
+
+        if asset_id is not None:
+            asset_stmt = select(Asset.id).where(
+                Asset.id == asset_id,
+                Asset.project_id == project_id,
+            )
+            asset_result = await db.execute(asset_stmt)
+            if asset_result.scalar_one_or_none() is None:
+                raise ValueError(f"Asset not found in this user project: {asset_id}")
 
     async def _hydrate_chunk_payloads(
         self,

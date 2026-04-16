@@ -15,10 +15,12 @@ Built for the **EELU University Project**, this system bridges the gap between r
 ## 🚀 Key Use Cases
 
 ### 1. 🎓 Academic & Research Assistant
+
 Ideal for students and researchers handling massive volumes of papers and textbooks.
-*   **Scenario**: A student uploads 10 PDF textbooks and 20 lecture slides.
-*   **Action**: "Provide a comparative summary of 'Neural Networks' vs 'Decision Trees' based on Chapters 4 and 5."
-*   **Outcome**: The system retrieves specific paragraphs from both chapters and synthesizes a coherent comparison with citations.
+
+- **Scenario**: A student uploads 10 PDF textbooks and 20 lecture slides.
+- **Action**: "Provide a comparative summary of 'Neural Networks' vs 'Decision Trees' based on Chapters 4 and 5."
+- **Outcome**: The system retrieves specific paragraphs from both chapters and synthesizes a coherent comparison with citations.
 
 ```mermaid
 graph LR
@@ -30,16 +32,20 @@ graph LR
 ```
 
 ### 2. ⚖️ Legal Contract Analysis
+
 For legal professionals reviewing complex agreements.
-*   **Scenario**: Uploading a 50-page Service Level Agreement (SLA).
-*   **Action**: "What are the termination clauses and penalties for early exit?"
-*   **Outcome**: Extracts exact clauses, references page numbers, and summarizes the risk factors.
+
+- **Scenario**: Uploading a 50-page Service Level Agreement (SLA).
+- **Action**: "What are the termination clauses and penalties for early exit?"
+- **Outcome**: Extracts exact clauses, references page numbers, and summarizes the risk factors.
 
 ### 3. 🏢 Corporate Knowledge Hub
+
 For HR and IT departments to automate internal support.
-*   **Scenario**: Storing company policies, insurance documents, and IT troubleshooting guides.
-*   **Action**: Employee asks "How do I claim dental insurance?" via Telegram Bot.
-*   **Outcome**: Instant instructions with links to the relevant forms found in the "Employee Handbook 2024".
+
+- **Scenario**: Storing company policies, insurance documents, and IT troubleshooting guides.
+- **Action**: Employee asks "How do I claim dental insurance?" via Telegram Bot.
+- **Outcome**: Instant instructions with links to the relevant forms found in the "Employee Handbook 2024".
 
 ---
 
@@ -57,7 +63,7 @@ graph TD
     subgraph Backend ["FastAPI Application Layer"]
         API[API Routes]
         Auth[Auth Middleware]
-        
+
         subgraph Services ["Core Services"]
             Loader[Document Loader]
             Chunker[Text Splitter]
@@ -75,17 +81,17 @@ graph TD
 
     UI -->|HTTP/REST| API
     TG -->|Webhook| API
-    
+
     API --> Services
-    
+
     Loader -->|Raw Text| Chunker
     Chunker -->|Chunks| Embedder
     Embedder -->|Vectors| PG
     Embedder -->|Vectors| Qdrant
-    
+
     Retriever <-->|Semantic Search| PG
     Retriever <-->|Semantic Search| Qdrant
-    
+
     GenAI <-->|Inference| Gemini[Google Gemini API]
 ```
 
@@ -96,29 +102,32 @@ graph TD
 The system processes data through a strict **ETL (Extract, Transform, Load)** pipeline optimized for RAG.
 
 ### Phase 1: Ingestion & Chunking
+
 1.  **File Upload**: Supports PDF, DOCX, TXT. Files are validated for MIME type and size.
 2.  **Text Extraction**: content is stripped of non-printable characters.
 3.  **Recursive Chunking**:
-    *   Strategy: `RecursiveCharacterTextSplitter`
-    *   Configuration: `chunk_size=1000`, `chunk_overlap=200`
-    *   **Why?**: This preserves semantic context by keeping paragraphs together while ensuring chunks fit within the embedding model's context window.
+    - Strategy: `RecursiveCharacterTextSplitter`
+    - Configuration: `chunk_size=1000`, `chunk_overlap=200`
+    - **Why?**: This preserves semantic context by keeping paragraphs together while ensuring chunks fit within the embedding model's context window.
 
 ### Phase 2: Vectorization (Embedding)
+
 1.  **Model**: `models/gemini-embedding-001` (Google).
 2.  **Dimension**: 768-dimensional dense vectors.
 3.  **Batching**: Chunks are processed in batches (default: 10) to respect API rate limits.
 
 ### Phase 3: Retrieval & Generation (The "RAG" Loop)
+
 1.  **Query Embedding**: User query is converted to a vector using the same model.
 2.  **Similarity Search**:
-    *   Metric: Cosine Similarity (via `pgvector` or `Qdrant`).
-    *   Top-K: Retrieves the top 5 most relevant distinct chunks.
+    - Metric: Cosine Similarity (via `pgvector` or `Qdrant`).
+    - Top-K: Retrieves the top 5 most relevant distinct chunks.
 3.  **Prompt Engineering**:
-    *   System constructs a prompt containing: "Context: [Retrieved Chunks] + Question: [User Query]".
-    *   Instruction: "Answer based ONLY on the context provided."
+    - System constructs a prompt containing: "Context: [Retrieved Chunks] + Question: [User Query]".
+    - Instruction: "Answer based ONLY on the context provided."
 4.  **Generation**:
-    *   Model: `Gemini 2.5 Flash` (or configured model).
-    *   Output: Streaming text response.
+    - Model: `Gemini 2.5 Flash` (or configured model).
+    - Output: Streaming text response.
 
 #### Query Sequence Diagram
 
@@ -128,21 +137,21 @@ sequenceDiagram
     participant API as FASTAPI
     participant V as VectorDB
     participant L as LLM (Gemini)
-    
+
     U->>API: POST /query "Summarize the intro"
-    
+
     Note over API: 1. Generate Query Embedding
     API->>L: Embed("Summarize the intro")
     L-->>API: Vector[0.12, -0.4, ...]
-    
+
     Note over API: 2. Semantic Search
     API->>V: Search(Vector, Limit=5)
     V-->>API: Returns [Chunk A, Chunk B, Chunk C]
-    
+
     Note over API: 3. Construct Context Prompt
     API->>L: Generate(Context + Question)
     L-->>API: "The introduction covers..."
-    
+
     API->>U: Final Answer
 ```
 
@@ -150,44 +159,50 @@ sequenceDiagram
 
 ## 💻 Tech Stack
 
-| Component | Technology | Description |
-|-----------|------------|-------------|
-| **Backend Framework** | **FastAPI** | High-performance async Python framework. |
-| **LLM Provider** | **Google Gemini** | Using `gemini-2.0-flash` (configurable) for reasoning. |
-| **Embeddings** | **Titan/Gemini** | `gemini-embedding-001` for vector representation. |
-| **Vector Database** | **PostgreSQL (pgvector)** | Relational + Vector data in one place. Optional Qdrant support. |
-| **ORM** | **SQLAlchemy** | Async ORM for database interactions. |
-| **Task Queue** | **AsyncIO** | Python's native async/await for non-blocking operations. |
-| **Frontend** | **Vanilla JS/CSS** | Lightweight, clean UI without complex build steps. |
+| Component             | Technology                | Description                                                     |
+| --------------------- | ------------------------- | --------------------------------------------------------------- |
+| **Backend Framework** | **FastAPI**               | High-performance async Python framework.                        |
+| **LLM Provider**      | **Google Gemini**         | Using `gemini-2.0-flash` (configurable) for reasoning.          |
+| **Embeddings**        | **Titan/Gemini**          | `gemini-embedding-001` for vector representation.               |
+| **Vector Database**   | **PostgreSQL (pgvector)** | Relational + Vector data in one place. Optional Qdrant support. |
+| **ORM**               | **SQLAlchemy**            | Async ORM for database interactions.                            |
+| **Task Queue**        | **AsyncIO**               | Python's native async/await for non-blocking operations.        |
+| **Frontend**          | **Vanilla JS/CSS**        | Lightweight, clean UI without complex build steps.              |
 
 ---
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
-*   Python 3.8+
-*   PostgreSQL 14+ (with `vector` extension installed)
-*   A Google Cloud API Key (for Gemini)
+
+- Python 3.8+
+- PostgreSQL 14+ (with `vector` extension installed)
+- A Google Cloud API Key (for Gemini)
 
 ### Quick Start (Windows)
+
 The project includes automated scripts for instant setup.
 
 1.  **Clone & Setup**:
+
     ```powershell
     git clone https://github.com/ZozElwakil/RAGMind---EELU-Project.git
     cd RAGMind---EELU-Project
     .\setup.bat
     ```
-    *This script creates the virtual environment, installs requirements, and sets up the .env file.*
+
+    _This script creates the virtual environment, installs requirements, and sets up the .env file._
 
 2.  **Environment Config**:
     Open `.env` and paste your keys:
+
     ```env
     DATABASE_URL=postgresql+asyncpg://postgres:password@localhost/ragmind
     GEMINI_API_KEY=AIzaSy...
     ```
 
 3.  **Initialize DB**:
+
     ```powershell
     python -m backend.init_database
     ```
@@ -221,9 +236,10 @@ RAGMind/
 
 ## 👥 Contributors
 
-*   **Abdulmoezz Elwakil** ([@ZozElwakil](https://github.com/ZozElwakil)) - Core Logic & Architecture
+- **Abdulmoezz Elwakil** ([@ZozElwakil](https://github.com/ZozElwakil)) - Core Logic & Architecture
 
 ## 📄 License
+
 This project is licensed under the **MIT License**.
 
 ---
@@ -235,6 +251,7 @@ This contract is the single source of truth for Phase 6 (SaaS transformation). I
 ### 1) Current User Shape
 
 The authenticated user object must always include:
+
 - user_id
 - email
 - role
@@ -242,6 +259,7 @@ The authenticated user object must always include:
 ### 2) JWT Claims
 
 The access token must always include these claims:
+
 - user_id
 - email
 - role
@@ -252,16 +270,19 @@ The access token must always include these claims:
 Project-level access is never allowed by project_id alone.
 
 All ownership-sensitive access must be scoped by:
+
 - current user identity (user_id from token)
 - target resource owner relation (project_id that belongs to this user)
 
 In short:
+
 - No open get-or-create pattern for projects.
 - No project/asset/chunk access without ownership check.
 
 ### 4) HTTP Error Contract
 
 Use these status codes consistently:
+
 - 401 Unauthorized: missing, invalid, or expired token
 - 403 Forbidden: resource exists but is not owned by current user
 - 404 Not Found: resource does not exist
@@ -269,10 +290,12 @@ Use these status codes consistently:
 ### 5) Route Protection Policy
 
 Public endpoints:
+
 - GET /health
 - GET /
 
 Protected endpoints:
+
 - All project routes
 - All document routes
 - All query routes
@@ -290,4 +313,5 @@ Any legacy method that allows access by project_id alone must be removed or repl
 Both contributors must explicitly confirm this exact version before coding auth and data isolation.
 
 Recommended confirmation text:
+
 - Approved: SaaS Auth and Data Isolation Contract v1

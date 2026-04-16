@@ -34,9 +34,10 @@ class DocumentController:
         self.embedding_service = EmbeddingService()
         self.vector_db = VectorDBProviderFactory.create_provider()
     
-    async def upload_document(
+    async def upload_document_for_user(
         self,
         db: AsyncSession,
+        user_id: int,
         project_id: int,
         file_content: bytes,
         filename: str,
@@ -47,6 +48,7 @@ class DocumentController:
         
         Args:
             db: Database session
+            user_id: Owner user ID
             project_id: Project ID
             file_content: File content bytes
             filename: Original filename
@@ -65,11 +67,14 @@ class DocumentController:
                 raise ValueError(error_msg)
             
             # Check project exists
-            project_stmt = select(Project).where(Project.id == project_id)
+            project_stmt = select(Project).where(
+                Project.id == project_id,
+                Project.user_id == user_id,
+            )
             project_result = await db.execute(project_stmt)
             project = project_result.scalar_one_or_none()
             if not project:
-                raise ValueError(f"Project not found: {project_id}")
+                raise ValueError(f"Project not found for this user: {project_id}")
             
             # Save file
             unique_filename, file_path = await self.file_service.save_upload_file(
@@ -97,7 +102,7 @@ class DocumentController:
             await db.commit()
             await db.refresh(asset)
             
-            logger.info(f"Uploaded document: {asset.id} - {filename}")
+            logger.info(f"Uploaded document: {asset.id} - {filename} (user_id={user_id})")
             return asset
             
         except Exception as e:
@@ -291,9 +296,10 @@ class DocumentController:
         flag_modified(asset, "extra_metadata")
         await db.commit()
     
-    async def get_document(
+    async def get_user_document(
         self,
         db: AsyncSession,
+        user_id: int,
         asset_id: int
     ) -> Optional[Asset]:
         """
@@ -301,13 +307,21 @@ class DocumentController:
         
         Args:
             db: Database session
+            user_id: Owner user ID
             asset_id: Asset ID
             
         Returns:
             Asset or None
         """
         try:
-            stmt = select(Asset).where(Asset.id == asset_id)
+            stmt = (
+                select(Asset)
+                .join(Project, Project.id == Asset.project_id)
+                .where(
+                    Asset.id == asset_id,
+                    Project.user_id == user_id,
+                )
+            )
             result = await db.execute(stmt)
             return result.scalar_one_or_none()
             
@@ -315,9 +329,10 @@ class DocumentController:
             logger.error(f"Error getting document: {str(e)}")
             raise
     
-    async def list_project_documents(
+    async def list_user_project_documents(
         self,
         db: AsyncSession,
+        user_id: int,
         project_id: int
     ) -> List[Asset]:
         """
@@ -325,13 +340,22 @@ class DocumentController:
         
         Args:
             db: Database session
+            user_id: Owner user ID
             project_id: Project ID
             
         Returns:
             List of assets
         """
         try:
-            stmt = select(Asset).where(Asset.project_id == project_id).order_by(Asset.created_at.desc())
+            stmt = (
+                select(Asset)
+                .join(Project, Project.id == Asset.project_id)
+                .where(
+                    Asset.project_id == project_id,
+                    Project.user_id == user_id,
+                )
+                .order_by(Asset.created_at.desc())
+            )
             result = await db.execute(stmt)
             return list(result.scalars().all())
             
@@ -339,9 +363,10 @@ class DocumentController:
             logger.error(f"Error listing documents: {str(e)}")
             raise
     
-    async def delete_document(
+    async def delete_user_document(
         self,
         db: AsyncSession,
+        user_id: int,
         asset_id: int
     ) -> bool:
         """
@@ -349,6 +374,7 @@ class DocumentController:
         
         Args:
             db: Database session
+            user_id: Owner user ID
             asset_id: Asset ID
             
         Returns:
@@ -356,7 +382,7 @@ class DocumentController:
         """
         try:
             # Get asset
-            asset = await self.get_document(db, asset_id)
+            asset = await self.get_user_document(db=db, user_id=user_id, asset_id=asset_id)
             if not asset:
                 return False
             
@@ -367,10 +393,74 @@ class DocumentController:
             await db.delete(asset)
             await db.commit()
             
-            logger.info(f"Deleted document: {asset_id}")
+            logger.info(f"Deleted document: {asset_id} (user_id={user_id})")
             return True
             
         except Exception as e:
             await db.rollback()
             logger.error(f"Error deleting document: {str(e)}")
             raise
+
+    async def _get_user_project(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        project_id: int,
+    ) -> Optional[Project]:
+        stmt = select(Project).where(
+            Project.id == project_id,
+            Project.user_id == user_id,
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    # Deprecated compatibility methods.
+    async def upload_document(
+        self,
+        db: AsyncSession,
+        project_id: int,
+        file_content: bytes,
+        filename: str,
+        file_size: int,
+        user_id: Optional[int] = None,
+    ) -> Asset:
+        if user_id is None:
+            raise ValueError("user_id is required. Use upload_document_for_user")
+        return await self.upload_document_for_user(
+            db=db,
+            user_id=user_id,
+            project_id=project_id,
+            file_content=file_content,
+            filename=filename,
+            file_size=file_size,
+        )
+
+    async def get_document(
+        self,
+        db: AsyncSession,
+        asset_id: int,
+        user_id: Optional[int] = None,
+    ) -> Optional[Asset]:
+        if user_id is None:
+            raise ValueError("user_id is required. Use get_user_document")
+        return await self.get_user_document(db=db, user_id=user_id, asset_id=asset_id)
+
+    async def list_project_documents(
+        self,
+        db: AsyncSession,
+        project_id: int,
+        user_id: Optional[int] = None,
+    ) -> List[Asset]:
+        if user_id is None:
+            raise ValueError("user_id is required. Use list_user_project_documents")
+        return await self.list_user_project_documents(db=db, user_id=user_id, project_id=project_id)
+
+    async def delete_document(
+        self,
+        db: AsyncSession,
+        asset_id: int,
+        user_id: Optional[int] = None,
+    ) -> bool:
+        if user_id is None:
+            raise ValueError("user_id is required. Use delete_user_document")
+        return await self.delete_user_document(db=db, user_id=user_id, asset_id=asset_id)

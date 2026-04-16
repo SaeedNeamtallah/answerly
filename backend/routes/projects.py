@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from backend.database import get_db
 from backend.controllers.project_controller import ProjectController
+from backend.dependencies import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -53,12 +54,14 @@ class ProjectStatsResponse(BaseModel):
 async def create_project(
     project_data: ProjectCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     project_controller: ProjectController = Depends(ProjectController)
 ):
     """Create a new project."""
     try:
         project = await project_controller.create_project(
             db=db,
+            user_id=current_user.user_id,
             name=project_data.name,
             description=project_data.description,
             metadata=project_data.metadata
@@ -73,11 +76,17 @@ async def list_projects(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     project_controller: ProjectController = Depends(ProjectController)
 ):
     """List all projects."""
     try:
-        projects, total_count = await project_controller.list_projects(db=db, skip=skip, limit=limit)
+        projects, total_count = await project_controller.list_projects(
+            db=db,
+            skip=skip,
+            limit=limit,
+            user_id=current_user.user_id,
+        )
         return {"items": projects, "total_count": total_count}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -87,11 +96,16 @@ async def list_projects(
 async def get_project(
     project_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     project_controller: ProjectController = Depends(ProjectController)
 ):
     """Get project by ID."""
     try:
-        project = await project_controller.get_project(db=db, project_id=project_id)
+        project = await project_controller.get_project(
+            db=db,
+            project_id=project_id,
+            user_id=current_user.user_id,
+        )
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         return project
@@ -105,15 +119,24 @@ async def get_project(
 async def get_project_stats(
     project_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     project_controller: ProjectController = Depends(ProjectController)
 ):
     """Get project statistics."""
     try:
-        project = await project_controller.get_project(db=db, project_id=project_id)
+        project = await project_controller.get_project(
+            db=db,
+            project_id=project_id,
+            user_id=current_user.user_id,
+        )
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
-        stats = await project_controller.get_project_stats(db=db, project_id=project_id)
+        stats = await project_controller.get_project_stats(
+            db=db,
+            project_id=project_id,
+            user_id=current_user.user_id,
+        )
         
         return {
             "project": project,
@@ -130,6 +153,7 @@ async def update_project(
     project_id: int,
     project_data: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     project_controller: ProjectController = Depends(ProjectController)
 ):
     """Update project."""
@@ -139,7 +163,8 @@ async def update_project(
             project_id=project_id,
             name=project_data.name,
             description=project_data.description,
-            metadata=project_data.metadata
+            metadata=project_data.metadata,
+            user_id=current_user.user_id,
         )
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -154,11 +179,16 @@ async def update_project(
 async def delete_project(
     project_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
     project_controller: ProjectController = Depends(ProjectController)
 ):
     """Delete project and all associated data."""
     try:
-        deleted = await project_controller.delete_project(db=db, project_id=project_id)
+        deleted = await project_controller.delete_project(
+            db=db,
+            project_id=project_id,
+            user_id=current_user.user_id,
+        )
         if not deleted:
             raise HTTPException(status_code=404, detail="Project not found")
         return None
