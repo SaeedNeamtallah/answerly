@@ -16,15 +16,17 @@ logger = logging.getLogger(__name__)
 
 class ProjectController:
     """Controller for project operations."""
+
+    # SECURITY RULE: all project queries must be scoped by owner_id derived from JWT.
     
     def __init__(self, file_service: FileService = Depends(FileService)):
         """Initialize project controller."""
         self.file_service = file_service
     
-    async def create_project_for_user(
+    async def create_project(
         self,
         db: AsyncSession,
-        user_id: int,
+        owner_id: int,
         name: str,
         description: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
@@ -34,7 +36,7 @@ class ProjectController:
         
         Args:
             db: Database session
-            user_id: Owner user ID
+            owner_id: Owner user ID
             name: Project name
             description: Optional description
             metadata: Optional metadata
@@ -44,7 +46,7 @@ class ProjectController:
         """
         try:
             project = Project(
-                user_id=user_id,
+                owner_id=owner_id,
                 name=name,
                 description=description,
                 extra_metadata=metadata or {}
@@ -54,7 +56,7 @@ class ProjectController:
             await db.commit()
             await db.refresh(project)
             
-            logger.info(f"Created project: {project.id} - {project.name} (user_id={user_id})")
+            logger.info(f"Created project: {project.id} - {project.name}")
             return project
             
         except Exception as e:
@@ -62,19 +64,19 @@ class ProjectController:
             logger.error(f"Error creating project: {str(e)}")
             raise
     
-    async def get_user_project(
+    async def get_project(
         self,
         db: AsyncSession,
-        user_id: int,
-        project_id: int
+        project_id: int,
+        owner_id: int,
     ) -> Optional[Project]:
         """
         Get project by ID.
         
         Args:
             db: Database session
-            user_id: Owner user ID
             project_id: Project ID
+            owner_id: Owner user ID
             
         Returns:
             Project or None
@@ -82,7 +84,7 @@ class ProjectController:
         try:
             stmt = select(Project).where(
                 Project.id == project_id,
-                Project.user_id == user_id,
+                Project.owner_id == owner_id,
             )
             result = await db.execute(stmt)
             project = result.scalar_one_or_none()
@@ -93,10 +95,10 @@ class ProjectController:
             logger.error(f"Error getting project: {str(e)}")
             raise
     
-    async def get_user_projects(
+    async def list_projects(
         self,
         db: AsyncSession,
-        user_id: int,
+        owner_id: int,
         skip: int = 0,
         limit: int = 100
     ) -> List[Project]:
@@ -105,7 +107,7 @@ class ProjectController:
         
         Args:
             db: Database session
-            user_id: Owner user ID
+            owner_id: Owner user ID
             skip: Number of projects to skip
             limit: Maximum number of projects to return
             
@@ -114,13 +116,17 @@ class ProjectController:
         """
         try:
             from sqlalchemy import func
-            count_stmt = select(func.count()).select_from(Project).where(Project.user_id == user_id)
+            count_stmt = (
+                select(func.count())
+                .select_from(Project)
+                .where(Project.owner_id == owner_id)
+            )
             count_result = await db.execute(count_stmt)
             total_count = count_result.scalar()
             
             stmt = (
                 select(Project)
-                .where(Project.user_id == user_id)
+                .where(Project.owner_id == owner_id)
                 .offset(skip)
                 .limit(limit)
                 .order_by(Project.created_at.desc())
@@ -134,11 +140,11 @@ class ProjectController:
             logger.error(f"Error listing projects: {str(e)}")
             raise
     
-    async def update_user_project(
+    async def update_project(
         self,
         db: AsyncSession,
-        user_id: int,
         project_id: int,
+        owner_id: int,
         name: Optional[str] = None,
         description: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
@@ -148,8 +154,8 @@ class ProjectController:
         
         Args:
             db: Database session
-            user_id: Owner user ID
             project_id: Project ID
+            owner_id: Owner user ID
             name: Optional new name
             description: Optional new description
             metadata: Optional new metadata
@@ -158,7 +164,7 @@ class ProjectController:
             Updated project or None
         """
         try:
-            project = await self.get_user_project(db, user_id, project_id)
+            project = await self.get_project(db, project_id, owner_id)
             if not project:
                 return None
             
@@ -174,7 +180,7 @@ class ProjectController:
             await db.commit()
             await db.refresh(project)
             
-            logger.info(f"Updated project: {project_id} (user_id={user_id})")
+            logger.info(f"Updated project: {project_id}")
             return project
             
         except Exception as e:
@@ -182,38 +188,42 @@ class ProjectController:
             logger.error(f"Error updating project: {str(e)}")
             raise
     
-    async def delete_user_project(
+    async def delete_project(
         self,
         db: AsyncSession,
-        user_id: int,
-        project_id: int
+        project_id: int,
+        owner_id: int,
     ) -> bool:
         """
         Delete project and all associated data.
         
         Args:
             db: Database session
-            user_id: Owner user ID
             project_id: Project ID
+            owner_id: Owner user ID
             
         Returns:
             True if deleted successfully
         """
         try:
+            project = await self.get_project(db, project_id, owner_id)
+            if not project:
+                return False
+
             # Delete files from storage
             await self.file_service.delete_project_files(project_id)
             
-            # Delete only user-owned project (cascade handles assets/chunks)
+            # Delete from database (cascade will handle assets and chunks)
             stmt = delete(Project).where(
                 Project.id == project_id,
-                Project.user_id == user_id,
+                Project.owner_id == owner_id,
             )
             result = await db.execute(stmt)
             await db.commit()
             
             deleted = result.rowcount > 0
             if deleted:
-                logger.info(f"Deleted project: {project_id} (user_id={user_id})")
+                logger.info(f"Deleted project: {project_id}")
             
             return deleted
             
@@ -222,54 +232,43 @@ class ProjectController:
             logger.error(f"Error deleting project: {str(e)}")
             raise
     
-    async def get_user_project_stats(
+    async def get_project_stats(
         self,
         db: AsyncSession,
-        user_id: int,
-        project_id: int
+        project_id: int,
+        owner_id: int,
     ) -> Dict[str, Any]:
         """
         Get project statistics.
         
         Args:
             db: Database session
-            user_id: Owner user ID
             project_id: Project ID
+            owner_id: Owner user ID
             
         Returns:
             Statistics dictionary
         """
         try:
-            project = await self.get_user_project(db=db, user_id=user_id, project_id=project_id)
-            if not project:
-                return {
-                    'asset_count': 0,
-                    'chunk_count': 0,
-                    'total_size': 0,
-                    'completed_assets': 0,
-                    'processing_assets': 0,
-                    'failed_assets': 0,
-                }
-
-            # Get asset count scoped to user-owned project
+            # Get asset count
             asset_stmt = (
                 select(Asset)
-                .join(Project, Project.id == Asset.project_id)
+                .join(Project, Asset.project_id == Project.id)
                 .where(
                     Asset.project_id == project_id,
-                    Project.user_id == user_id,
+                    Project.owner_id == owner_id,
                 )
             )
             asset_result = await db.execute(asset_stmt)
             assets = asset_result.scalars().all()
             
-            # Get chunk count scoped to user-owned project
+            # Get chunk count
             chunk_stmt = (
                 select(Chunk)
-                .join(Project, Project.id == Chunk.project_id)
+                .join(Project, Chunk.project_id == Project.id)
                 .where(
                     Chunk.project_id == project_id,
-                    Project.user_id == user_id,
+                    Project.owner_id == owner_id,
                 )
             )
             chunk_result = await db.execute(chunk_stmt)
@@ -287,70 +286,3 @@ class ProjectController:
         except Exception as e:
             logger.error(f"Error getting project stats: {str(e)}")
             raise
-
-    # Deprecated compatibility methods.
-    async def create_project(
-        self,
-        db: AsyncSession,
-        name: str,
-        description: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        user_id: Optional[int] = None,
-    ) -> Project:
-        if user_id is None:
-            raise ValueError("user_id is required. Use create_project_for_user")
-        return await self.create_project_for_user(db, user_id, name, description, metadata)
-
-    async def get_project(
-        self,
-        db: AsyncSession,
-        project_id: int,
-        user_id: Optional[int] = None,
-    ) -> Optional[Project]:
-        if user_id is None:
-            raise ValueError("user_id is required. Use get_user_project")
-        return await self.get_user_project(db, user_id, project_id)
-
-    async def list_projects(
-        self,
-        db: AsyncSession,
-        skip: int = 0,
-        limit: int = 100,
-        user_id: Optional[int] = None,
-    ) -> List[Project]:
-        if user_id is None:
-            raise ValueError("user_id is required. Use get_user_projects")
-        return await self.get_user_projects(db, user_id, skip, limit)
-
-    async def update_project(
-        self,
-        db: AsyncSession,
-        project_id: int,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        user_id: Optional[int] = None,
-    ) -> Optional[Project]:
-        if user_id is None:
-            raise ValueError("user_id is required. Use update_user_project")
-        return await self.update_user_project(db, user_id, project_id, name, description, metadata)
-
-    async def delete_project(
-        self,
-        db: AsyncSession,
-        project_id: int,
-        user_id: Optional[int] = None,
-    ) -> bool:
-        if user_id is None:
-            raise ValueError("user_id is required. Use delete_user_project")
-        return await self.delete_user_project(db, user_id, project_id)
-
-    async def get_project_stats(
-        self,
-        db: AsyncSession,
-        project_id: int,
-        user_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        if user_id is None:
-            raise ValueError("user_id is required. Use get_user_project_stats")
-        return await self.get_user_project_stats(db, user_id, project_id)

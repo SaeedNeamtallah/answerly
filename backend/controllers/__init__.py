@@ -3,4 +3,4 @@
 Keep this module import-light to avoid side effects and circular imports.
 """
 
-__all__ = ["UserController"]
+__all__ = []

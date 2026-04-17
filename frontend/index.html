@@ -35,6 +35,10 @@
                         <i class="fas fa-chart-pie"></i>
                         <span data-i18n="nav_dashboard">لوحة التحكم</span>
                     </li>
+                    <li data-view="securityCenter">
+                        <i class="fas fa-shield-halved"></i>
+                        <span data-i18n="nav_security_center">Security Center</span>
+                    </li>
                     <li data-view="projects">
                         <i class="fas fa-folder-tree"></i>
                         <span data-i18n="nav_projects">المشاريع</span>
@@ -51,6 +55,10 @@
                         <i class="fas fa-sliders"></i>
                         <span data-i18n="nav_ai_config">إعدادات الذكاء الاصطناعي</span>
                     </li>
+                    <li data-view="account-settings">
+                        <i class="fas fa-user-cog"></i>
+                        <span data-i18n="nav_account_settings">إعدادات الحساب</span>
+                    </li>
                 </ul>
             </nav>
 
@@ -59,15 +67,20 @@
                     <div class="avatar">A</div>
                     <div class="details">
                         <p class="name">المستخدم</p>
-                        <p class="status">متصل</p>
+                        <p class="status" data-i18n="status_online">متصل</p>
                     </div>
                 </div>
-                <button id="lang-toggle" class="icon-btn" title="Switch Language">
-                    <span class="lang-code">EN</span>
-                </button>
-                <button id="theme-toggle" class="icon-btn" title="Toggle theme">
-                    <i class="fas fa-moon"></i>
-                </button>
+                <div class="sidebar-actions">
+                    <button id="lang-toggle" class="icon-btn" title="Switch Language">
+                        <span class="lang-code">EN</span>
+                    </button>
+                    <button id="theme-toggle" class="icon-btn" title="Toggle theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button id="logout-btn" class="icon-btn" title="Logout" aria-label="Logout">
+                        <i class="fas fa-right-from-bracket"></i>
+                    </button>
+                </div>
             </div>
         </aside>
 
@@ -149,6 +162,82 @@
                 </div>
                 <div class="projects-grid" id="recent-projects-list">
                     <!-- Projects will be injected here -->
+                </div>
+            </section>
+        </div>
+    </template>
+
+    <template id="security-center-template">
+        <div class="security-center-view" dir="ltr">
+            <h1 class="view-title" data-i18n="security_section_title">Security Center</h1>
+            <section class="security-section">
+                <div class="section-header">
+                    <h2 data-i18n="security_section_overview_title">Security Overview</h2>
+                    <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn" type="button">
+                        <i class="fas fa-radiation"></i>
+                        <span data-i18n="security_simulate_btn">Start Attack Simulation</span>
+                    </button>
+                </div>
+
+                <div class="security-stats-grid">
+                    <div class="stat-card security-stat-card">
+                        <div class="icon"><i class="fas fa-shield-halved"></i></div>
+                        <div class="info">
+                            <span class="label" data-i18n="security_total_events">Total Events</span>
+                            <span class="value" id="security-stat-total-events">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card security-stat-card">
+                        <div class="icon"><i class="fas fa-user-lock"></i></div>
+                        <div class="info">
+                            <span class="label" data-i18n="security_login_failures">Login Failures</span>
+                            <span class="value" id="security-stat-login-failures">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card security-stat-card">
+                        <div class="icon"><i class="fas fa-ban"></i></div>
+                        <div class="info">
+                            <span class="label" data-i18n="security_blocked_attacks">Blocked Attacks</span>
+                            <span class="value" id="security-stat-blocked-attacks">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card security-stat-card">
+                        <div class="icon"><i class="fas fa-bolt"></i></div>
+                        <div class="info">
+                            <span class="label" data-i18n="security_brute_force_alerts">Brute Force Alerts</span>
+                            <span class="value" id="security-stat-brute-force">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="security-events-card">
+                    <div class="section-header security-events-header">
+                        <h3 data-i18n="security_events_title">Security Events Feed</h3>
+                    </div>
+                    <div class="security-live-feed" id="security-live-feed">
+                        <div class="security-live-feed-title" data-i18n="security_live_feed_title">Live Feed</div>
+                        <ul id="security-live-feed-list">
+                            <li class="security-live-feed-empty" data-i18n="security_live_feed_empty">No live events right now</li>
+                        </ul>
+                    </div>
+                    <div class="security-events-table-wrap">
+                        <table class="security-events-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="security_col_timestamp">Timestamp</th>
+                                    <th data-i18n="security_col_username">Actor</th>
+                                    <th data-i18n="security_col_event_type">Event Type</th>
+                                    <th data-i18n="security_col_severity">Severity</th>
+                                    <th data-i18n="security_col_message">Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="security-events-body">
+                                <tr>
+                                    <td colspan="5" class="security-empty-row" data-i18n="security_events_empty">No security events yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
         </div>
@@ -407,8 +496,124 @@
         </div>
     </template>
 
+    <template id="account-settings-template">
+        <div class="account-settings-view">
+            <h1 class="view-title" data-i18n="account_settings_title">إعدادات الحساب</h1>
+
+            <div class="config-card">
+                <p class="config-desc" data-i18n="account_settings_desc">إدارة إعدادات الأمان والتفضيلات الشخصية.</p>
+
+                <div class="config-group">
+                    <div class="config-group-title">
+                        <i class="fas fa-id-badge"></i>
+                        <span data-i18n="account_profile_title">الملف الشخصي</span>
+                    </div>
+                    <div class="account-profile-grid">
+                        <div class="account-profile-item">
+                            <span class="account-profile-label" data-i18n="account_username_label">اسم المستخدم</span>
+                            <strong id="account-username-value">-</strong>
+                        </div>
+                        <div class="account-profile-item">
+                            <span class="account-profile-label" data-i18n="account_role_label">الدور</span>
+                            <strong id="account-role-value">-</strong>
+                        </div>
+                        <div class="account-profile-item">
+                            <span class="account-profile-label" data-i18n="account_created_label">تاريخ الإنشاء</span>
+                            <strong id="account-created-value">-</strong>
+                        </div>
+                        <div class="account-profile-item">
+                            <span class="account-profile-label" data-i18n="account_session_expires_label">انتهاء الجلسة</span>
+                            <strong id="account-session-expiry-value">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <div class="config-group-title">
+                        <i class="fas fa-sliders"></i>
+                        <span data-i18n="account_preferences_title">تفضيلات احترافية</span>
+                    </div>
+
+                    <div class="config-section">
+                        <label for="account-language-select" class="config-label" data-i18n="account_language_label">لغة الواجهة</label>
+                        <select id="account-language-select" class="form-control">
+                            <option value="ar" data-i18n="language_ar">العربية</option>
+                            <option value="en" data-i18n="language_en">English</option>
+                        </select>
+                    </div>
+
+                    <div class="config-section mt-4">
+                        <label for="account-theme-select" class="config-label" data-i18n="account_theme_label">المظهر</label>
+                        <select id="account-theme-select" class="form-control">
+                            <option value="dark" data-i18n="theme_dark">داكن</option>
+                            <option value="light" data-i18n="theme_light">فاتح</option>
+                        </select>
+                    </div>
+
+                    <div class="config-section mt-4">
+                        <label for="account-api-base-input" class="config-label" data-i18n="account_api_base_label">رابط واجهة API</label>
+                        <input id="account-api-base-input" class="form-control" type="text" placeholder="http://127.0.0.1:8000" />
+                        <p class="config-desc" data-i18n="account_api_base_desc">استخدمه لتبديل البيئة بسهولة (Local/Staging/Production).</p>
+                    </div>
+
+                    <button id="save-account-preferences-btn" class="btn btn-primary mt-4">
+                        <i class="fas fa-floppy-disk"></i>
+                        <span data-i18n="account_save_preferences_btn">حفظ التفضيلات</span>
+                    </button>
+                </div>
+
+                <div class="config-group">
+                    <div class="config-group-title">
+                        <i class="fas fa-key"></i>
+                        <span data-i18n="account_password_title">تغيير كلمة المرور</span>
+                    </div>
+                    <p class="config-desc" data-i18n="account_password_desc">حدّث كلمة مرورك بشكل دوري لحماية حسابك.</p>
+
+                    <div class="config-section">
+                        <label for="account-current-password" class="config-label" data-i18n="account_current_password_label">كلمة المرور الحالية</label>
+                        <input id="account-current-password" type="password" class="form-control" autocomplete="current-password" />
+                    </div>
+
+                    <div class="config-section mt-4">
+                        <label for="account-new-password" class="config-label" data-i18n="account_new_password_label">كلمة المرور الجديدة</label>
+                        <input id="account-new-password" type="password" class="form-control" autocomplete="new-password" />
+                        <div class="password-strength-wrap" id="password-strength-wrap">
+                            <div class="password-strength-header">
+                                <span data-i18n="account_password_strength_label">قوة كلمة المرور</span>
+                                <span id="password-strength-text" class="password-strength-text" data-strength="none" data-i18n="account_password_strength_empty">-</span>
+                            </div>
+                            <div id="password-strength-meter" class="password-strength-meter" data-level="0" aria-hidden="true">
+                                <span class="strength-segment"></span>
+                                <span class="strength-segment"></span>
+                                <span class="strength-segment"></span>
+                                <span class="strength-segment"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-section mt-4">
+                        <label for="account-confirm-password" class="config-label" data-i18n="account_confirm_password_label">تأكيد كلمة المرور الجديدة</label>
+                        <input id="account-confirm-password" type="password" class="form-control" autocomplete="new-password" />
+                    </div>
+
+                    <div class="config-section mt-4">
+                        <label for="account-show-passwords" class="password-visibility-toggle">
+                            <input id="account-show-passwords" type="checkbox" />
+                            <span data-i18n="account_show_passwords">إظهار كلمات المرور</span>
+                        </label>
+                    </div>
+
+                    <button id="change-password-btn" class="btn btn-primary mt-4">
+                        <i class="fas fa-shield"></i>
+                        <span data-i18n="account_change_password_btn">تحديث كلمة المرور</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
     <!-- Scripts -->
-    <script src="app.js"></script>
+    <script src="app.js?v=20260417-6"></script>
 </body>
 
 </html>

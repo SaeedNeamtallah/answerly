@@ -1,6 +1,6 @@
 """
 Database models using SQLAlchemy async ORM.
-Defines tables for projects, assets, and chunks with vector embeddings.
+Defines tables for users, projects, assets, and chunks with vector embeddings.
 """
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index
 from sqlalchemy.ext.declarative import declarative_base
@@ -8,34 +8,25 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from datetime import datetime
-import uuid
 
 Base = declarative_base()
 
 
 class User(Base):
-    """User model for SaaS identity and tenant isolation."""
+    """Application user model for authentication."""
+
     __tablename__ = "users"
 
-    user_id = Column(Integer, primary_key=True, index=True)
-    user_uuid = Column(
-        String(36),
-        unique=True,
-        nullable=False,
-        index=True,
-        default=lambda: str(uuid.uuid4())
-    )
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    role = Column(String(50), nullable=False, default="user")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(150), nullable=False, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
-    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
+    projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<User(user_id={self.user_id}, email='{self.email}', role='{self.role}')>"
+        return f"<User(id={self.id}, username='{self.username}')>"
 
 
 class Project(Base):
@@ -43,7 +34,7 @@ class Project(Base):
     __tablename__ = "projects"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -53,12 +44,12 @@ class Project(Base):
     extra_metadata = Column("metadata", JSON, default={})
     
     # Relationships
-    user = relationship("User", back_populates="projects")
+    owner = relationship("User", back_populates="projects")
     assets = relationship("Asset", back_populates="project", cascade="all, delete-orphan")
     chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Project(id={self.id}, name='{self.name}')>"
+        return f"<Project(id={self.id}, owner_id={self.owner_id}, name='{self.name}')>"
 
 
 class Asset(Base):

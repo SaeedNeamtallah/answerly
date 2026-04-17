@@ -2,12 +2,16 @@
 File Management Service.
 Handles file storage with project-based organization.
 """
-import os
 import uuid
 import shutil
+import io
+import zipfile
 from pathlib import Path
 from typing import Optional
 from backend.config import settings
+from backend.security.event_service import log_event
+from backend.security.security_event import SecurityEventType, SecuritySeverity
+from backend.security.sanitization import sanitize_filename
 import logging
 import aiofiles
 
@@ -21,6 +25,17 @@ class FileService:
         """Initialize file service."""
         self.upload_dir = Path(settings.upload_dir)
         self.max_size_bytes = settings.max_file_size_mb * 1024 * 1024
+        self.magic_scan_bytes = max(512, settings.security_upload_max_scan_bytes)
+        self.blocked_extensions = {".php", ".exe", ".js", ".sh"}
+        self.allowed_mime_types = {
+            ".pdf": {"application/pdf"},
+            ".txt": {"text/plain", "application/octet-stream"},
+            ".docx": {
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/zip",
+                "application/octet-stream",
+            },
+        }
         
         # Create upload directory if it doesn't exist
         self.upload_dir.mkdir(parents=True, exist_ok=True)
@@ -50,10 +65,44 @@ class FileService:
         Returns:
             Unique filename
         """
-        file_ext = Path(original_filename).suffix
-        unique_id = uuid.uuid4().hex[:12]
-        safe_name = Path(original_filename).stem[:50]  # Limit length
-        return f"{safe_name}_{unique_id}{file_ext}"
+        safe_name = sanitize_filename(original_filename)
+        file_ext = Path(safe_name).suffix.lower()
+        unique_id = uuid.uuid4().hex[:8]
+        file_name = Path(safe_name).stem[:120] or "upload"
+        return f"{file_name}_{unique_id}{file_ext}"
+
+    def _validate_magic_signature(self, extension: str, file_content: bytes) -> tuple[bool, Optional[str]]:
+        """Validate that file bytes look like the declared extension."""
+        if not settings.security_upload_validate_magic:
+            return True, None
+
+        sample = file_content[: self.magic_scan_bytes]
+
+        if extension == ".pdf":
+            if not sample.startswith(b"%PDF-"):
+                return False, "File content does not match PDF format"
+            return True, None
+
+        if extension == ".docx":
+            if not sample.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
+                return False, "File content does not match DOCX format"
+            try:
+                with zipfile.ZipFile(io.BytesIO(file_content)) as archive:
+                    names = set(archive.namelist())
+                    if "[Content_Types].xml" not in names:
+                        return False, "Invalid DOCX structure"
+                    if not any(name.startswith("word/") for name in names):
+                        return False, "Invalid DOCX structure"
+            except zipfile.BadZipFile:
+                return False, "Invalid DOCX file"
+            return True, None
+
+        if extension == ".txt":
+            if b"\x00" in sample:
+                return False, "Text file appears to contain binary content"
+            return True, None
+
+        return True, None
     
     async def save_upload_file(
         self,
@@ -141,24 +190,84 @@ class FileService:
             logger.error(f"Error deleting project files: {str(e)}")
             raise
     
-    def validate_file(self, filename: str, file_size: int) -> tuple[bool, Optional[str]]:
+    def validate_file(
+        self,
+        filename: str,
+        file_size: int,
+        file_content: Optional[bytes] = None,
+        content_type: Optional[str] = None,
+        user_id: Optional[int] = None,
+        ip_address: Optional[str] = None,
+    ) -> tuple[bool, Optional[str]]:
         """
-        Validate file before upload.
-        
+        Validate uploaded file.
+
         Args:
             filename: File name
             file_size: File size in bytes
-            
+            file_content: Optional file bytes for signature checks
+            content_type: Optional MIME type from client upload
+
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Check file extension
         from backend.services.document_loader import DocumentLoaderService
-        if not DocumentLoaderService.is_supported_file(filename):
+
+        def _log_blocked(reason: str) -> None:
+            log_event(
+                {
+                    "event_type": SecurityEventType.FILE_UPLOAD_BLOCKED,
+                    "severity": SecuritySeverity.HIGH,
+                    "user_id": user_id,
+                    "ip_address": ip_address,
+                    "message": "Blocked malicious file upload",
+                    "metadata": {
+                        "filename": safe_filename,
+                        "reason": reason,
+                        "content_type": content_type,
+                        "file_size": int(file_size or 0),
+                    },
+                }
+            )
+
+        safe_filename = sanitize_filename(filename)
+
+        if file_size <= 0:
+            _log_blocked("empty_file")
+            return False, "File is empty"
+
+        file_path = Path(safe_filename)
+        file_ext = file_path.suffix.lower()
+        file_suffixes = {suffix.lower() for suffix in file_path.suffixes}
+
+        blocked_match = sorted(file_suffixes.intersection(self.blocked_extensions))
+        if blocked_match:
+            _log_blocked(f"blocked_extension:{blocked_match[0]}")
+            return False, f"Blocked file extension detected: {blocked_match[0]}"
+
+        if not DocumentLoaderService.is_supported_file(safe_filename):
+            _log_blocked("unsupported_extension")
             return False, f"Unsupported file type. Supported: {DocumentLoaderService.get_supported_extensions()}"
-        
-        # Check file size
+
         if file_size > self.max_size_bytes:
+            _log_blocked("file_too_large")
             return False, f"File too large. Maximum size is {settings.max_file_size_mb}MB"
+
+        normalized_type = (content_type or "").lower().split(";")[0].strip()
+        if not normalized_type:
+            _log_blocked("missing_content_type")
+            return False, "Missing file content type"
+
+        allowed_types = self.allowed_mime_types.get(file_ext, set())
+        if allowed_types and normalized_type not in allowed_types:
+            if not (file_ext == ".txt" and normalized_type.startswith("text/")):
+                _log_blocked("invalid_content_type")
+                return False, f"Invalid content type '{content_type}' for {file_ext}"
+
+        if file_content is not None:
+            valid_signature, signature_error = self._validate_magic_signature(file_ext, file_content)
+            if not valid_signature:
+                _log_blocked("invalid_file_signature")
+                return False, signature_error
         
         return True, None

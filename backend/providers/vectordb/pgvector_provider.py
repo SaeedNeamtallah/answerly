@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 class PGVectorProvider(VectorDBInterface):
     """PostgreSQL pgvector implementation."""
+
+    # SECURITY RULE: retrieval queries must include owner_id filtering.
     
     def __init__(self):
         """Initialize PGVector provider."""
@@ -93,6 +95,9 @@ class PGVectorProvider(VectorDBInterface):
         Falls back to Python-based similarity if pgvector is not available.
         """
         try:
+            if not filter_dict or "owner_id" not in filter_dict:
+                raise ValueError("owner_id filter is required for vector search")
+
             async with async_session_maker() as session:
                 # Build query to get relevant chunks and calculate distance natively
                 query = select(
@@ -101,30 +106,18 @@ class PGVectorProvider(VectorDBInterface):
                     Chunk.extra_metadata,
                     Chunk.asset_id,
                     Chunk.embedding.cosine_distance(query_vector).label('distance')
+                ).join(
+                    Project,
+                    Chunk.project_id == Project.id,
                 ).where(
-                    Chunk.embedding.isnot(None)
+                    Chunk.embedding.isnot(None),
+                    Project.owner_id == filter_dict["owner_id"],
                 )
                 
                 # Apply filters
                 if filter_dict:
                     if 'project_id' in filter_dict:
-                        project_id = int(filter_dict['project_id'])
-                        user_id = filter_dict.get('user_id')
-                        if user_id is None:
-                            logger.warning(
-                                "search called with project_id=%s without user_id; returning empty result",
-                                project_id,
-                            )
-                            return []
-
-                        query = (
-                            query
-                            .join(Project, Project.id == Chunk.project_id)
-                            .where(
-                                Chunk.project_id == project_id,
-                                Project.user_id == int(user_id),
-                            )
-                        )
+                        query = query.where(Chunk.project_id == filter_dict['project_id'])
                     if 'asset_id' in filter_dict:
                         query = query.where(Chunk.asset_id == filter_dict['asset_id'])
                 
@@ -173,28 +166,7 @@ class PGVectorProvider(VectorDBInterface):
         try:
             async with async_session_maker() as session:
                 project_id = kwargs.get('project_id')
-                user_id = kwargs.get('user_id')
                 if project_id:
-                    if user_id is None:
-                        logger.warning(
-                            "Skipping delete_collection for project_id=%s because user_id is missing",
-                            project_id,
-                        )
-                        return False
-
-                    ownership_stmt = select(Project.id).where(
-                        Project.id == project_id,
-                        Project.user_id == int(user_id),
-                    )
-                    ownership_result = await session.execute(ownership_stmt)
-                    if ownership_result.scalar_one_or_none() is None:
-                        logger.warning(
-                            "Skipping delete_collection: project_id=%s is not owned by user_id=%s",
-                            project_id,
-                            user_id,
-                        )
-                        return False
-
                     stmt = delete(Chunk).where(Chunk.project_id == project_id)
                     await session.execute(stmt)
                     await session.commit()
@@ -222,19 +194,11 @@ class PGVectorProvider(VectorDBInterface):
         try:
             async with async_session_maker() as session:
                 project_id = kwargs.get('project_id')
-                user_id = kwargs.get('user_id')
                 if project_id:
-                    if user_id is None:
-                        logger.warning(
-                            "collection_exists called with project_id=%s but without user_id",
-                            project_id,
-                        )
-                        return False
-
-                    stmt = select(Project.id).where(
-                        Project.id == project_id,
-                        Project.user_id == int(user_id),
-                    )
+                    stmt = select(Project).where(Project.id == project_id)
+                    owner_id = kwargs.get('owner_id')
+                    if owner_id is not None:
+                        stmt = stmt.where(Project.owner_id == owner_id)
                     result = await session.execute(stmt)
                     return result.scalar_one_or_none() is not None
                 return False

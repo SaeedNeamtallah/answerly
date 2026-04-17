@@ -2,7 +2,7 @@
 Google Gemini 2.5 Flash LLM Provider Implementation.
 Uses google-generativeai SDK for text generation and embeddings.
 """
-from typing import List, Optional, AsyncIterator
+from typing import Any, List, Optional, AsyncIterator
 import google.generativeai as genai
 from backend.providers.llm.interface import LLMInterface
 from backend.config import settings
@@ -14,6 +14,53 @@ logger = logging.getLogger(__name__)
 
 class GeminiProvider(LLMInterface):
     """Google Gemini LLM provider implementation."""
+
+    @staticmethod
+    def _get_attr_or_key(obj: Any, name: str, default: Any = None) -> Any:
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            return obj.get(name, default)
+        return getattr(obj, name, default)
+
+    def _extract_text_from_candidate(self, candidate: Any) -> str:
+        content = self._get_attr_or_key(candidate, "content")
+        if content is None:
+            return ""
+
+        parts = self._get_attr_or_key(content, "parts", []) or []
+        chunks: List[str] = []
+        for part in parts:
+            text = self._get_attr_or_key(part, "text")
+            if text:
+                chunks.append(str(text))
+
+        return "".join(chunks)
+
+    def _extract_text_from_response(self, response: Any) -> str:
+        # Fast path: if quick accessor is valid, use it.
+        try:
+            quick_text = self._get_attr_or_key(response, "text")
+            if quick_text:
+                return str(quick_text)
+        except Exception:
+            pass
+
+        # Safe path: parse candidates/content/parts manually.
+        candidates = self._get_attr_or_key(response, "candidates", []) or []
+        for candidate in candidates:
+            text = self._extract_text_from_candidate(candidate)
+            if text:
+                return text
+
+        return ""
+
+    def _extract_finish_reason(self, response: Any) -> str:
+        candidates = self._get_attr_or_key(response, "candidates", []) or []
+        if not candidates:
+            return "unknown"
+        reason = self._get_attr_or_key(candidates[0], "finish_reason", "unknown")
+        return str(reason)
     
     def __init__(self, api_key: str = None, model_name: str = None):
         """
@@ -87,8 +134,14 @@ class GeminiProvider(LLMInterface):
                     generation_config=generation_config
                 )
             )
-            
-            return response.text
+
+            text = self._extract_text_from_response(response)
+            if not text:
+                logger.warning(
+                    "Gemini returned an empty response (finish_reason=%s)",
+                    self._extract_finish_reason(response)
+                )
+            return text
             
         except Exception as e:
             logger.error(f"Error generating text with Gemini: {str(e)}")
@@ -123,10 +176,20 @@ class GeminiProvider(LLMInterface):
                 ),
             )
 
+            emitted_any = False
+            last_finish_reason = "unknown"
             for chunk in response:
-                text = getattr(chunk, "text", None)
+                last_finish_reason = self._extract_finish_reason(chunk)
+                text = self._extract_text_from_response(chunk)
                 if text:
+                    emitted_any = True
                     yield text
+
+            if not emitted_any:
+                logger.warning(
+                    "Gemini stream returned no tokens (finish_reason=%s)",
+                    last_finish_reason,
+                )
 
         except Exception as e:
             logger.error(f"Error streaming text with Gemini: {str(e)}")

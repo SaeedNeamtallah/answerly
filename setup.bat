@@ -149,8 +149,11 @@ choice /C YN /M "Do you want to start the database with Docker?"
 if errorlevel 2 goto skip_docker
 if errorlevel 1 (
     echo [INFO] Starting Docker services...
-    docker compose -f docker/docker-compose.yml up -d
-    if errorlevel 1 (
+    set SKIP_DOCKER_PAUSE=1
+    call start_docker.bat
+    set DOCKER_START_EXIT=%ERRORLEVEL%
+    set SKIP_DOCKER_PAUSE=
+    if not "%DOCKER_START_EXIT%"=="0" (
         echo [ERROR] Failed to start Docker services!
     ) else (
         echo [✓] PostgreSQL, Qdrant, RabbitMQ and Redis containers started

@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 
 class QueryController:
     """Controller for query operations."""
+
+    # SECURITY RULE: retrieval must be scoped to owner_id from JWT.
+
+    @staticmethod
+    def _fallback_answer(language: str) -> str:
+        if language == "ar":
+            return "تعذر توليد إجابة واضحة الآن. حاول إعادة صياغة السؤال بشكل أدق."
+        return "Could not generate a clear answer right now. Please try rephrasing your question."
     
     def __init__(self):
         """Initialize query controller."""
@@ -25,7 +33,7 @@ class QueryController:
     async def answer_query(
         self,
         db: AsyncSession,
-        user_id: int,
+        owner_id: int,
         project_id: int,
         query: str,
         top_k: int = 5,
@@ -37,6 +45,7 @@ class QueryController:
         
         Args:
             db: Database session
+            owner_id: Owner user ID
             project_id: Project ID to search in
             query: User question
             top_k: Number of chunks to retrieve
@@ -51,9 +60,8 @@ class QueryController:
             logger.info(f"Processing query for project {project_id}: {query[:50]}...")
             
             similar_chunks = await self.query_service.search_similar_chunks(
-                db=db,
                 query=query,
-                user_id=user_id,
+                owner_id=owner_id,
                 project_id=project_id,
                 top_k=top_k,
                 asset_id=asset_id
@@ -80,12 +88,16 @@ class QueryController:
             
         except Exception as e:
             logger.error(f"Error processing query: {str(e)}")
-            raise
+            return {
+                'answer': self._fallback_answer(language),
+                'sources': [],
+                'context_used': 0
+            }
 
     async def answer_query_stream(
         self,
         db: AsyncSession,
-        user_id: int,
+        owner_id: int,
         project_id: int,
         query: str,
         top_k: int = 5,
@@ -102,9 +114,8 @@ class QueryController:
             )
 
             similar_chunks = await self.query_service.search_similar_chunks(
-                db=db,
                 query=query,
-                user_id=user_id,
+                owner_id=owner_id,
                 project_id=project_id,
                 top_k=top_k,
                 asset_id=asset_id,
@@ -137,5 +148,5 @@ class QueryController:
 
         except Exception as e:
             logger.error(f"Error streaming query: {str(e)}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': self._fallback_answer(language)}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
