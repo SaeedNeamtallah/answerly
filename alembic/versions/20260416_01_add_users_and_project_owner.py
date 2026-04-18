@@ -1,4 +1,5 @@
-﻿"""add users table and project ownership
+﻿
+"""add users table and project ownership
 
 Revision ID: 20260416_01
 Revises:
