@@ -225,3 +225,20 @@ RAGMind/
 
 ## 📄 License
 This project is licensed under the **MIT License**.
+
+
+## Database Migrations (Alembic)
+
+Run migrations before starting the backend when database schema changes are pulled:
+
+`powershell
+alembic upgrade head
+` 
+
+To rollback one revision:
+
+`powershell
+alembic downgrade -1
+` 
+
+

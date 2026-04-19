@@ -1,6 +1,6 @@
 """
 Database models using SQLAlchemy async ORM.
-Defines tables for projects, assets, and chunks with vector embeddings.
+Defines tables for users, projects, assets, and chunks with vector embeddings.
 """
 # from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index, func
@@ -16,11 +16,29 @@ import uuid
 Base = declarative_base()
 
 
+class User(Base):
+    """Application user model for authentication."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(150), nullable=False, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}')>"
+
+
 class Project(Base):
     """Project model for organizing documents."""
     __tablename__ = "projects"
     
     id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -30,11 +48,12 @@ class Project(Base):
     extra_metadata = Column("metadata", JSON, default={})
     
     # Relationships
+    owner = relationship("User", back_populates="projects")
     assets = relationship("Asset", back_populates="project", cascade="all, delete-orphan")
     chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Project(id={self.id}, name='{self.name}')>"
+        return f"<Project(id={self.id}, owner_id={self.owner_id}, name='{self.name}')>"
 
 
 class Asset(Base):

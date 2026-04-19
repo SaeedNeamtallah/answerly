@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.celery_app import celery_app, get_setup_utils
 from backend.config import settings
-from backend.database.models import Asset, Chunk
+from backend.database.models import Asset, Chunk, Project
 from backend.runtime_config import get_runtime_value
 from backend.utils.idempotency_manager import IdempotencyManager
 
@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 @celery_app.task(
     bind=True,
     name="backend.tasks.file_processing.process_document_task",
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
 )
 def process_document_task(self, asset_id: int):
     return asyncio.run(_process_document(self, asset_id))
@@ -91,6 +89,7 @@ async def _process_document(task_instance, asset_id: int):
             asset = asset_result.scalar_one_or_none()
 
             if asset is None:
+
                 error_result = {"error": f"Asset not found: {asset_id}"}
                 await idempotency_manager.update_task_status(
                     db=db,
@@ -100,6 +99,13 @@ async def _process_document(task_instance, asset_id: int):
                 )
                 task_instance.update_state(state="FAILURE", meta=error_result)
                 raise ValueError(f"Asset not found: {asset_id}")
+
+            # SECURITY RULE: owner_id is persisted in vector payload for strict isolation.
+            owner_stmt = select(Project.owner_id).where(Project.id == asset.project_id)
+            owner_result = await db.execute(owner_stmt)
+            owner_id = owner_result.scalar_one_or_none()
+            if owner_id is None:
+                raise ValueError(f"Project owner not found for project {asset.project_id}")
 
             if asset.status == "completed":
                 final_result = {
@@ -115,6 +121,10 @@ async def _process_document(task_instance, asset_id: int):
                     result=final_result,
                 )
                 return final_result
+
+
+
+            # Mark as processing
 
             asset.status = "processing"
             asset.error_message = None
@@ -177,6 +187,7 @@ async def _process_document(task_instance, asset_id: int):
                 chunk_ids = [c.id for c in chunk_records]
                 vector_metadata = [
                     {
+                        "owner_id": owner_id,
                         "asset_id": c.asset_id,
                         "project_id": c.project_id,
                         "chunk_index": c.chunk_index,

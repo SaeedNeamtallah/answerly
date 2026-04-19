@@ -68,6 +68,19 @@ echo Activating virtual environment...
 call venv\Scripts\activate.bat
 echo.
 
+REM Ensure Celery worker is running (auto-start in a separate terminal)
+if not defined SKIP_CELERY_AUTOSTART (
+    tasklist /v /fi "imagename eq cmd.exe" | findstr /I "RAGMind Celery Worker" >nul
+    if errorlevel 1 (
+        echo Starting Celery worker in a separate window...
+        start "RAGMind Celery Worker" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && celery -A backend.celery_app:celery_app worker -l info -Q default,file_processing -P solo"
+        timeout /t 2 /nobreak >nul
+    ) else (
+        echo [✓] Celery worker window is already running
+    )
+    echo.
+)
+
 REM Install dependencies with uv (much faster!)
 echo Installing/Updating dependencies with uv...
 uv pip install -r backend\requirements.txt
@@ -83,11 +96,11 @@ echo Starting FastAPI server...
 echo Server will be available at: http://127.0.0.1:8001
 echo API docs at: http://127.0.0.1:8001/docs
 echo.
-echo [!] Remember to start the Celery worker in a separate terminal:
-echo     start_celery.bat
+echo [✓] Celery worker should be running in: "RAGMind Celery Worker" window
+echo     (set SKIP_CELERY_AUTOSTART=1 if you want to disable this)
 echo.
 echo Starting frontend server at: http://localhost:8080
 start "" cmd /c "cd /d %~dp0frontend && python -m http.server 8080"
-echo Opening frontend in your browser...
-start "" "http://localhost:8080"
+echo Opening login page...
+start "" "http://localhost:8080/login.html"
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001

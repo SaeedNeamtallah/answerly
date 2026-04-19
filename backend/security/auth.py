@@ -1,0 +1,372 @@
+"""JWT authentication helpers and FastAPI dependencies."""
+from __future__ import annotations
+
+import base64
+import hashlib
+import os
+import time
+from hmac import compare_digest
+from pathlib import Path
+from typing import List, Optional, Set
+
+import jwt
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.config import settings
+from backend.database import get_db
+from backend.database.models import User
+from backend.security.event_service import log_event
+from backend.security.jwt_utils import create_jwt_access_token, decode_jwt_access_token
+from backend.security.security_event import SecurityEventType, SecuritySeverity
+from backend.security.sanitization import sanitize_text
+
+
+security_scheme = HTTPBearer(auto_error=False)
+
+ROLE_USER = "user"
+ROLE_ADMIN = "admin"
+ROLE_CYBERSECURITY_ENGINEER = "cybersecurity_engineer"
+
+_ENV_FILE_PATH = Path(__file__).resolve().parents[2] / ".env"
+_ENGINEER_USERNAMES_CACHE: Set[str] = set()
+_ENGINEER_USERNAMES_CACHE_MTIME: float = -1.0
+_ENGINEER_USERNAMES_CACHE_TS: float = 0.0
+_ENGINEER_USERNAMES_CACHE_TTL_SECONDS = 2.0
+
+
+class AuthUser(BaseModel):
+    username: str
+    roles: List[str]
+
+
+def _normalize_username(value: str) -> str:
+    return sanitize_text(value, max_length=150, strip_html=True, allow_newlines=False).strip().lower()
+
+
+def _normalize_role(value: str) -> str:
+    clean = sanitize_text(value, max_length=64, strip_html=True, allow_newlines=False).strip().lower()
+    return clean or ROLE_USER
+
+
+def _load_engineer_usernames_from_env_file() -> Set[str]:
+    global _ENGINEER_USERNAMES_CACHE, _ENGINEER_USERNAMES_CACHE_MTIME, _ENGINEER_USERNAMES_CACHE_TS
+
+    now = time.monotonic()
+    try:
+        mtime = _ENV_FILE_PATH.stat().st_mtime
+    except OSError:
+        return set(_ENGINEER_USERNAMES_CACHE)
+
+    cache_is_fresh = (now - _ENGINEER_USERNAMES_CACHE_TS) < _ENGINEER_USERNAMES_CACHE_TTL_SECONDS
+    if cache_is_fresh and mtime == _ENGINEER_USERNAMES_CACHE_MTIME:
+        return set(_ENGINEER_USERNAMES_CACHE)
+
+    raw_value = ""
+    try:
+        with _ENV_FILE_PATH.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if stripped.upper().startswith("SECURITY_CYBERSECURITY_ENGINEER_USERNAMES="):
+                    raw_value = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    except Exception:
+        # Keep previous cache if .env is temporarily unreadable.
+        return set(_ENGINEER_USERNAMES_CACHE)
+
+    refreshed: Set[str] = set()
+    for chunk in raw_value.split(","):
+        normalized = _normalize_username(chunk)
+        if normalized:
+            refreshed.add(normalized)
+
+    _ENGINEER_USERNAMES_CACHE = refreshed
+    _ENGINEER_USERNAMES_CACHE_MTIME = mtime
+    _ENGINEER_USERNAMES_CACHE_TS = now
+    return set(_ENGINEER_USERNAMES_CACHE)
+
+
+def _configured_cybersecurity_engineer_usernames() -> Set[str]:
+    raw_value = os.getenv("SECURITY_CYBERSECURITY_ENGINEER_USERNAMES")
+    if raw_value is None:
+        # Fallback to live .env value so changing .env works without restart.
+        env_file_usernames = _load_engineer_usernames_from_env_file()
+        if env_file_usernames:
+            return env_file_usernames
+        raw_value = str(settings.security_cybersecurity_engineer_usernames or "")
+
+    usernames: Set[str] = set()
+
+    for chunk in raw_value.split(","):
+        normalized = _normalize_username(chunk)
+        if normalized:
+            usernames.add(normalized)
+
+    return usernames
+
+
+def resolve_roles_for_username(username: str) -> List[str]:
+    normalized_username = _normalize_username(username)
+    resolved_roles: List[str] = []
+
+    if normalized_username and normalized_username == _normalize_username(settings.auth_admin_username):
+        resolved_roles.append(ROLE_ADMIN)
+
+    if normalized_username and normalized_username in _configured_cybersecurity_engineer_usernames():
+        resolved_roles.append(ROLE_CYBERSECURITY_ENGINEER)
+
+    resolved_roles.append(ROLE_USER)
+
+    deduplicated_roles: List[str] = []
+    for role in resolved_roles:
+        normalized_role = _normalize_role(role)
+        if normalized_role not in deduplicated_roles:
+            deduplicated_roles.append(normalized_role)
+
+    return deduplicated_roles
+
+
+def has_role(roles: List[str], required_role: str) -> bool:
+    expected = _normalize_role(required_role)
+    return any(_normalize_role(role) == expected for role in (roles or []))
+
+
+def _extract_client_ip(request: Request | None) -> str | None:
+    if request is None:
+        return None
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip() or None
+    if request.client and request.client.host:
+        return request.client.host
+    return None
+
+
+def _verify_pbkdf2_sha256(password: str, encoded_hash: str) -> bool:
+    """Verify hashes in format: pbkdf2_sha256$iterations$salt_b64$hash_b64."""
+    try:
+        algo, iterations_str, salt_b64, digest_b64 = encoded_hash.split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+
+        iterations = int(iterations_str)
+        salt = base64.b64decode(salt_b64.encode("ascii"))
+        expected = base64.b64decode(digest_b64.encode("ascii"))
+
+        computed = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            iterations,
+            dklen=len(expected),
+        )
+        return compare_digest(computed, expected)
+    except Exception:
+        return False
+
+
+def _verify_admin_password(password: str) -> bool:
+    if settings.auth_admin_password_hash:
+        return _verify_pbkdf2_sha256(password, settings.auth_admin_password_hash)
+    return compare_digest(password, settings.auth_admin_password)
+
+
+def authenticate_admin(username: str, password: str) -> bool:
+    """Authenticate admin credentials from environment settings."""
+    clean_username = sanitize_text(username, max_length=128, strip_html=True, allow_newlines=False)
+    return compare_digest(clean_username, settings.auth_admin_username) and _verify_admin_password(password)
+
+
+def create_access_token(username: str, roles: Optional[List[str]] = None) -> str:
+    """Create short-lived JWT access token."""
+    return create_jwt_access_token(
+        subject=username,
+        roles=roles or ["admin"],
+        expires_minutes=settings.auth_access_token_expire_minutes,
+    )
+
+
+def _decode_access_token(token: str) -> AuthUser:
+    try:
+        payload = decode_jwt_access_token(token)
+    except jwt.ExpiredSignatureError as exc:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_TOKEN_INVALID,
+                "severity": SecuritySeverity.MEDIUM,
+                "message": "Rejected expired access token",
+                "metadata": {"reason": "expired"},
+            }
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from exc
+    except jwt.PyJWTError as exc:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_TOKEN_INVALID,
+                "severity": SecuritySeverity.MEDIUM,
+                "message": "Rejected invalid access token",
+                "metadata": {"reason": "jwt_error"},
+            }
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token") from exc
+
+    username = str(payload.get("sub") or "").strip()
+    roles_raw = payload.get("roles")
+
+    if not username:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_TOKEN_INVALID,
+                "severity": SecuritySeverity.MEDIUM,
+                "message": "Rejected token without subject claim",
+                "metadata": {"reason": "missing_sub"},
+            }
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+
+    if not isinstance(roles_raw, list) or not roles_raw:
+        resolved_roles = resolve_roles_for_username(username)
+    else:
+        resolved_roles = []
+        for role in roles_raw:
+            normalized_role = _normalize_role(str(role))
+            if normalized_role not in resolved_roles:
+                resolved_roles.append(normalized_role)
+
+        if ROLE_USER not in resolved_roles:
+            resolved_roles.append(ROLE_USER)
+
+    return AuthUser(username=username, roles=resolved_roles)
+
+
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+) -> AuthUser:
+    """Require and decode bearer token."""
+    if credentials is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_REQUIRED,
+                "severity": SecuritySeverity.LOW,
+                "ip_address": _extract_client_ip(request),
+                "message": "Authentication required but bearer token is missing",
+                "metadata": {"path": request.url.path, "method": request.method},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return _decode_access_token(credentials.credentials)
+
+
+async def get_current_db_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Require bearer token, validate JWT, and fetch current user from database."""
+    if credentials is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_REQUIRED,
+                "severity": SecuritySeverity.LOW,
+                "ip_address": _extract_client_ip(request),
+                "message": "Authentication required but bearer token is missing",
+                "metadata": {"path": request.url.path, "method": request.method},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_user = _decode_access_token(credentials.credentials)
+    user_stmt = select(User).where(User.username == token_user.username)
+    user_result = await db.execute(user_stmt)
+    user = user_result.scalar_one_or_none()
+
+    if user is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_TOKEN_INVALID,
+                "severity": SecuritySeverity.MEDIUM,
+                "ip_address": _extract_client_ip(request),
+                "message": "Token subject does not map to an existing user",
+                "metadata": {"username": token_user.username, "path": request.url.path},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
+
+
+async def require_mutation_auth_if_enabled(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+) -> Optional[AuthUser]:
+    """Conditionally enforce auth on write operations via environment flag."""
+    if not settings.security_require_auth_for_mutations:
+        return None
+
+    if credentials is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_REQUIRED,
+                "severity": SecuritySeverity.LOW,
+                "ip_address": _extract_client_ip(request),
+                "message": "Mutation endpoint requires authentication",
+                "metadata": {"path": request.url.path, "method": request.method},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return _decode_access_token(credentials.credentials)
+
+
+async def require_security_center_access(
+    request: Request,
+    current_user: User = Depends(get_current_db_user),
+) -> User:
+    """Allow Security Center access only for Cybersecurity Engineer users."""
+    roles = resolve_roles_for_username(current_user.username)
+    if has_role(roles, ROLE_CYBERSECURITY_ENGINEER) or has_role(roles, ROLE_ADMIN):
+        return current_user
+
+    log_event(
+        {
+            "event_type": SecurityEventType.AUTHZ_DENIED,
+            "severity": SecuritySeverity.HIGH,
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "ip_address": _extract_client_ip(request),
+            "message": "Security Center access denied",
+            "metadata": {
+                "path": request.url.path,
+                "method": request.method,
+                "required_role": ROLE_CYBERSECURITY_ENGINEER,
+                "user_roles": roles,
+            },
+        }
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Security Center access is restricted to Cybersecurity Engineer role",
+    )

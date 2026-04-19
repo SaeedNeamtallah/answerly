@@ -16,6 +16,8 @@ class QdrantProvider(VectorDBInterface):
     Qdrant vector database implementation.
     Optional provider - requires Qdrant server running.
     """
+
+    # SECURITY RULE: retrieval filters must include owner_id from JWT context.
     
     def __init__(self, url: str = "http://localhost:6333", api_key: str = ""):
         """
@@ -81,7 +83,7 @@ class QdrantProvider(VectorDBInterface):
                 # Create payload indexes for faster filtered search
                 try:
                     from qdrant_client.models import PayloadSchemaType
-                    for field in ("project_id", "asset_id"):
+                    for field in ("owner_id", "project_id", "asset_id"):
                         await asyncio.to_thread(
                             self.client.create_payload_index,
                             collection_name=collection_name,
@@ -189,6 +191,9 @@ class QdrantProvider(VectorDBInterface):
             List of (id, score, payload)
         """
         try:
+            if not filter_dict or "owner_id" not in filter_dict:
+                raise ValueError("owner_id filter is required for vector search")
+
             # Build filter if provided
             search_filter = None
             if filter_dict:
@@ -201,7 +206,7 @@ class QdrantProvider(VectorDBInterface):
                 search_filter = Filter(must=conditions)
             
             # Search
-            payload_fields = ["content", "metadata", "asset_id", "project_id"]
+            payload_fields = ["content", "metadata", "asset_id", "project_id", "owner_id"]
 
             if hasattr(self.client, "query_points"):
                 search_result = await asyncio.to_thread(

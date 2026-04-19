@@ -9,7 +9,7 @@ from backend.providers.llm.factory import LLMProviderFactory
 from backend.runtime_config import get_runtime_value
 from backend.config import settings
 from backend.database.connection import async_session_maker
-from backend.database.models import Chunk
+from backend.database.models import Chunk, Project
 from sqlalchemy import select
 import logging
 import re
@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 class QueryService:
     """Service for processing queries and searching."""
+
+    # SECURITY RULE: all retrieval queries must include JWT owner_id scoping.
     
     def __init__(self):
         """Initialize query service."""
@@ -30,6 +32,7 @@ class QueryService:
     async def search_similar_chunks(
         self,
         query: str,
+        owner_id: int,
         project_id: int,
         top_k: int = 5,
         asset_id: Optional[int] = None
@@ -39,6 +42,7 @@ class QueryService:
         
         Args:
             query: Search query
+            owner_id: Owner user ID
             project_id: Project ID to search within
             top_k: Number of results to return
             asset_id: Optional asset ID to filter by
@@ -55,7 +59,10 @@ class QueryService:
             query_embedding = await self.embedding_service.generate_single_embedding(query_text)
             
             # Build filter
-            filter_dict = {'project_id': project_id}
+            filter_dict = {
+                'owner_id': owner_id,
+                'project_id': project_id,
+            }
             if asset_id:
                 filter_dict['asset_id'] = asset_id
             
@@ -71,7 +78,12 @@ class QueryService:
                 filter_dict=filter_dict
             )
             
-            formatted_results = await self._hydrate_chunk_payloads(results)
+            formatted_results = await self._hydrate_chunk_payloads(
+                results,
+                owner_id=owner_id,
+                project_id=project_id,
+                asset_id=asset_id,
+            )
 
             if not formatted_results:
                 logger.info("No similar chunks found for query")
@@ -103,7 +115,10 @@ class QueryService:
 
     async def _hydrate_chunk_payloads(
         self,
-        results: List[Tuple[Any, float, Dict[str, Any]]]
+        results: List[Tuple[Any, float, Dict[str, Any]]],
+        owner_id: int,
+        project_id: Optional[int] = None,
+        asset_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         if not results:
             return []
@@ -114,8 +129,18 @@ class QueryService:
         async with async_session_maker() as session:
             query = (
                 select(Chunk.id, Chunk.content, Chunk.extra_metadata, Chunk.asset_id)
-                .where(Chunk.id.in_(chunk_ids))
+                .join(Project, Chunk.project_id == Project.id)
+                .where(
+                    Chunk.id.in_(chunk_ids),
+                    Project.owner_id == owner_id,
+                )
             )
+
+            if project_id is not None:
+                query = query.where(Chunk.project_id == project_id)
+            if asset_id is not None:
+                query = query.where(Chunk.asset_id == asset_id)
+
             rows = await session.execute(query)
             rows = rows.all()
 
@@ -130,7 +155,9 @@ class QueryService:
 
         formatted_results = []
         for chunk_id in chunk_ids:
-            payload = payload_map.get(chunk_id, {})
+            payload = payload_map.get(chunk_id)
+            if payload is None:
+                continue
             formatted_results.append({
                 'chunk_id': chunk_id,
                 'similarity': id_to_score.get(chunk_id, 0.0),

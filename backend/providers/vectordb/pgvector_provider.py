@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 class PGVectorProvider(VectorDBInterface):
     """PostgreSQL pgvector implementation."""
+
+    # SECURITY RULE: retrieval queries must include owner_id filtering.
     
     def __init__(self):
         """Initialize PGVector provider."""
@@ -93,6 +95,9 @@ class PGVectorProvider(VectorDBInterface):
         Falls back to Python-based similarity if pgvector is not available.
         """
         try:
+            if not filter_dict or "owner_id" not in filter_dict:
+                raise ValueError("owner_id filter is required for vector search")
+
             async with async_session_maker() as session:
                 # Build query to get relevant chunks and calculate distance natively
                 query = select(
@@ -101,8 +106,12 @@ class PGVectorProvider(VectorDBInterface):
                     Chunk.extra_metadata,
                     Chunk.asset_id,
                     Chunk.embedding.cosine_distance(query_vector).label('distance')
+                ).join(
+                    Project,
+                    Chunk.project_id == Project.id,
                 ).where(
-                    Chunk.embedding.isnot(None)
+                    Chunk.embedding.isnot(None),
+                    Project.owner_id == filter_dict["owner_id"],
                 )
                 
                 # Apply filters
@@ -187,6 +196,9 @@ class PGVectorProvider(VectorDBInterface):
                 project_id = kwargs.get('project_id')
                 if project_id:
                     stmt = select(Project).where(Project.id == project_id)
+                    owner_id = kwargs.get('owner_id')
+                    if owner_id is not None:
+                        stmt = stmt.where(Project.owner_id == owner_id)
                     result = await session.execute(stmt)
                     return result.scalar_one_or_none() is not None
                 return False

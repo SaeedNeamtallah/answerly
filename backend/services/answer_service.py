@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 class AnswerService:
     """Service for generating answers from context."""
+
+    @staticmethod
+    def _fallback_answer(language: str) -> str:
+        if language == "ar":
+            return "تعذر توليد إجابة واضحة الآن. حاول إعادة صياغة السؤال بشكل أدق."
+        return "Could not generate a clear answer right now. Please try rephrasing your question."
     
     def __init__(self):
         """Initialize answer service."""
@@ -49,10 +55,15 @@ class AnswerService:
                 temperature=0.7,
                 max_tokens=25000
             )
+
+            answer = (answer or "").strip()
+            if not answer:
+                logger.warning("LLM returned empty answer, using fallback")
+                answer = self._fallback_answer(language)
             
             # Format response
             response = {
-                'answer': answer.strip(),
+                'answer': answer,
                 'context_used': len(context_chunks)
             }
             
@@ -81,12 +92,19 @@ class AnswerService:
             context = self._build_context(context_chunks)
             prompt = self._build_prompt(query, context, language)
 
+            emitted_any = False
             async for token in self.llm_provider.generate_text_stream(
                 prompt=prompt,
                 temperature=0.7,
                 max_tokens=25000,
             ):
-                yield token
+                if token:
+                    emitted_any = True
+                    yield token
+
+            if not emitted_any:
+                logger.warning("LLM stream returned no tokens, using fallback")
+                yield self._fallback_answer(language)
 
         except Exception as e:
             logger.error(f"Error streaming answer: {str(e)}")
