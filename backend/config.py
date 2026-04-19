@@ -159,6 +159,7 @@ class Settings(BaseSettings):
     celery_task_time_limit: int = Field(default=600, alias="CELERY_TASK_TIME_LIMIT")
     celery_task_acks_late: bool = Field(default=True, alias="CELERY_TASK_ACKS_LATE")
     celery_worker_concurrency: int = Field(default=2, alias="CELERY_WORKER_CONCURRENCY")
+    celery_flower_password: str = Field(default=None, alias="CELERY_FLOWER_PASSWORD")
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

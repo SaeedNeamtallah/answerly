@@ -2,12 +2,16 @@
 Database models using SQLAlchemy async ORM.
 Defines tables for projects, assets, and chunks with vector embeddings.
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index
+# from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
+
 
 Base = declarative_base()
 
@@ -103,3 +107,33 @@ class Chunk(Base):
 
     def __repr__(self):
         return f"<Chunk(id={self.id}, asset_id={self.asset_id}, chunk_index={self.chunk_index})>"
+
+class CeleryTaskExecution(Base):
+    """Track Celery task executions."""
+    __tablename__ = "celery_task_executions"
+
+    execution_id = Column(Integer, primary_key=True, autoincrement=True)
+
+    task_name = Column(String(255), nullable=False)
+    task_args_hash = Column(String(64), nullable=False)  # SHA-256 hash of task arguments
+    celery_task_id = Column(UUID(as_uuid=True), nullable=True)
+
+    status = Column(String(20), nullable=False, default="PENDING")
+
+    task_args = Column(JSON, nullable=True)
+    result = Column(JSON, nullable=True)
+
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+
+    __table_args__ = (
+        Index("ixz_task_name_args_celery_hash", "task_name", "task_args_hash", "celery_task_id", unique=True),
+        Index("ixz_task_execution_status", "status"),
+        Index("ixz_task_execution_created_at", "created_at"),
+        Index("ixz_celery_task_id", "celery_task_id"),
+    )
+
+    def __repr__(self):
+        return f"<CeleryTaskExecution(execution_id={self.execution_id}, task_name='{self.task_name}', status='{self.status}')>"

@@ -11,7 +11,7 @@ from backend.database import get_db
 from backend.controllers.document_controller import DocumentController
 from backend.tasks.file_processing import process_document_task
 from backend.celery_app import celery_app
-
+from backend.tasks.process_workflow import process_and_index_workflow
 router = APIRouter(tags=["Documents"])
 
 
@@ -29,6 +29,9 @@ class AssetResponse(BaseModel):
     processed_at: Optional[datetime]
     extra_metadata: Dict[str, Any]
     
+class ProcessAndIndexRequest(BaseModel):
+    do_reset: bool = False
+
     class Config:
         from_attributes = True
 
@@ -132,6 +135,45 @@ async def process_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/documents/{asset_id}/process-and-index")
+async def process_and_index_document(
+    asset_id: int,
+    payload: ProcessAndIndexRequest,
+    db: AsyncSession = Depends(get_db),
+    document_controller: DocumentController = Depends(DocumentController)
+):
+    """
+    Trigger a workflow that:
+    1) processes the document
+    2) then triggers project-level indexing
+    """
+    try:
+        document = await document_controller.get_document(db=db, asset_id=asset_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        task = process_and_index_workflow.apply_async(
+            kwargs={
+                "asset_id": asset_id,
+                "project_id": document.project_id,
+                "do_reset": payload.do_reset,
+            },
+            queue="file_processing",
+        )
+
+        return {
+            "workflow_task_id": task.id,
+            "status": "queued",
+            "asset_id": asset_id,
+            "project_id": document.project_id,
+            "do_reset": payload.do_reset,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/documents/{asset_id}", status_code=204)
 async def delete_document(

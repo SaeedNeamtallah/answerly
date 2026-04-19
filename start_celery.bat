@@ -57,4 +57,4 @@ echo.
 echo Press Ctrl+C to stop the worker.
 echo ========================================
 echo.
-celery -A backend.celery_app:celery_app worker -l info -Q default,file_processing -P solo
+celery -A backend.celery_app:celery_app worker -l info -Q default,file_processing,data_indexing -P solo
