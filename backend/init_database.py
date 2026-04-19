@@ -75,6 +75,7 @@ async def main():
         
         logger.info("✅ Database initialized successfully!")
         logger.info("Tables created:")
+        logger.info("  - users")
         logger.info("  - projects")
         logger.info("  - assets")
         logger.info("  - chunks (with vector embeddings)")

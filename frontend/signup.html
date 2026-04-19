@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up | RAGMind</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="auth.css">
+</head>
+<body class="auth-page">
+    <main class="auth-shell">
+        <section class="auth-brand">
+            <a class="brand-logo" href="login.html">
+                <i class="fas fa-brain-circuit"></i>
+                <span>RAGMind</span>
+            </a>
+            <h1>Create your secure workspace</h1>
+            <p>
+                Build projects, upload documents, and chat with your data using a protected multi-user RAG system.
+            </p>
+            <ul class="brand-points">
+                <li><i class="fas fa-user-lock"></i><span>Per-user project and document isolation</span></li>
+                <li><i class="fas fa-file-shield"></i><span>Secure upload validation and sanitization</span></li>
+                <li><i class="fas fa-rocket"></i><span>Production-ready auth and rate-limited APIs</span></li>
+            </ul>
+        </section>
+
+        <section class="auth-panel">
+            <div class="auth-card card">
+                <h2>Create account</h2>
+                <p class="subtitle">Sign up to start using RAGMind.</p>
+
+                <form id="signup-form" novalidate>
+                    <div class="field">
+                        <label for="username">Username</label>
+                        <input id="username" name="username" type="text" autocomplete="username" required>
+                    </div>
+
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <div class="password-input-wrap">
+                            <input id="password" class="password-input" name="password" type="password" autocomplete="new-password" required>
+                            <button id="password-toggle" class="password-toggle-btn" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+                        </div>
+                        <div class="password-requirements" aria-label="Password requirements">
+                            <p class="password-requirements-title">Password requirements:</p>
+                            <ul class="password-requirements-list">
+                                <li id="rule-length" class="rule-item invalid"><span class="rule-indicator" aria-hidden="true">x</span><span class="rule-text">At least 8 characters</span></li>
+                                <li id="rule-uppercase" class="rule-item invalid"><span class="rule-indicator" aria-hidden="true">x</span><span class="rule-text">At least one uppercase letter</span></li>
+                                <li id="rule-lowercase" class="rule-item invalid"><span class="rule-indicator" aria-hidden="true">x</span><span class="rule-text">At least one lowercase letter</span></li>
+                                <li id="rule-number" class="rule-item invalid"><span class="rule-indicator" aria-hidden="true">x</span><span class="rule-text">At least one number</span></li>
+                                <li id="rule-special" class="rule-item invalid"><span class="rule-indicator" aria-hidden="true">x</span><span class="rule-text">At least one special character (!@#$%^&amp;*)</span></li>
+                            </ul>
+                            <div class="password-strength" aria-live="polite">
+                                <span class="password-strength-label">Strength:</span>
+                                <span id="password-strength-value" class="password-strength-value weak">Weak</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="signup-btn" type="submit">Sign Up</button>
+
+                    <p id="status-message" class="message" role="alert"></p>
+
+                    <div class="helper-row">
+                        <a class="link" href="login.html">Already have an account? Login</a>
+                        <span id="api-hint" class="api-hint"></span>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        (async function () {
+            const form = document.getElementById("signup-form");
+            const usernameInput = document.getElementById("username");
+            const passwordInput = document.getElementById("password");
+            const passwordToggleButton = document.getElementById("password-toggle");
+            const signupButton = document.getElementById("signup-btn");
+            const statusMessage = document.getElementById("status-message");
+            const apiHint = document.getElementById("api-hint");
+            const passwordStrengthValue = document.getElementById("password-strength-value");
+            const passwordRuleElements = {
+                length: document.getElementById("rule-length"),
+                uppercase: document.getElementById("rule-uppercase"),
+                lowercase: document.getElementById("rule-lowercase"),
+                number: document.getElementById("rule-number"),
+                special: document.getElementById("rule-special")
+            };
+            const CHECK_MARK = String.fromCharCode(10003);
+            const INVALID_MARK = "x";
+            let isSubmitting = false;
+            let currentPasswordRuleState = {
+                length: false,
+                uppercase: false,
+                lowercase: false,
+                number: false,
+                special: false
+            };
+
+            function normalizeBaseUrl(url) {
+                return String(url || "").trim().replace(/\/+$/, "");
+            }
+
+            let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://localhost:8001";
+
+            function updateApiHint() {
+                apiHint.textContent = "API: " + apiBaseUrl;
+            }
+
+            function getApiBaseCandidates() {
+                const queryParams = new URLSearchParams(window.location.search);
+                const fromQuery = normalizeBaseUrl(queryParams.get("api"));
+                const host = window.location.hostname || "localhost";
+                const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+
+                const candidates = [
+                    fromQuery,
+                    normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")),
+                    normalizeBaseUrl(apiBaseUrl),
+                    `${protocol}//${host}:8001`,
+                    `${protocol}//${host}:8000`
+                ].filter(Boolean);
+
+                return [...new Set(candidates)];
+            }
+
+            async function canReachApi(baseUrl) {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 2000);
+
+                try {
+                    const response = await fetch(baseUrl + "/health", { signal: controller.signal });
+                    return response.ok;
+                } catch (_) {
+                    return false;
+                } finally {
+                    clearTimeout(timeout);
+                }
+            }
+
+            async function resolveApiBaseUrl(maxAttempts = 1) {
+                const candidates = getApiBaseCandidates();
+
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    for (const candidate of candidates) {
+                        if (await canReachApi(candidate)) {
+                            apiBaseUrl = candidate;
+                            localStorage.setItem("ragmind_api_base_url", apiBaseUrl);
+                            updateApiHint();
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
+            updateApiHint();
+            await resolveApiBaseUrl(2);
+
+            function setMessage(text, type) {
+                statusMessage.textContent = text;
+                statusMessage.className = "message visible " + type;
+            }
+
+            function clearMessage() {
+                statusMessage.textContent = "";
+                statusMessage.className = "message";
+            }
+
+            function clearErrorMessageIfVisible() {
+                if (statusMessage.classList.contains("error")) {
+                    clearMessage();
+                }
+            }
+
+            function normalizePassword(value) {
+                return String(value || "").trim();
+            }
+
+            function evaluatePasswordRules(password) {
+                return {
+                    length: password.length >= 8,
+                    uppercase: /[A-Z]/.test(password),
+                    lowercase: /[a-z]/.test(password),
+                    number: /[0-9]/.test(password),
+                    special: /[!@#$%^&*]/.test(password)
+                };
+            }
+
+            function areAllPasswordRulesSatisfied(ruleState) {
+                return Object.keys(passwordRuleElements).every(function (key) {
+                    return !!ruleState[key];
+                });
+            }
+
+            function setPasswordFieldValidity(password, isValid, forceInvalid) {
+                const shouldShowInvalid = !!forceInvalid || (password.length > 0 && !isValid);
+                passwordInput.classList.toggle("is-invalid", shouldShowInvalid);
+            }
+
+            function getPasswordStrength(password, ruleState) {
+                const satisfiedCount = Object.keys(ruleState).reduce(function (count, key) {
+                    return count + (ruleState[key] ? 1 : 0);
+                }, 0);
+
+                if (!password || satisfiedCount <= 2) {
+                    return { label: "Weak", className: "weak" };
+                }
+
+                if (satisfiedCount <= 4 || password.length < 10) {
+                    return { label: "Medium", className: "medium" };
+                }
+
+                return { label: "Strong", className: "strong" };
+            }
+
+            function updatePasswordStrengthUI(password, ruleState) {
+                if (!passwordStrengthValue) {
+                    return;
+                }
+
+                const strength = getPasswordStrength(password, ruleState);
+                passwordStrengthValue.textContent = strength.label;
+                passwordStrengthValue.className = "password-strength-value " + strength.className;
+            }
+
+            function updateSignupButtonState(ruleState) {
+                const activeRuleState = ruleState || currentPasswordRuleState;
+                const passwordIsValid = areAllPasswordRulesSatisfied(activeRuleState);
+                signupButton.disabled = isSubmitting || !passwordIsValid;
+            }
+
+            function setRuleState(ruleElement, isValid) {
+                if (!ruleElement) {
+                    return;
+                }
+
+                ruleElement.classList.toggle("valid", isValid);
+                ruleElement.classList.toggle("invalid", !isValid);
+
+                const indicator = ruleElement.querySelector(".rule-indicator");
+                if (indicator) {
+                    indicator.textContent = isValid ? CHECK_MARK : INVALID_MARK;
+                }
+            }
+
+            function updatePasswordRulesUI(password) {
+                const results = evaluatePasswordRules(password);
+                currentPasswordRuleState = results;
+                const isValid = areAllPasswordRulesSatisfied(results);
+
+                setRuleState(passwordRuleElements.length, results.length);
+                setRuleState(passwordRuleElements.uppercase, results.uppercase);
+                setRuleState(passwordRuleElements.lowercase, results.lowercase);
+                setRuleState(passwordRuleElements.number, results.number);
+                setRuleState(passwordRuleElements.special, results.special);
+
+                setPasswordFieldValidity(password, isValid, false);
+                updatePasswordStrengthUI(password, results);
+                updateSignupButtonState(results);
+                return results;
+            }
+
+            function setupPasswordValidation() {
+                passwordInput.addEventListener("input", function () {
+                    const normalizedPassword = normalizePassword(passwordInput.value);
+                    updatePasswordRulesUI(normalizedPassword);
+                    clearErrorMessageIfVisible();
+                });
+
+                usernameInput.addEventListener("input", function () {
+                    clearErrorMessageIfVisible();
+                });
+
+                passwordToggleButton.addEventListener("click", function () {
+                    const showingPassword = passwordInput.type === "text";
+                    if (showingPassword) {
+                        passwordInput.type = "password";
+                        passwordToggleButton.textContent = "Show";
+                        passwordToggleButton.setAttribute("aria-label", "Show password");
+                        passwordToggleButton.setAttribute("aria-pressed", "false");
+                    } else {
+                        passwordInput.type = "text";
+                        passwordToggleButton.textContent = "Hide";
+                        passwordToggleButton.setAttribute("aria-label", "Hide password");
+                        passwordToggleButton.setAttribute("aria-pressed", "true");
+                    }
+                    passwordInput.focus();
+                });
+
+                updatePasswordRulesUI(normalizePassword(passwordInput.value));
+            }
+
+            setupPasswordValidation();
+
+            form.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                clearMessage();
+
+                const username = usernameInput.value.trim();
+                const password = normalizePassword(passwordInput.value);
+
+                if (!username || !password) {
+                    setPasswordFieldValidity(password, false, !password);
+                    setMessage("Username and password are required.", "error");
+                    return;
+                }
+
+                const passwordValidation = updatePasswordRulesUI(password);
+                if (!areAllPasswordRulesSatisfied(passwordValidation)) {
+                    setPasswordFieldValidity(password, false, true);
+                    setMessage("Password does not meet all requirements. Please check the list below.", "error");
+                    return;
+                }
+
+                setPasswordFieldValidity(password, true, false);
+
+                isSubmitting = true;
+                updateSignupButtonState();
+                const originalButtonText = signupButton.textContent;
+                signupButton.textContent = "Creating account...";
+
+                try {
+                    await resolveApiBaseUrl(1);
+
+                    // Security note: client-side checks are UX-only; backend must validate password policy as well.
+                    // Also never log plaintext passwords in client-side console output.
+                    const submitSignupRequest = async () => fetch(apiBaseUrl + "/auth/signup", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ username: username, password: password })
+                    });
+
+                    let response;
+                    try {
+                        response = await submitSignupRequest();
+                    } catch (networkError) {
+                        const recovered = await resolveApiBaseUrl(3);
+                        if (!recovered) {
+                            throw networkError;
+                        }
+                        response = await submitSignupRequest();
+                    }
+
+                    let payload = null;
+                    try {
+                        payload = await response.json();
+                    } catch (_) {
+                        payload = null;
+                    }
+
+                    if (!response.ok) {
+                        const message = payload && payload.detail ? payload.detail : "Signup failed. Please try again.";
+                        throw new Error(message);
+                    }
+
+                    setMessage("Account created successfully. Redirecting to login...", "success");
+                    setTimeout(function () {
+                        window.location.href = "login.html";
+                    }, 1200);
+                } catch (error) {
+                    setMessage(error.message || "Signup failed. Please try again.", "error");
+                } finally {
+                    isSubmitting = false;
+                    updateSignupButtonState();
+                    signupButton.textContent = originalButtonText;
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

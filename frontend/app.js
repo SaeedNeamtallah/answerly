@@ -4,19 +4,42 @@
  */
 
 // Configuration
-const API_BASE_URL = 'http://localhost:8001';
+let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || 'http://localhost:8001').replace(/\/+$/, '');
 
 // Translations
 const i18n = {
     ar: {
         nav_dashboard: "لوحة التحكم",
+        nav_security_center: "Security Center",
         nav_projects: "المشاريع",
         nav_chat: "المحادثة الذكية",
         nav_bot: "إعدادات البوت",
         nav_ai_config: "إعدادات الذكاء الاصطناعي",
+        nav_account_settings: "إعدادات الحساب",
+        status_online: "متصل",
         stat_projects: "إجمالي المشاريع",
         stat_docs: "المستندات",
         stat_chunks: "القطع النصية",
+        security_section_title: "Security Center",
+        security_section_overview_title: "Security Overview",
+        security_total_events: "Total Events",
+        security_login_failures: "Login Failures",
+        security_blocked_attacks: "Blocked Attacks",
+        security_brute_force_alerts: "Brute Force Alerts",
+        security_events_title: "Security Events Feed",
+        security_col_timestamp: "Timestamp",
+        security_col_username: "Actor",
+        security_col_event_type: "Event Type",
+        security_col_severity: "Severity",
+        security_col_message: "Message",
+        security_events_empty: "No security events yet",
+        security_live_feed_title: "Live Feed",
+        security_live_feed_empty: "No live events right now",
+        security_load_error: "Failed to load security data",
+        security_simulate_btn: "Start Attack Simulation",
+        security_simulate_running: "Running simulation...",
+        security_simulate_success: "Simulation events generated",
+        security_access_denied: "غير مسموح: Security Center متاح فقط لـ Cybersecurity Engineer",
         recent_projects: "المشاريع الأخيرة",
         view_all: "عرض الكل",
         your_projects: "مشاريعك",
@@ -73,17 +96,81 @@ const i18n = {
         empty_docs: "لا توجد مستندات بعد",
         empty_docs_desc: "ارفع ملفات PDF أو TXT أو DOCX لبدء المعالجة.",
         copy_btn: "نسخ",
-        copied_btn: "تم النسخ!"
+        copied_btn: "تم النسخ!",
+        logout_btn: "تسجيل الخروج",
+        account_settings_title: "إعدادات الحساب",
+        account_settings_desc: "إدارة إعدادات الأمان والتفضيلات الشخصية.",
+        account_profile_title: "الملف الشخصي",
+        account_username_label: "اسم المستخدم",
+        account_role_label: "الدور",
+        account_created_label: "تاريخ الإنشاء",
+        account_session_expires_label: "انتهاء الجلسة",
+        account_preferences_title: "تفضيلات احترافية",
+        account_language_label: "لغة الواجهة",
+        account_theme_label: "المظهر",
+        account_api_base_label: "رابط واجهة API",
+        account_api_base_desc: "استخدمه لتبديل البيئة بسهولة (Local/Staging/Production).",
+        account_save_preferences_btn: "حفظ التفضيلات",
+        account_password_title: "تغيير كلمة المرور",
+        account_password_desc: "حدّث كلمة مرورك بشكل دوري لحماية حسابك.",
+        account_current_password_label: "كلمة المرور الحالية",
+        account_new_password_label: "كلمة المرور الجديدة",
+        account_confirm_password_label: "تأكيد كلمة المرور الجديدة",
+        account_change_password_btn: "تحديث كلمة المرور",
+        account_role_user: "مستخدم",
+        account_role_admin: "مدير",
+        account_role_cybersecurity_engineer: "مهندس أمن سيبراني",
+        language_ar: "العربية",
+        language_en: "English",
+        theme_dark: "داكن",
+        theme_light: "فاتح",
+        account_preferences_saved: "تم حفظ تفضيلات الحساب",
+        account_api_unreachable: "تعذر الوصول إلى عنوان API المدخل",
+        account_password_required: "يرجى ملء جميع حقول كلمة المرور",
+        account_password_mismatch: "كلمة المرور الجديدة وتأكيدها غير متطابقين",
+        account_password_updated: "تم تحديث كلمة المرور بنجاح",
+        account_show_passwords: "إظهار كلمات المرور",
+        account_password_strength_label: "قوة كلمة المرور",
+        account_password_strength_empty: "-",
+        account_password_strength_very_weak: "ضعيفة جدا",
+        account_password_strength_weak: "ضعيفة",
+        account_password_strength_fair: "متوسطة",
+        account_password_strength_good: "جيدة",
+        account_password_strength_strong: "قوية",
+        account_password_endpoint_missing: "خدمة تغيير كلمة المرور غير متاحة حاليا. أعد تشغيل الباك-إند ثم جرّب مرة أخرى"
     },
     en: {
         nav_dashboard: "Dashboard",
+        nav_security_center: "Security Center",
         nav_projects: "Projects",
         nav_chat: "Smart Chat",
         nav_bot: "Bot Settings",
         nav_ai_config: "AI Settings",
+        nav_account_settings: "Account Settings",
+        status_online: "Online",
         stat_projects: "Total Projects",
         stat_docs: "Documents",
         stat_chunks: "Text Chunks",
+        security_section_title: "Security Center",
+        security_section_overview_title: "Security Overview",
+        security_total_events: "Total Events",
+        security_login_failures: "Login Failures",
+        security_blocked_attacks: "Blocked Attacks",
+        security_brute_force_alerts: "Brute Force Alerts",
+        security_events_title: "Security Events Feed",
+        security_col_timestamp: "Timestamp",
+        security_col_username: "Actor",
+        security_col_event_type: "Event Type",
+        security_col_severity: "Severity",
+        security_col_message: "Message",
+        security_events_empty: "No security events yet",
+        security_live_feed_title: "Live Feed",
+        security_live_feed_empty: "No live events right now",
+        security_load_error: "Failed to load security data",
+        security_simulate_btn: "Start Attack Simulation",
+        security_simulate_running: "Running simulation...",
+        security_simulate_success: "Simulation events generated",
+        security_access_denied: "Access denied: Security Center is only for Cybersecurity Engineer",
         recent_projects: "Recent Projects",
         view_all: "View All",
         your_projects: "Your Projects",
@@ -140,7 +227,48 @@ const i18n = {
         empty_docs: "No documents yet",
         empty_docs_desc: "Upload PDF, TXT, or DOCX files to start processing.",
         copy_btn: "Copy",
-        copied_btn: "Copied!"
+        copied_btn: "Copied!",
+        logout_btn: "Logout",
+        account_settings_title: "Account Settings",
+        account_settings_desc: "Manage security controls and personal preferences.",
+        account_profile_title: "Profile",
+        account_username_label: "Username",
+        account_role_label: "Role",
+        account_created_label: "Created At",
+        account_session_expires_label: "Session Expires",
+        account_preferences_title: "Professional Preferences",
+        account_language_label: "Interface Language",
+        account_theme_label: "Theme",
+        account_api_base_label: "API Base URL",
+        account_api_base_desc: "Use it to switch quickly between Local/Staging/Production.",
+        account_save_preferences_btn: "Save Preferences",
+        account_password_title: "Change Password",
+        account_password_desc: "Rotate your password regularly to keep your account secure.",
+        account_current_password_label: "Current Password",
+        account_new_password_label: "New Password",
+        account_confirm_password_label: "Confirm New Password",
+        account_change_password_btn: "Update Password",
+        account_role_user: "User",
+        account_role_admin: "Administrator",
+        account_role_cybersecurity_engineer: "Cybersecurity Engineer",
+        language_ar: "Arabic",
+        language_en: "English",
+        theme_dark: "Dark",
+        theme_light: "Light",
+        account_preferences_saved: "Account preferences saved",
+        account_api_unreachable: "The provided API endpoint is unreachable",
+        account_password_required: "Please fill in all password fields",
+        account_password_mismatch: "New password and confirmation do not match",
+        account_password_updated: "Password updated successfully",
+        account_show_passwords: "Show passwords",
+        account_password_strength_label: "Password strength",
+        account_password_strength_empty: "-",
+        account_password_strength_very_weak: "Very weak",
+        account_password_strength_weak: "Weak",
+        account_password_strength_fair: "Fair",
+        account_password_strength_good: "Good",
+        account_password_strength_strong: "Strong",
+        account_password_endpoint_missing: "Password update endpoint is unavailable. Restart the backend and try again"
     }
 };
 
@@ -149,11 +277,14 @@ const state = {
     currentView: 'dashboard',
     projects: [],
     stats: null,
+    currentUser: null,
     selectedProject: null,
     chatMessages: [],
     isUploading: false,
     retrievalTopK: null,
     docPoller: null,
+    securityStreamAbortController: null,
+    securityStreamReconnectTimer: null,
     lang: localStorage.getItem('lang') || 'ar',
     theme: localStorage.getItem('theme') || 'dark'
 };
@@ -168,20 +299,312 @@ const elements = {
     modalBody: document.getElementById('modal-body'),
     closeModalBtn: document.querySelector('.close-modal'),
     themeToggle: document.getElementById('theme-toggle'),
-    langToggle: document.getElementById('lang-toggle')
+    langToggle: document.getElementById('lang-toggle'),
+    logoutBtn: document.getElementById('logout-btn'),
+    userNameLabel: document.querySelector('.user-info .name'),
+    userAvatar: document.querySelector('.user-info .avatar')
 };
+
+const ACTIVE_DOC_STATUSES = new Set(['uploaded', 'queued', 'pending', 'processing']);
+const ACCESS_TOKEN_KEY = 'access_token';
+const SECURITY_STREAM_RECONNECT_MS = 1500;
+const ROLE_USER = 'user';
+const ROLE_ADMIN = 'admin';
+const ROLE_CYBERSECURITY_ENGINEER = 'cybersecurity_engineer';
+
+function getAccessToken() {
+    return (localStorage.getItem(ACCESS_TOKEN_KEY) || '').trim();
+}
+
+function parseJwtPayload(token) {
+    try {
+        const parts = String(token || '').split('.');
+        if (parts.length !== 3) return null;
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+        const json = atob(padded);
+        return JSON.parse(json);
+    } catch (_) {
+        return null;
+    }
+}
+
+function isTokenExpired(token) {
+    const payload = parseJwtPayload(token);
+    if (!payload || typeof payload.exp !== 'number') return true;
+    return Date.now() >= payload.exp * 1000;
+}
+
+function redirectToLogin(reason = '') {
+    if (reason) {
+        window.location.replace(`login.html?reason=${encodeURIComponent(reason)}`);
+        return;
+    }
+    window.location.replace('login.html');
+}
+
+function clearAuthAndRedirect(reason = 'expired') {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    redirectToLogin(reason);
+}
+
+function logoutUser() {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    redirectToLogin();
+}
+
+function withAuthHeaders(extraHeaders = {}) {
+    const token = getAccessToken();
+    const headers = { ...extraHeaders };
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+}
+
+function normalizeBaseUrl(url) {
+    if (!url) return '';
+    return String(url).trim().replace(/\/+$/, '');
+}
+
+function isDocumentActive(status) {
+    return ACTIVE_DOC_STATUSES.has(String(status || '').toLowerCase());
+}
+
+function getApiBaseCandidates() {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = normalizeBaseUrl(params.get('api'));
+    const host = window.location.hostname || 'localhost';
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+
+    const candidates = [
+        fromQuery,
+        normalizeBaseUrl(localStorage.getItem('ragmind_api_base_url')),
+        normalizeBaseUrl(API_BASE_URL),
+        `${protocol}//${host}:8001`,
+        `${protocol}//${host}:8000`
+    ].filter(Boolean);
+
+    return [...new Set(candidates)];
+}
+
+async function canReachApi(baseUrl) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+
+    try {
+        const response = await fetch(`${baseUrl}/health`, { signal: controller.signal });
+        return response.ok;
+    } catch (_) {
+        return false;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function resolveApiBaseUrl(maxAttempts = 8) {
+    const candidates = getApiBaseCandidates();
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        for (const candidate of candidates) {
+            if (await canReachApi(candidate)) {
+                API_BASE_URL = candidate;
+                localStorage.setItem('ragmind_api_base_url', API_BASE_URL);
+                return true;
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    return false;
+}
+
+async function fetchWithApiRecovery(endpoint, options = {}, retries = 1) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fetch(`${API_BASE_URL}${endpoint}`, options);
+        } catch (error) {
+            lastError = error;
+            const message = String(error && error.message ? error.message : '').toLowerCase();
+            const isNetworkFailure = message.includes('failed to fetch');
+
+            if (!isNetworkFailure || attempt >= retries) {
+                break;
+            }
+
+            const recovered = await resolveApiBaseUrl(20);
+            if (!recovered) {
+                break;
+            }
+        }
+    }
+
+    throw lastError || new Error('Failed to fetch');
+}
+
+function isNetworkError(error) {
+    const message = String(error && error.message ? error.message : '').toLowerCase();
+    return error instanceof TypeError || message.includes('failed to fetch');
+}
+
+function evaluatePasswordStrength(password) {
+    const value = String(password || '');
+    if (!value) {
+        return {
+            level: 0,
+            tone: 'none',
+            labelKey: 'account_password_strength_empty'
+        };
+    }
+
+    let score = 0;
+    if (value.length >= 8) score += 1;
+    if (value.length >= 12) score += 1;
+    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1;
+    if (/\d/.test(value)) score += 1;
+    if (/[^A-Za-z0-9]/.test(value)) score += 1;
+
+    if (score <= 1) {
+        return { level: 1, tone: 'very-weak', labelKey: 'account_password_strength_very_weak' };
+    }
+    if (score === 2) {
+        return { level: 2, tone: 'weak', labelKey: 'account_password_strength_weak' };
+    }
+    if (score === 3) {
+        return { level: 3, tone: 'fair', labelKey: 'account_password_strength_fair' };
+    }
+    if (score === 4) {
+        return { level: 4, tone: 'good', labelKey: 'account_password_strength_good' };
+    }
+
+    return { level: 4, tone: 'strong', labelKey: 'account_password_strength_strong' };
+}
+
+function renderPasswordStrengthIndicator(password) {
+    const meter = document.getElementById('password-strength-meter');
+    const text = document.getElementById('password-strength-text');
+    if (!meter || !text) return;
+
+    const t = i18n[state.lang];
+    const strength = evaluatePasswordStrength(password);
+    meter.dataset.level = String(strength.level);
+    text.dataset.strength = strength.tone;
+    text.textContent = t[strength.labelKey] || '-';
+}
+
+async function submitPasswordChangeWithFallback(payload) {
+    const token = getAccessToken();
+    if (!token) {
+        clearAuthAndRedirect('expired');
+        throw new Error('Unauthorized');
+    }
+
+    const endpointCandidates = ['/auth/change-password', '/auth/update-password'];
+    const baseCandidates = [API_BASE_URL, ...getApiBaseCandidates().filter(base => base !== API_BASE_URL)];
+
+    let lastNetworkError = null;
+
+    for (const baseUrl of baseCandidates) {
+        let baseUnreachable = false;
+
+        for (const endpoint of endpointCandidates) {
+            let response;
+
+            try {
+                response = await fetch(`${baseUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+            } catch (error) {
+                if (isNetworkError(error)) {
+                    lastNetworkError = error;
+                    baseUnreachable = true;
+                    break;
+                }
+                throw error;
+            }
+
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
+
+            if (response.status === 404) {
+                continue;
+            }
+
+            let responseData = {};
+            try {
+                responseData = await response.json();
+            } catch (_) {
+                responseData = {};
+            }
+
+            if (!response.ok) {
+                const apiError = new Error(responseData.detail || 'Error');
+                apiError.status = response.status;
+                throw apiError;
+            }
+
+            if (API_BASE_URL !== baseUrl) {
+                API_BASE_URL = baseUrl;
+                localStorage.setItem('ragmind_api_base_url', API_BASE_URL);
+            }
+
+            return responseData;
+        }
+
+        if (baseUnreachable) {
+            continue;
+        }
+    }
+
+    if (lastNetworkError) {
+        throw lastNetworkError;
+    }
+
+    const endpointError = new Error(i18n[state.lang].account_password_endpoint_missing);
+    endpointError.status = 404;
+    throw endpointError;
+}
 
 // --- API Client ---
 
 const api = {
     async get(endpoint) {
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const response = await fetchWithApiRecovery(endpoint, {
+                headers: withAuthHeaders()
+            });
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
+            if (!response.ok) {
+                let errorData = {};
+                try {
+                    errorData = await response.json();
+                } catch (_) {
+                    errorData = {};
+                }
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+            }
             return await response.json();
         } catch (error) {
             console.error(`API Get Error (${endpoint}):`, error);
-            showNotification(state.lang === 'ar' ? 'خطأ في الاتصال بالسيرفر' : 'Server Connection Error', 'error');
+            if (error.message !== 'Unauthorized') {
+                const message = error.message === 'Failed to fetch'
+                    ? (state.lang === 'ar' ? 'خطأ في الاتصال بالسيرفر' : 'Server Connection Error')
+                    : error.message;
+                showNotification(message, 'error');
+            }
             throw error;
         }
     },
@@ -192,35 +615,428 @@ const api = {
                 method: 'POST',
                 body: isFormData ? data : JSON.stringify(data)
             };
-            if (!isFormData) {
-                options.headers = { 'Content-Type': 'application/json' };
-            }
+            options.headers = withAuthHeaders(
+                isFormData ? {} : { 'Content-Type': 'application/json' }
+            );
 
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+            const response = await fetchWithApiRecovery(endpoint, options);
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Error');
+                let errorData = {};
+                try {
+                    errorData = await response.json();
+                } catch (_) {
+                    errorData = {};
+                }
+                const apiError = new Error(errorData.detail || 'Error');
+                apiError.status = response.status;
+                throw apiError;
             }
             return await response.json();
         } catch (error) {
             console.error(`API Post Error (${endpoint}):`, error);
-            showNotification(error.message, 'error');
+            if (error.message !== 'Unauthorized') {
+                showNotification(error.message, 'error');
+            }
             throw error;
         }
     },
 
     async delete(endpoint) {
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
+            const response = await fetchWithApiRecovery(endpoint, {
+                method: 'DELETE',
+                headers: withAuthHeaders()
+            });
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
             if (!response.ok) throw new Error('Delete failed');
             return true;
         } catch (error) {
             console.error(`API Delete Error (${endpoint}):`, error);
-            showNotification(error.message, 'error');
+            if (error.message !== 'Unauthorized') {
+                showNotification(error.message, 'error');
+            }
             throw error;
         }
     }
 };
+
+function normalizeProjectsResponse(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.items)) return payload.items;
+    return [];
+}
+
+async function getCurrentUser() {
+    if (state.currentUser) {
+        updateSidebarUserInfo(state.currentUser);
+        applySecurityCenterNavAccess();
+        return state.currentUser;
+    }
+
+    state.currentUser = await api.get('/auth/me');
+    updateSidebarUserInfo(state.currentUser);
+    applySecurityCenterNavAccess();
+    return state.currentUser;
+}
+
+function updateSidebarUserInfo(user) {
+    const fallbackName = state.lang === 'ar' ? 'المستخدم' : 'User';
+    const rawName = user && user.username ? String(user.username).trim() : '';
+    const displayName = rawName || fallbackName;
+
+    if (elements.userNameLabel) {
+        elements.userNameLabel.textContent = displayName;
+    }
+
+    if (elements.userAvatar) {
+        const firstChar = displayName.charAt(0) || 'U';
+        elements.userAvatar.textContent = firstChar.toUpperCase();
+    }
+}
+
+function normalizeUserRoles(user) {
+    const normalizedRoles = [];
+
+    const appendRole = (rawRole) => {
+        const role = String(rawRole || '').trim().toLowerCase();
+        if (!role) return;
+        if (!normalizedRoles.includes(role)) {
+            normalizedRoles.push(role);
+        }
+    };
+
+    if (user && Array.isArray(user.roles)) {
+        user.roles.forEach(appendRole);
+    }
+
+    if (user && typeof user.role === 'string') {
+        appendRole(user.role);
+    }
+
+    if (normalizedRoles.length === 0) {
+        normalizedRoles.push(ROLE_USER);
+    } else if (!normalizedRoles.includes(ROLE_USER)) {
+        normalizedRoles.push(ROLE_USER);
+    }
+
+    return normalizedRoles;
+}
+
+function formatPrimaryRoleLabel(user = state.currentUser) {
+    const t = i18n[state.lang];
+    const roles = normalizeUserRoles(user);
+    const primaryRole = roles[0] || ROLE_USER;
+
+    if (primaryRole === ROLE_CYBERSECURITY_ENGINEER) {
+        return t.account_role_cybersecurity_engineer || primaryRole;
+    }
+
+    if (primaryRole === ROLE_ADMIN) {
+        return t.account_role_admin || primaryRole;
+    }
+
+    return t.account_role_user || primaryRole;
+}
+
+function formatLocaleDateTime(value) {
+    if (!value) return '-';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '-';
+    }
+
+    return date.toLocaleString(state.lang === 'ar' ? 'ar-EG' : 'en-US');
+}
+
+function getSessionExpiryLabel() {
+    const payload = parseJwtPayload(getAccessToken());
+    if (!payload || typeof payload.exp !== 'number') {
+        return '-';
+    }
+
+    return formatLocaleDateTime(payload.exp * 1000);
+}
+
+function canAccessSecurityCenter(user = state.currentUser) {
+    const roles = normalizeUserRoles(user);
+    return roles.includes(ROLE_CYBERSECURITY_ENGINEER) || roles.includes(ROLE_ADMIN);
+}
+
+function applySecurityCenterNavAccess() {
+    const navItem = document.querySelector('.sidebar-nav li[data-view="securityCenter"]');
+    if (!navItem) return;
+
+    navItem.style.display = canAccessSecurityCenter() ? '' : 'none';
+}
+
+async function fetchUserProjects() {
+    const [projectsPayload, currentUser] = await Promise.all([
+        api.get('/projects/'),
+        getCurrentUser()
+    ]);
+
+    const projects = normalizeProjectsResponse(projectsPayload);
+
+    // Defensive filtering in case owner_id is present in response payload.
+    if (projects.length > 0 && projects.some(project => typeof project.owner_id !== 'undefined')) {
+        return projects.filter(project => project.owner_id === currentUser.id);
+    }
+
+    return projects;
+}
+
+function sumProjectMetric(projects, fieldName) {
+    return projects.reduce((sum, project) => {
+        const value = Number(project && project[fieldName]);
+        return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+}
+
+function normalizeSecurityStats(payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const toCount = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0) return 0;
+        return Math.floor(numeric);
+    };
+
+    return {
+        total_events: toCount(data.total_events),
+        login_failures: toCount(data.login_failures),
+        brute_force_attempts: toCount(data.brute_force_attempts),
+        blocked_uploads: toCount(data.blocked_uploads)
+    };
+}
+
+async function fetchSecurityJson(endpoint) {
+    const response = await fetchWithApiRecovery(endpoint, {
+        headers: withAuthHeaders()
+    });
+
+    if (response.status === 401) {
+        clearAuthAndRedirect('expired');
+        throw new Error('Unauthorized');
+    }
+
+    if (!response.ok) {
+        let errorData = {};
+        try {
+            errorData = await response.json();
+        } catch (_) {
+            errorData = {};
+        }
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+}
+
+async function fetchSecurityDashboardData(limit = 20) {
+    const safeLimit = limit === 50 ? 50 : 20;
+    const [statsPayload, eventsPayload] = await Promise.all([
+        fetchSecurityJson('/security/stats'),
+        fetchSecurityJson(`/security/events?limit=${safeLimit}`)
+    ]);
+
+    return {
+        stats: normalizeSecurityStats(statsPayload),
+        events: Array.isArray(eventsPayload) ? eventsPayload : []
+    };
+}
+
+function getSecuritySeverityClass(severity) {
+    switch (String(severity || '').toUpperCase()) {
+        case 'LOW':
+            return 'security-severity-low';
+        case 'MEDIUM':
+            return 'security-severity-medium';
+        case 'HIGH':
+            return 'security-severity-high';
+        case 'CRITICAL':
+            return 'security-severity-critical';
+        default:
+            return 'security-severity-medium';
+    }
+}
+
+function formatSecurityTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return '-';
+    }
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+function formatSecurityClockTime(timestamp) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return '--:--:--';
+    }
+
+    return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+function extractSecurityEventUser(event) {
+    const directUsername = String(event && event.username ? event.username : '').trim();
+    if (directUsername) {
+        return directUsername;
+    }
+
+    const metadataUsername = String(
+        event && event.metadata && event.metadata.username ? event.metadata.username : ''
+    ).trim();
+    if (metadataUsername) {
+        return metadataUsername;
+    }
+
+    const userId = Number(event && event.user_id);
+    if (Number.isFinite(userId) && userId > 0) {
+        return `user_${userId}`;
+    }
+
+    return 'System';
+}
+
+function renderSecurityLiveFeed(events) {
+    const feedList = document.getElementById('security-live-feed-list');
+    if (!feedList) return;
+
+    if (!Array.isArray(events) || events.length === 0) {
+        feedList.innerHTML = `<li class="security-live-feed-empty">${escapeHtml(i18n[state.lang].security_live_feed_empty)}</li>`;
+        return;
+    }
+
+    feedList.innerHTML = events.slice(0, 8).map((event) => {
+        const eventType = String(event && event.event_type ? event.event_type : 'UNKNOWN').toUpperCase();
+        const message = String(event && event.message ? event.message : '-');
+        const userLabel = extractSecurityEventUser(event);
+        const line = `[${formatSecurityClockTime(event && event.timestamp ? event.timestamp : '')}] ${eventType} [Actor: ${userLabel}] - ${message}`;
+
+        return `<li class="security-live-feed-item"><span class="security-live-feed-line">${escapeHtml(line)}</span></li>`;
+    }).join('');
+}
+
+function renderSecurityCounters(stats, shouldAnimate = false) {
+    const safeStats = normalizeSecurityStats(stats || {});
+
+    if (shouldAnimate) {
+        animateCounter('security-stat-total-events', safeStats.total_events);
+        animateCounter('security-stat-login-failures', safeStats.login_failures);
+        animateCounter('security-stat-blocked-attacks', safeStats.blocked_uploads);
+        animateCounter('security-stat-brute-force', safeStats.brute_force_attempts);
+        return;
+    }
+
+    const setCounter = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = Number(value || 0).toLocaleString();
+        }
+    };
+
+    setCounter('security-stat-total-events', safeStats.total_events);
+    setCounter('security-stat-login-failures', safeStats.login_failures);
+    setCounter('security-stat-blocked-attacks', safeStats.blocked_uploads);
+    setCounter('security-stat-brute-force', safeStats.brute_force_attempts);
+}
+
+function renderSecurityEventsTable(events) {
+    const tableBody = document.getElementById('security-events-body');
+    if (!tableBody) return;
+
+    if (!Array.isArray(events) || events.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="security-empty-row">${escapeHtml(i18n[state.lang].security_events_empty)}</td></tr>`;
+        return;
+    }
+
+    tableBody.innerHTML = events.map((event) => {
+        const eventType = String(event && event.event_type ? event.event_type : 'UNKNOWN').toUpperCase();
+        const severity = String(event && event.severity ? event.severity : 'MEDIUM').toUpperCase();
+        const username = extractSecurityEventUser(event);
+        const message = String(event && event.message ? event.message : '-');
+        const timestamp = formatSecurityTimestamp(event && event.timestamp ? event.timestamp : '');
+        const severityClass = getSecuritySeverityClass(severity);
+
+        return `
+            <tr>
+                <td class="security-col-time">${escapeHtml(timestamp)}</td>
+                <td class="security-col-username">${escapeHtml(username)}</td>
+                <td><span class="security-event-type">${escapeHtml(eventType)}</span></td>
+                <td><span class="security-severity ${severityClass}">${escapeHtml(severity)}</span></td>
+                <td class="security-col-message">${escapeHtml(message)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function setupSecuritySimulationAction() {
+    const button = document.getElementById('security-simulate-btn');
+    if (!button) return;
+
+    const label = button.querySelector('span');
+    const icon = button.querySelector('i');
+    const defaultIconClass = icon ? icon.className : '';
+
+    button.onclick = async () => {
+        if (button.disabled) return;
+
+        button.disabled = true;
+        button.classList.add('is-loading');
+        if (icon) {
+            icon.className = 'fas fa-spinner fa-spin';
+        }
+        if (label) {
+            label.textContent = i18n[state.lang].security_simulate_running;
+        }
+
+        try {
+            const payload = await api.post('/security/simulate', {});
+            applySecurityStreamPayload(payload);
+
+            const generatedCount = Number(payload && payload.generated_count);
+            const suffix = Number.isFinite(generatedCount) && generatedCount > 0
+                ? ` (${generatedCount})`
+                : '';
+            showNotification(`${i18n[state.lang].security_simulate_success}${suffix}`, 'success');
+        } catch (error) {
+            console.error('Security simulation trigger failed:', error);
+        } finally {
+            button.disabled = false;
+            button.classList.remove('is-loading');
+            if (icon) {
+                icon.className = defaultIconClass;
+            }
+            if (label) {
+                label.textContent = i18n[state.lang].security_simulate_btn;
+            }
+        }
+    };
+}
+
+function isSecurityCenterView(viewName = state.currentView) {
+    return viewName === 'securityCenter' || viewName === 'security-center';
+}
 
 // --- View Rendering ---
 
@@ -230,17 +1046,14 @@ const views = {
         showLoader();
 
         try {
-            const [projectsRes, stats] = await Promise.all([
-                api.get('/projects/'),
-                api.get('/stats/')
-            ]);
-            const projects = projectsRes.items || projectsRes;
+            const projects = await fetchUserProjects();
+
             state.projects = projects;
 
-            // Animate stats
-            animateCounter('stat-projects', stats.projects);
-            animateCounter('stat-docs', stats.documents);
-            animateCounter('stat-chunks', stats.chunks);
+            // Keep dashboard counters scoped to authenticated user's projects.
+            animateCounter('stat-projects', projects.length);
+            animateCounter('stat-docs', sumProjectMetric(projects, 'document_count'));
+            animateCounter('stat-chunks', sumProjectMetric(projects, 'chunk_count'));
 
             // Render recent projects
             const list = document.getElementById('recent-projects-list');
@@ -267,13 +1080,41 @@ const views = {
         }
     },
 
+    async securityCenter() {
+        renderTemplate('security-center-template');
+        showLoader();
+
+        try {
+            const securityData = await fetchSecurityDashboardData(20).catch((error) => {
+                console.error('Security Center Data Error:', error);
+                if (error.message !== 'Unauthorized') {
+                    showNotification(i18n[state.lang].security_load_error, 'warning');
+                }
+                return {
+                    stats: normalizeSecurityStats({}),
+                    events: []
+                };
+            });
+
+            renderSecurityCounters(securityData.stats, true);
+            renderSecurityEventsTable(securityData.events);
+            renderSecurityLiveFeed(securityData.events);
+            startSecurityRealtimeStream();
+            setupSecuritySimulationAction();
+            applyTranslations();
+        } catch (error) {
+            console.error('Security Center Load Error:', error);
+        } finally {
+            hideLoader();
+        }
+    },
+
     async projects() {
         renderTemplate('projects-template');
         showLoader();
 
         try {
-            const projectsRes = await api.get('/projects/');
-            const projects = projectsRes.items || projectsRes;
+            const projects = await fetchUserProjects();
             state.projects = projects;
 
             const list = document.getElementById('all-projects-list');
@@ -324,8 +1165,7 @@ const views = {
         renderTemplate('chat-template');
 
         const select = document.getElementById('chat-project-select');
-        const projectsRes = await api.get('/projects/');
-        const projects = projectsRes.items || projectsRes;
+        const projects = await fetchUserProjects();
 
         projects.forEach(p => {
             const opt = document.createElement('option');
@@ -385,11 +1225,10 @@ const views = {
         showLoader();
 
         try {
-            const [projectsRes, config] = await Promise.all([
-                api.get('/projects/'),
+            const [projects, config] = await Promise.all([
+                fetchUserProjects(),
                 api.get('/bot/config')
             ]);
-            const projects = projectsRes.items || projectsRes;
 
             const select = document.getElementById('bot-active-project');
             projects.forEach(p => {
@@ -566,6 +1405,161 @@ const views = {
         } finally {
             hideLoader();
         }
+    },
+
+    async 'account-settings'() {
+        renderTemplate('account-settings-template');
+        showLoader();
+
+        try {
+            const user = await getCurrentUser();
+
+            const usernameValue = document.getElementById('account-username-value');
+            const roleValue = document.getElementById('account-role-value');
+            const createdValue = document.getElementById('account-created-value');
+            const sessionExpiryValue = document.getElementById('account-session-expiry-value');
+
+            const languageSelect = document.getElementById('account-language-select');
+            const themeSelect = document.getElementById('account-theme-select');
+            const apiBaseInput = document.getElementById('account-api-base-input');
+            const savePreferencesBtn = document.getElementById('save-account-preferences-btn');
+
+            const currentPasswordInput = document.getElementById('account-current-password');
+            const newPasswordInput = document.getElementById('account-new-password');
+            const confirmPasswordInput = document.getElementById('account-confirm-password');
+            const showPasswordsToggle = document.getElementById('account-show-passwords');
+            const changePasswordBtn = document.getElementById('change-password-btn');
+
+            const passwordInputs = [
+                currentPasswordInput,
+                newPasswordInput,
+                confirmPasswordInput
+            ].filter(Boolean);
+
+            if (showPasswordsToggle) {
+                showPasswordsToggle.onchange = () => {
+                    const inputType = showPasswordsToggle.checked ? 'text' : 'password';
+                    passwordInputs.forEach((input) => {
+                        input.type = inputType;
+                    });
+                };
+            }
+
+            if (newPasswordInput) {
+                newPasswordInput.oninput = () => {
+                    renderPasswordStrengthIndicator(newPasswordInput.value);
+                };
+                renderPasswordStrengthIndicator(newPasswordInput.value);
+            }
+
+            if (usernameValue) {
+                usernameValue.textContent = user && user.username ? user.username : '-';
+            }
+            if (roleValue) {
+                roleValue.textContent = formatPrimaryRoleLabel(user);
+            }
+            if (createdValue) {
+                createdValue.textContent = formatLocaleDateTime(user && user.created_at ? user.created_at : null);
+            }
+            if (sessionExpiryValue) {
+                sessionExpiryValue.textContent = getSessionExpiryLabel();
+            }
+
+            if (languageSelect) {
+                languageSelect.value = state.lang;
+            }
+            if (themeSelect) {
+                themeSelect.value = state.theme;
+            }
+            if (apiBaseInput) {
+                apiBaseInput.value = API_BASE_URL;
+            }
+
+            if (savePreferencesBtn) {
+                savePreferencesBtn.onclick = async () => {
+                    const nextLanguage = languageSelect ? languageSelect.value : state.lang;
+                    const nextTheme = themeSelect ? themeSelect.value : state.theme;
+                    const requestedApiBase = normalizeBaseUrl(apiBaseInput ? apiBaseInput.value : API_BASE_URL);
+                    const languageChanged = nextLanguage !== state.lang;
+                    const themeChanged = nextTheme !== state.theme;
+                    const apiChanged = Boolean(requestedApiBase) && requestedApiBase !== API_BASE_URL;
+
+                    if (apiChanged) {
+                        const reachable = await canReachApi(requestedApiBase);
+                        if (!reachable) {
+                            showNotification(i18n[state.lang].account_api_unreachable, 'warning');
+                            return;
+                        }
+
+                        API_BASE_URL = requestedApiBase;
+                        localStorage.setItem('ragmind_api_base_url', API_BASE_URL);
+                    }
+
+                    if (themeChanged) {
+                        applyTheme(nextTheme);
+                    }
+
+                    if (languageChanged) {
+                        state.lang = nextLanguage;
+                        localStorage.setItem('lang', state.lang);
+                    }
+
+                    showNotification(i18n[state.lang].account_preferences_saved, 'success');
+
+                    if (languageChanged) {
+                        await switchView('account-settings');
+                        return;
+                    }
+
+                    applyTranslations();
+                };
+            }
+
+            if (changePasswordBtn) {
+                changePasswordBtn.onclick = async () => {
+                    const currentPassword = currentPasswordInput ? currentPasswordInput.value : '';
+                    const newPassword = newPasswordInput ? newPasswordInput.value : '';
+                    const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
+
+                    if (!currentPassword || !newPassword || !confirmPassword) {
+                        showNotification(i18n[state.lang].account_password_required, 'warning');
+                        return;
+                    }
+
+                    if (newPassword !== confirmPassword) {
+                        showNotification(i18n[state.lang].account_password_mismatch, 'warning');
+                        return;
+                    }
+
+                    try {
+                        await submitPasswordChangeWithFallback({
+                            current_password: currentPassword,
+                            new_password: newPassword,
+                            confirm_new_password: confirmPassword
+                        });
+
+                        if (currentPasswordInput) currentPasswordInput.value = '';
+                        if (newPasswordInput) newPasswordInput.value = '';
+                        if (confirmPasswordInput) confirmPasswordInput.value = '';
+                        renderPasswordStrengthIndicator('');
+
+                        showNotification(i18n[state.lang].account_password_updated, 'success');
+                    } catch (error) {
+                        console.error('Change Password Error:', error);
+                        showNotification(error.message || i18n[state.lang].error_generic, 'error');
+                    }
+                };
+            }
+
+            applyTranslations();
+            if (newPasswordInput) {
+                renderPasswordStrengthIndicator(newPasswordInput.value);
+            }
+        } catch (error) {
+            console.error('Account Settings Error:', error);
+        } finally {
+            hideLoader();
+        }
     }
 };
 
@@ -620,19 +1614,23 @@ function createProjectCard(project) {
 function createDocItem(doc) {
     const item = document.createElement('div');
     item.className = 'doc-item';
+    const isActiveStatus = isDocumentActive(doc.status);
     const statusClass = doc.status === 'completed' ? 'status-done' : (doc.status === 'failed' ? 'status-error' : 'status-processing');
-    const statusIcon = doc.status === 'completed' ? 'fa-check-circle' : (doc.status === 'failed' ? 'fa-exclamation-circle' : 'fa-spinner fa-spin');
+    const statusIcon = doc.status === 'completed' ? 'fa-check-circle' : (doc.status === 'failed' ? 'fa-exclamation-circle' : (isActiveStatus ? 'fa-spinner fa-spin' : 'fa-clock'));
     const meta = doc.extra_metadata || {};
     const totalChunks = Number.isFinite(meta.total_chunks) ? meta.total_chunks : null;
     const processedChunks = Number.isFinite(meta.processed_chunks) ? meta.processed_chunks : null;
     const progressValue = Number.isFinite(meta.progress) ? meta.progress : null;
     const stageLabel = getStageLabel(meta.stage);
-    const showProgress = doc.status === 'processing' && totalChunks && totalChunks > 0;
+    const showProgress = isActiveStatus && totalChunks && totalChunks > 0;
     const progressPercent = progressValue != null
         ? Math.max(0, Math.min(100, progressValue))
         : Math.round((processedChunks || 0) / totalChunks * 100);
 
     const statusText = {
+        uploaded: state.lang === 'ar' ? 'تم الرفع' : 'Uploaded',
+        queued: state.lang === 'ar' ? 'في قائمة الانتظار' : 'Queued',
+        pending: state.lang === 'ar' ? 'قيد الانتظار' : 'Pending',
         completed: state.lang === 'ar' ? 'مكتمل' : 'Completed',
         failed: state.lang === 'ar' ? 'فشل' : 'Failed',
         processing: state.lang === 'ar' ? 'جاري المعالجة' : 'Processing'
@@ -691,8 +1689,8 @@ function startDocPolling(projectId, docs) {
         state.docPoller = null;
     }
 
-    const hasProcessing = docs.some(doc => doc.status === 'processing');
-    if (!hasProcessing) return;
+    const hasActiveDocs = docs.some(doc => isDocumentActive(doc.status));
+    if (!hasActiveDocs) return;
 
     state.docPoller = setInterval(async () => {
         if (state.currentView !== 'projectDetail') {
@@ -704,8 +1702,8 @@ function startDocPolling(projectId, docs) {
         try {
             const updated = await api.get(`/projects/${projectId}/documents`);
             renderDocsList(updated);
-            const stillProcessing = updated.some(doc => doc.status === 'processing');
-            if (!stillProcessing) {
+            const stillActive = updated.some(doc => isDocumentActive(doc.status));
+            if (!stillActive) {
                 clearInterval(state.docPoller);
                 state.docPoller = null;
             }
@@ -713,6 +1711,126 @@ function startDocPolling(projectId, docs) {
             console.error('Docs Poll Error:', error);
         }
     }, 3000);
+}
+
+function clearSecurityStreamReconnectTimer() {
+    if (state.securityStreamReconnectTimer) {
+        clearTimeout(state.securityStreamReconnectTimer);
+        state.securityStreamReconnectTimer = null;
+    }
+}
+
+function stopSecurityRealtimeStream() {
+    clearSecurityStreamReconnectTimer();
+
+    if (state.securityStreamAbortController) {
+        state.securityStreamAbortController.abort();
+        state.securityStreamAbortController = null;
+    }
+}
+
+function scheduleSecurityStreamReconnect() {
+    if (!isSecurityCenterView()) return;
+    if (state.securityStreamReconnectTimer) return;
+
+    state.securityStreamReconnectTimer = setTimeout(() => {
+        state.securityStreamReconnectTimer = null;
+        startSecurityRealtimeStream();
+    }, SECURITY_STREAM_RECONNECT_MS);
+}
+
+function applySecurityStreamPayload(payload) {
+    if (!payload || typeof payload !== 'object') return;
+
+    const events = Array.isArray(payload.events) ? payload.events : [];
+    renderSecurityCounters(payload.stats || {}, false);
+    renderSecurityEventsTable(events);
+    renderSecurityLiveFeed(events);
+}
+
+async function startSecurityRealtimeStream() {
+    stopSecurityRealtimeStream();
+
+    if (!isSecurityCenterView()) return;
+
+    const controller = new AbortController();
+    state.securityStreamAbortController = controller;
+
+    try {
+        const response = await fetchWithApiRecovery('/security/events/stream?limit=20', {
+            headers: withAuthHeaders({ Accept: 'text/event-stream' }),
+            signal: controller.signal
+        }, 0);
+
+        if (response.status === 401) {
+            clearAuthAndRedirect('expired');
+            throw new Error('Unauthorized');
+        }
+
+        if (!response.ok || !response.body) {
+            throw new Error(`Security stream failed (${response.status})`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (isSecurityCenterView() && !controller.signal.aborted) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+            let boundary = buffer.indexOf('\n\n');
+            while (boundary !== -1) {
+                const rawEvent = buffer.slice(0, boundary).trim();
+                buffer = buffer.slice(boundary + 2);
+
+                if (rawEvent && !rawEvent.startsWith(':')) {
+                    const lines = rawEvent.split('\n');
+                    const dataLines = [];
+
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            dataLines.push(line.slice(5).trim());
+                        }
+                    }
+
+                    if (dataLines.length > 0) {
+                        try {
+                            applySecurityStreamPayload(JSON.parse(dataLines.join('\n')));
+                        } catch (parseError) {
+                            console.warn('Security stream payload parse error:', parseError);
+                        }
+                    }
+                }
+
+                boundary = buffer.indexOf('\n\n');
+            }
+        }
+
+        try {
+            await reader.cancel();
+        } catch (_) {
+            // Ignore cancellation errors on connection close.
+        }
+    } catch (error) {
+        if (error && error.name === 'AbortError') {
+            return;
+        }
+
+        if (error.message !== 'Unauthorized') {
+            console.error('Security realtime stream error:', error);
+        }
+    } finally {
+        if (state.securityStreamAbortController === controller) {
+            state.securityStreamAbortController = null;
+        }
+
+        if (!controller.signal.aborted && isSecurityCenterView()) {
+            scheduleSecurityStreamReconnect();
+        }
+    }
 }
 
 function getStageLabel(stage) {
@@ -767,6 +1885,12 @@ function applyTranslations() {
     const searchInput = document.querySelector('.search-bar input');
     if (searchInput) searchInput.placeholder = t.search_placeholder;
 
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.title = t.logout_btn;
+        logoutBtn.setAttribute('aria-label', t.logout_btn);
+    }
+
     // Update back button icon direction
     const backBtn = document.getElementById('back-to-projects');
     if (backBtn) {
@@ -775,8 +1899,8 @@ function applyTranslations() {
     }
 }
 
-function toggleTheme() {
-    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+function applyTheme(themeName) {
+    state.theme = themeName === 'light' ? 'light' : 'dark';
     document.body.classList.toggle('light-theme', state.theme === 'light');
     document.body.classList.toggle('dark-theme', state.theme === 'dark');
 
@@ -784,6 +1908,10 @@ function toggleTheme() {
     icon.className = state.theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
 
     localStorage.setItem('theme', state.theme);
+}
+
+function toggleTheme() {
+    applyTheme(state.theme === 'dark' ? 'light' : 'dark');
 }
 
 function toggleLang() {
@@ -796,10 +1924,20 @@ function toggleLang() {
 // --- Event Handlers ---
 
 async function switchView(viewName, params = null) {
+    if (viewName === 'security-center') {
+        viewName = 'securityCenter';
+    }
+
+    if (viewName === 'securityCenter' && !canAccessSecurityCenter()) {
+        showNotification(i18n[state.lang].security_access_denied, 'warning');
+        viewName = 'dashboard';
+    }
+
     if (state.docPoller) {
         clearInterval(state.docPoller);
         state.docPoller = null;
     }
+    stopSecurityRealtimeStream();
     state.currentView = viewName;
 
     // Update Nav
@@ -908,11 +2046,16 @@ async function handleChatSubmit() {
         }
 
         // ── Stream via SSE (fetch + ReadableStream) ──
-        const response = await fetch(`${API_BASE_URL}/projects/${projectId}/query/stream`, {
+        const response = await fetchWithApiRecovery(`/projects/${projectId}/query/stream`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(payload),
         });
+
+        if (response.status === 401) {
+            clearAuthAndRedirect('expired');
+            throw new Error('Unauthorized');
+        }
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -1347,7 +2490,17 @@ async function handleFiles(files, projectId) {
 
 // --- Initialization ---
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    const authToken = getAccessToken();
+    if (!authToken) {
+        redirectToLogin();
+        return;
+    }
+    if (isTokenExpired(authToken)) {
+        clearAuthAndRedirect('expired');
+        return;
+    }
+
     // Nav Clicks
     elements.navItems.forEach(item => {
         item.onclick = () => {
@@ -1368,6 +2521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Theme & Lang
     elements.themeToggle.onclick = toggleTheme;
     elements.langToggle.onclick = toggleLang;
+    if (elements.logoutBtn) {
+        elements.logoutBtn.onclick = logoutUser;
+    }
 
     // Search Bar
     const searchInput = document.querySelector('.search-bar input');
@@ -1401,13 +2557,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Init State
-    if (state.theme === 'light') {
-        document.body.classList.add('light-theme');
-        document.body.classList.remove('dark-theme');
-        elements.themeToggle.querySelector('i').className = 'fas fa-sun';
-    }
+    applyTheme(state.theme);
 
     // Initial View
     applyTranslations();
+    const apiReady = await resolveApiBaseUrl();
+    if (!apiReady) {
+        showNotification(state.lang === 'ar' ? 'تعذر الوصول إلى السيرفر. تأكد أن الباك-إند يعمل.' : 'Cannot reach backend server. Make sure it is running.', 'error');
+        const recovered = await resolveApiBaseUrl(30);
+        if (!recovered) {
+            return;
+        }
+    }
+
+    try {
+        await getCurrentUser();
+    } catch (error) {
+        console.error('Current user load error:', error);
+        return;
+    }
+
     switchView('dashboard');
 });

@@ -15,6 +15,7 @@ except ImportError:
 # Configure logging
 from backend.config import settings
 import logging
+from backend.security.middleware import SecurityRateLimitMiddleware
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
@@ -23,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from backend.database import init_db, close_db
-from backend.routes import projects, documents, query, health, stats, bot_config, app_config
+from backend.routes import projects, documents, query, health, stats, bot_config, app_config, auth, security
 
 
 @asynccontextmanager
@@ -81,6 +82,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security middleware: global API throttling.
+app.add_middleware(SecurityRateLimitMiddleware)
+
 # GZip compression for responses
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
@@ -90,8 +94,10 @@ app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(query.router)
 app.include_router(stats.router)
+app.include_router(security.router)
 app.include_router(bot_config.router)
 app.include_router(app_config.router)
+app.include_router(auth.router)
 
 
 if __name__ == "__main__":

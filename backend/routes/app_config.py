@@ -2,14 +2,16 @@
 Application configuration routes.
 Exposes provider availability and runtime selections.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Dict, List
+from typing import Dict, Optional
 
 from backend.config import settings
 from backend.runtime_config import get_runtime_value, update_runtime_config
 from backend.providers.llm.factory import LLMProviderFactory
 from backend.providers.vectordb.factory import VectorDBProviderFactory
+from backend.security.auth import AuthUser, require_mutation_auth_if_enabled
+from backend.security.sanitization import sanitize_text
 
 router = APIRouter(prefix="/config", tags=["App Config"])
 
@@ -66,36 +68,51 @@ async def get_providers() -> Dict[str, object]:
 
 
 @router.post("/providers")
-async def update_providers(payload: ProviderUpdate) -> Dict[str, object]:
+async def update_providers(
+    payload: ProviderUpdate,
+    _auth: Optional[AuthUser] = Depends(require_mutation_auth_if_enabled),
+) -> Dict[str, object]:
     """Update runtime provider selections."""
+    llm_provider = sanitize_text(payload.llm_provider, max_length=64, strip_html=True, allow_newlines=False).lower()
+    embedding_provider = sanitize_text(payload.embedding_provider, max_length=64, strip_html=True, allow_newlines=False).lower()
+    vector_db_provider = None
+    if payload.vector_db_provider is not None:
+        vector_db_provider = sanitize_text(payload.vector_db_provider, max_length=64, strip_html=True, allow_newlines=False).lower()
+    chunk_strategy = None
+    if payload.chunk_strategy is not None:
+        chunk_strategy = sanitize_text(payload.chunk_strategy, max_length=32, strip_html=True, allow_newlines=False).lower()
+
+    if not llm_provider or not embedding_provider:
+        raise HTTPException(status_code=400, detail="Provider names cannot be empty")
+
     llm_available = set(LLMProviderFactory.get_available_providers())
     embedding_available = set(LLMProviderFactory.get_available_embedding_providers())
     vector_available = set(VectorDBProviderFactory.get_available_providers())
     chunk_strategy_allowed = {"parent_child", "simple"}
 
-    if payload.llm_provider not in llm_available:
+    if llm_provider not in llm_available:
         raise HTTPException(status_code=400, detail="Unsupported LLM provider")
-    if payload.embedding_provider not in embedding_available:
+    if embedding_provider not in embedding_available:
         raise HTTPException(status_code=400, detail="Unsupported embedding provider")
-    if payload.vector_db_provider is not None and payload.vector_db_provider not in vector_available:
+    if vector_db_provider is not None and vector_db_provider not in vector_available:
         raise HTTPException(status_code=400, detail="Unsupported vector DB provider")
-    if payload.chunk_strategy is not None and payload.chunk_strategy not in chunk_strategy_allowed:
+    if chunk_strategy is not None and chunk_strategy not in chunk_strategy_allowed:
         raise HTTPException(status_code=400, detail="Unsupported chunk strategy")
 
     updates = {
-        "llm_provider": payload.llm_provider,
-        "embedding_provider": payload.embedding_provider,
+        "llm_provider": llm_provider,
+        "embedding_provider": embedding_provider,
     }
 
-    if payload.vector_db_provider is not None:
-        updates["vector_db_provider"] = payload.vector_db_provider
+    if vector_db_provider is not None:
+        updates["vector_db_provider"] = vector_db_provider
 
     if payload.retrieval_top_k is not None:
         top_k = min(payload.retrieval_top_k, settings.retrieval_top_k_max)
         updates["retrieval_top_k"] = top_k
 
-    if payload.chunk_strategy is not None:
-        updates["chunk_strategy"] = payload.chunk_strategy
+    if chunk_strategy is not None:
+        updates["chunk_strategy"] = chunk_strategy
     if payload.chunk_size is not None:
         updates["chunk_size"] = payload.chunk_size
     if payload.chunk_overlap is not None:

@@ -5,18 +5,28 @@ API endpoints for querying documents.
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from backend.config import settings
 from backend.runtime_config import get_runtime_value
 from backend.database import get_db
+from backend.database.models import User
+from backend.controllers.project_controller import ProjectController
+from backend.controllers.document_controller import DocumentController
 from backend.controllers.query_controller import QueryController
+from backend.security.auth import get_current_db_user
+from backend.security.event_service import log_event
+from backend.security.security_event import SecurityEventType, SecuritySeverity
+from backend.security.sanitization import sanitize_text
 
-router = APIRouter(tags=["Query"])
+# SECURITY RULE: query access is always scoped to JWT current_user ownership.
+router = APIRouter(tags=["Query"], dependencies=[Depends(get_current_db_user)])
 
 
 # Request/Response Models
 class QueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str = Field(..., min_length=1)
     top_k: Optional[int] = Field(default=None, ge=1, le=20)
     language: str = Field(default="ar", pattern="^(ar|en)$")
@@ -36,24 +46,85 @@ class QueryResponse(BaseModel):
     context_used: int
 
 
+async def _ensure_query_scope(
+    db: AsyncSession,
+    project_id: int,
+    current_user: User,
+    project_controller: ProjectController,
+    document_controller: DocumentController,
+    asset_id: Optional[int],
+) -> None:
+    """Validate that project/document scope belongs to the authenticated user."""
+    project = await project_controller.get_project(
+        db=db,
+        project_id=project_id,
+        owner_id=current_user.id,
+    )
+    if not project:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTHZ_DENIED,
+                "severity": SecuritySeverity.HIGH,
+                "user_id": current_user.id,
+                "message": "Query access denied: project ownership mismatch",
+                "metadata": {"project_id": project_id, "asset_id": asset_id},
+            }
+        )
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if asset_id is not None:
+        document = await document_controller.get_document(
+            db=db,
+            asset_id=asset_id,
+            owner_id=current_user.id,
+        )
+        if not document or document.project_id != project_id:
+            log_event(
+                {
+                    "event_type": SecurityEventType.AUTHZ_DENIED,
+                    "severity": SecuritySeverity.HIGH,
+                    "user_id": current_user.id,
+                    "message": "Query access denied: document scope mismatch",
+                    "metadata": {"project_id": project_id, "asset_id": asset_id},
+                }
+            )
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+
 # Routes
 @router.post("/projects/{project_id}/query", response_model=QueryResponse)
 async def query_project(
     project_id: int,
     query_data: QueryRequest,
-    db: AsyncSession = Depends(get_db)
-,
-    query_controller: QueryController = Depends(QueryController)
+    current_user: User = Depends(get_current_db_user),
+    db: AsyncSession = Depends(get_db),
+    query_controller: QueryController = Depends(QueryController),
+    project_controller: ProjectController = Depends(ProjectController),
+    document_controller: DocumentController = Depends(DocumentController),
 ):
     """
     Ask a question about project documents.
     Returns AI-generated answer with sources.
     """
     try:
-        result = await query_controller.answer_query(
+        await _ensure_query_scope(
             db=db,
             project_id=project_id,
-            query=query_data.query,
+            current_user=current_user,
+            project_controller=project_controller,
+            document_controller=document_controller,
+            asset_id=query_data.asset_id,
+        )
+
+        clean_query = sanitize_text(query_data.query, max_length=4000, strip_html=True, allow_newlines=True)
+        if not clean_query:
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+        result = await query_controller.answer_query(
+            db=db,
+            owner_id=current_user.id,
+            project_id=project_id,
+            query=clean_query,
             top_k=max(
                 1,
                 min(
@@ -70,7 +141,9 @@ async def query_project(
         )
         
         return result
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -79,13 +152,29 @@ async def query_project(
 async def query_project_stream(
     project_id: int,
     query_data: QueryRequest,
+    current_user: User = Depends(get_current_db_user),
     db: AsyncSession = Depends(get_db),
-    query_controller: QueryController = Depends(QueryController)
+    query_controller: QueryController = Depends(QueryController),
+    project_controller: ProjectController = Depends(ProjectController),
+    document_controller: DocumentController = Depends(DocumentController),
 ):
     """
     Stream an AI-generated answer via Server-Sent Events.
     Emits: sources event, then token events, then [DONE].
     """
+    await _ensure_query_scope(
+        db=db,
+        project_id=project_id,
+        current_user=current_user,
+        project_controller=project_controller,
+        document_controller=document_controller,
+        asset_id=query_data.asset_id,
+    )
+
+    clean_query = sanitize_text(query_data.query, max_length=4000, strip_html=True, allow_newlines=True)
+    if not clean_query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
     top_k = max(
         1,
         min(
@@ -101,8 +190,9 @@ async def query_project_stream(
     return StreamingResponse(
         query_controller.answer_query_stream(
             db=db,
+            owner_id=current_user.id,
             project_id=project_id,
-            query=query_data.query,
+            query=clean_query,
             top_k=top_k,
             language=query_data.language,
             asset_id=query_data.asset_id,

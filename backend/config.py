@@ -135,6 +135,102 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000, alias="API_PORT")
     api_title: str = Field(default="RAGMind API", alias="API_TITLE")
     api_version: str = Field(default="1.0.0", alias="API_VERSION")
+
+    # Authentication and Security Configuration
+    auth_jwt_secret_key: str = Field(default="change-me-in-env", alias="AUTH_JWT_SECRET_KEY")
+    auth_jwt_algorithm: str = Field(default="HS256", alias="AUTH_JWT_ALGORITHM")
+    auth_access_token_expire_minutes: int = Field(default=60, alias="AUTH_ACCESS_TOKEN_EXPIRE_MINUTES")
+    auth_admin_username: str = Field(default="admin", alias="AUTH_ADMIN_USERNAME")
+    auth_admin_password: str = Field(default="admin123", alias="AUTH_ADMIN_PASSWORD")
+    auth_admin_password_hash: str = Field(default="", alias="AUTH_ADMIN_PASSWORD_HASH")
+    security_require_auth_for_mutations: bool = Field(default=False, alias="SECURITY_REQUIRE_AUTH_FOR_MUTATIONS")
+    security_login_bruteforce_enabled: bool = Field(
+        default=True,
+        alias="SECURITY_LOGIN_BRUTEFORCE_ENABLED"
+    )
+    security_login_bruteforce_threshold: int = Field(
+        default=5,
+        alias="SECURITY_LOGIN_BRUTEFORCE_THRESHOLD"
+    )
+    security_login_bruteforce_window_seconds: int = Field(
+        default=60,
+        alias="SECURITY_LOGIN_BRUTEFORCE_WINDOW_SECONDS"
+    )
+    security_login_bruteforce_block_seconds: int = Field(
+        default=300,
+        alias="SECURITY_LOGIN_BRUTEFORCE_BLOCK_SECONDS"
+    )
+    security_cybersecurity_engineer_usernames: str = Field(
+        default="",
+        alias="SECURITY_CYBERSECURITY_ENGINEER_USERNAMES"
+    )
+
+    security_rate_limit_enabled: bool = Field(default=True, alias="SECURITY_RATE_LIMIT_ENABLED")
+    security_rate_limit_global_enabled: bool = Field(default=False, alias="SECURITY_RATE_LIMIT_GLOBAL_ENABLED")
+    security_rate_limit_requests_per_window: int = Field(
+        default=300,
+        alias="SECURITY_RATE_LIMIT_REQUESTS_PER_WINDOW"
+    )
+    security_rate_limit_window_seconds: int = Field(default=60, alias="SECURITY_RATE_LIMIT_WINDOW_SECONDS")
+    security_rate_limit_exempt_paths: str = Field(
+        default="/health,/docs,/openapi.json,/redoc",
+        alias="SECURITY_RATE_LIMIT_EXEMPT_PATHS"
+    )
+
+    security_rate_limit_chat_requests_per_window: int = Field(
+        default=30,
+        alias="SECURITY_RATE_LIMIT_CHAT_REQUESTS_PER_WINDOW"
+    )
+    security_rate_limit_chat_window_seconds: int = Field(
+        default=60,
+        alias="SECURITY_RATE_LIMIT_CHAT_WINDOW_SECONDS"
+    )
+    security_rate_limit_chat_max_in_flight: int = Field(
+        default=2,
+        alias="SECURITY_RATE_LIMIT_CHAT_MAX_IN_FLIGHT"
+    )
+
+    security_rate_limit_upload_requests_per_window: int = Field(
+        default=8,
+        alias="SECURITY_RATE_LIMIT_UPLOAD_REQUESTS_PER_WINDOW"
+    )
+    security_rate_limit_upload_window_seconds: int = Field(
+        default=60,
+        alias="SECURITY_RATE_LIMIT_UPLOAD_WINDOW_SECONDS"
+    )
+    security_rate_limit_upload_max_in_flight: int = Field(
+        default=2,
+        alias="SECURITY_RATE_LIMIT_UPLOAD_MAX_IN_FLIGHT"
+    )
+
+    security_rate_limit_project_create_requests_per_window: int = Field(
+        default=10,
+        alias="SECURITY_RATE_LIMIT_PROJECT_CREATE_REQUESTS_PER_WINDOW"
+    )
+    security_rate_limit_project_create_window_seconds: int = Field(
+        default=300,
+        alias="SECURITY_RATE_LIMIT_PROJECT_CREATE_WINDOW_SECONDS"
+    )
+    security_rate_limit_project_create_max_in_flight: int = Field(
+        default=2,
+        alias="SECURITY_RATE_LIMIT_PROJECT_CREATE_MAX_IN_FLIGHT"
+    )
+
+    security_rate_limit_login_requests_per_window: int = Field(
+        default=6,
+        alias="SECURITY_RATE_LIMIT_LOGIN_REQUESTS_PER_WINDOW"
+    )
+    security_rate_limit_login_window_seconds: int = Field(
+        default=60,
+        alias="SECURITY_RATE_LIMIT_LOGIN_WINDOW_SECONDS"
+    )
+    security_rate_limit_login_max_in_flight: int = Field(
+        default=2,
+        alias="SECURITY_RATE_LIMIT_LOGIN_MAX_IN_FLIGHT"
+    )
+
+    security_upload_validate_magic: bool = Field(default=True, alias="SECURITY_UPLOAD_VALIDATE_MAGIC")
+    security_upload_max_scan_bytes: int = Field(default=8192, alias="SECURITY_UPLOAD_MAX_SCAN_BYTES")
     
     # Telegram Bot Configuration
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")

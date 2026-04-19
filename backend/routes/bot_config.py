@@ -2,13 +2,15 @@
 Bot Configuration Routes.
 API endpoints for configuring the Telegram bot.
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Form
 from pydantic import BaseModel
 from typing import Optional
 import json
 import os
 import httpx
 from telegram_bot.config import bot_settings
+from backend.security.auth import AuthUser, require_mutation_auth_if_enabled
+from backend.security.sanitization import sanitize_text
 
 router = APIRouter(prefix="/bot", tags=["Bot Config"])
 
@@ -36,7 +38,10 @@ async def get_bot_config():
     return load_config()
 
 @router.post("/config")
-async def update_bot_config(config: BotConfig):
+async def update_bot_config(
+    config: BotConfig,
+    _auth: Optional[AuthUser] = Depends(require_mutation_auth_if_enabled),
+):
     """Update bot configuration (active project)."""
     current_config = load_config()
     if config.active_project_id is not None:
@@ -47,6 +52,7 @@ async def update_bot_config(config: BotConfig):
 @router.post("/profile")
 async def update_bot_profile(
     name: str = Form(...),
+    _auth: Optional[AuthUser] = Depends(require_mutation_auth_if_enabled),
     # image: UploadFile = File(None) # Image upload to be implemented if needed
 ):
     """
@@ -54,10 +60,14 @@ async def update_bot_profile(
     Requires 'setMyName' permission.
     """
     try:
+        clean_name = sanitize_text(name, max_length=64, strip_html=True, allow_newlines=False)
+        if not clean_name:
+            raise HTTPException(status_code=400, detail="Bot name cannot be empty")
+
         async with httpx.AsyncClient() as client:
             # Update Name
             url = f"https://api.telegram.org/bot{bot_settings.telegram_bot_token}/setMyName"
-            response = await client.post(url, json={"name": name})
+            response = await client.post(url, json={"name": clean_name})
             response.raise_for_status()
             
             return {"status": "success", "message": "Bot profile updated"}

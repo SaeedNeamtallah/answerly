@@ -1,12 +1,12 @@
 services:
+  # 1. قاعدة البيانات (PostgreSQL + pgvector)
   postgres:
     image: pgvector/pgvector:pg16
     container_name: ragmind-postgres
     environment:
       POSTGRES_USER: ragmind
-      POSTGRES_PASSWORD: ragmind123
+      POSTGRES_PASSWORD: ragmind123  # نفس اللي في الـ .env
       POSTGRES_DB: ragmind
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5435:5432"
     volumes:
@@ -19,59 +19,96 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # 2. Vector Database (Qdrant)
   qdrant:
     image: qdrant/qdrant:latest
     container_name: ragmind-qdrant
     ports:
       - "6381:6333"
-      - "6382:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
-
-
-
+  # 3. Message Broker (RabbitMQ)
   rabbitmq:
     image: rabbitmq:4.1.2-management-alpine
     container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: minirag_user
+      RABBITMQ_DEFAULT_PASS: minirag_rabbitmq_2222
+      RABBITMQ_DEFAULT_VHOST: minirag_vhost
     ports:
       - "5729:5672"
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-    env_file:
-      - ./env/.env.rabbitmq
     restart: always
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       timeout: 10s
       retries: 5
 
+  # 4. Caching & Task Backend (Redis)
   redis:
-    image: redis:8.0.3-alpine
+    image: redis:7-alpine # نسخة مستقرة للإنتاج
     container_name: redis
     ports:
       - "6383:6379"
     volumes:
       - redis_data:/data
-    env_file:
-      - ./env/.env.redis
     restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      timeout: 10s
-      retries: 5
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-minirag_redis_2222}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "minirag_redis_2222"]
+
+  # 5. الباكند (FastAPI) - إضافة مهمة
+  backend:
+    build: 
+      context: .. # بيفترض إن الـ Dockerfile في الفولدر الرئيسي
+      dockerfile: backend.Dockerfile 
+    container_name: ragmind-backend
+    env_file: ../.env
+    ports:
+      - "8000:8000"
+
+    depends_on:
+    - postgres
+    - redis
+    - rabbitmq
 
 
+    volumes:
+      - ../uploads:/app/uploads
+    restart: always
 
-    
+  # 6. معالج المهام (Celery Worker) - إضافة مهمة
+  worker:
+    build:
+      context: ..
+      dockerfile: backend.Dockerfile
+    container_name: ragmind-worker
+    # أمر تشغيل السلري الخاص بمشروعك
+    command: celery -A backend.celery_app worker --loglevel=info -Q default,file_processing
+    env_file: ../.env
+    depends_on:
+      - redis
+      - rabbitmq
+    volumes:
+      - ../uploads:/app/uploads
+    restart: always
+
+  # 7. بوت التليجرام (اختياري)
+  telegram_bot:
+    build:
+      context: ..
+      dockerfile: backend.Dockerfile
+    container_name: ragmind-bot
+    command: python -m telegram_bot.bot
+    env_file: ../.env
+    depends_on:
+      - backend
+    restart: always
 
 volumes:
   postgres_data:
   qdrant_data:
-
   rabbitmq_data:
-  redis_data: 
+  redis_data:

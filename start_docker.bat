@@ -27,6 +27,28 @@ if errorlevel 1 (
 echo [✓] Docker is running
 echo.
 
+REM Ensure Docker env files exist (required by docker-compose.yml)
+if not exist "docker\env\" (
+    echo [INFO] Creating docker\env directory...
+    mkdir "docker\env" >nul 2>&1
+)
+
+if not exist "docker\env\.env.rabbitmq" (
+    echo [INFO] Creating docker\env\.env.rabbitmq...
+    (
+        echo RABBITMQ_DEFAULT_USER=minirag_user
+        echo RABBITMQ_DEFAULT_PASS=minirag_rabbitmq_2222
+        echo RABBITMQ_DEFAULT_VHOST=minirag_vhost
+    ) > "docker\env\.env.rabbitmq"
+)
+
+if not exist "docker\env\.env.redis" (
+    echo [INFO] Creating docker\env\.env.redis...
+    (
+        echo REDIS_PASSWORD=minirag_redis_2222
+    ) > "docker\env\.env.redis"
+)
+
 REM Start services
 echo Starting PostgreSQL, Qdrant, RabbitMQ and Redis containers...
 docker compose -f docker/docker-compose.yml up -d
