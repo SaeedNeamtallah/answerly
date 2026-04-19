@@ -3,6 +3,7 @@
 Database connection management with async SQLAlchemy.
 Provides engine and session factory.
 """
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from backend.config import settings
 import logging
@@ -31,7 +32,7 @@ async_session_maker = async_sessionmaker(
 )
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency function to get database session.
     Use with FastAPI Depends().

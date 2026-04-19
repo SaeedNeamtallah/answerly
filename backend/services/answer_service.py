@@ -204,22 +204,33 @@ Answer:"""
     
     def _extract_sources(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Extract source information from chunks.
+        Extract unique source information from chunks.
         
         Args:
             chunks: List of chunk dictionaries
             
         Returns:
-            List of source information
+            List of unique source information
         """
+        seen = set()
         sources = []
+
         for chunk in chunks:
-            metadata = chunk.get('metadata', {})
+            metadata = chunk.get('metadata', {}) or {}
+            asset_id = chunk.get('asset_id')
+            chunk_index = metadata.get('chunk_index', 0)
+
+            key = (asset_id, chunk_index)
+            if key in seen:
+                continue
+
+            seen.add(key)
+
             sources.append({
                 'document_name': metadata.get('document_name', 'Unknown'),
-                'chunk_index': metadata.get('chunk_index', 0),
+                'chunk_index': chunk_index,
                 'similarity': chunk.get('similarity', 0.0),
-                'asset_id': chunk.get('asset_id')
+                'asset_id': asset_id
             })
         
         return sources

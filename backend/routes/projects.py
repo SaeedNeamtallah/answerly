@@ -10,13 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.controllers.project_controller import ProjectController
+from backend.tasks.data_indexing import index_project_task
 from backend.database import get_db
 from backend.database.models import User
 from backend.security.auth import get_current_db_user
 from backend.security.event_service import log_event
 from backend.security.sanitization import sanitize_metadata, sanitize_optional_text, sanitize_project_name
 from backend.security.security_event import SecurityEventType, SecuritySeverity
-
 
 # SECURITY RULE: never trust client ownership fields; all access is scoped by JWT user.
 router = APIRouter(prefix="/projects", tags=["Projects"], dependencies=[Depends(get_current_db_user)])
@@ -36,6 +36,10 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+
+
+class ProjectIndexRequest(BaseModel):
+    do_reset: bool = False
 
 
 class ProjectResponse(BaseModel):
@@ -150,6 +154,45 @@ async def get_project(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{project_id}/index")
+async def index_project(
+    project_id: int,
+    payload: ProjectIndexRequest,
+    db: AsyncSession = Depends(get_db),
+    project_controller: ProjectController = Depends(ProjectController)
+):
+    """Trigger project-level indexing via Celery."""
+    try:
+        project = await project_controller.get_project(db=db, project_id=project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # task = index_project_task.delay(
+        #     project_id=project_id,
+        #     do_reset=payload.do_reset
+        # )
+
+        task = index_project_task.apply_async(
+            kwargs={
+                "project_id": project_id,
+                "do_reset": payload.do_reset
+            },
+            queue="data_indexing"
+        )
+
+
+        return {
+            "task_id": task.id,
+            "status": "queued",
+            "project_id": project_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{project_id}/stats", response_model=ProjectStatsResponse)

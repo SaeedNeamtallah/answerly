@@ -64,6 +64,9 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
     include=[
         "backend.tasks.file_processing",
+        "backend.tasks.data_indexing",
+        "backend.tasks.process_workflow",
+        "backend.tasks.maintenance",
     ],
 )
 
@@ -92,12 +95,36 @@ celery_app.conf.update(
     broker_connection_max_retries=10,
     worker_cancel_long_running_tasks_on_connection_loss=True,
 
-    # Task routing
-    task_routes={
-        "backend.tasks.file_processing.process_document_task": {
-            "queue": "file_processing"
-        },
+# Task routing
+task_routes = {
+    "backend.tasks.file_processing.process_document_task": {
+        "queue": "file_processing"
     },
+    "backend.tasks.data_indexing.index_project_task": {
+        "queue": "data_indexing"
+    },
+    "backend.tasks.process_workflow.process_and_index_workflow": {
+        "queue": "file_processing"
+    },
+    "backend.tasks.process_workflow.push_after_process_task": {
+        "queue": "data_indexing"
+    },
+    "backend.tasks.maintenance.clean_celery_executions_table": {
+        "queue": "default"
+    },
+    
+},
+
+
+    beat_schedule={
+        "cleanup-old-task-records": {
+            "task": "backend.tasks.maintenance.clean_celery_executions_table",
+            "schedule": 10,  
+            "args": (),
+        }
+    },
+
+    timezone="UTC",
 )
 
 celery_app.conf.task_default_queue = "default"
