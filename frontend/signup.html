@@ -107,7 +107,7 @@
                 return String(url || "").trim().replace(/\/+$/, "");
             }
 
-            let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://localhost:8001";
+            let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://localhost:8000";
 
             function updateApiHint() {
                 apiHint.textContent = "API: " + apiBaseUrl;
@@ -123,8 +123,9 @@
                     fromQuery,
                     normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")),
                     normalizeBaseUrl(apiBaseUrl),
-                    `${protocol}//${host}:8001`,
-                    `${protocol}//${host}:8000`
+                    `${protocol}//${host}:8000`,
+                    `${protocol}//${host}:8101`,
+                    `${protocol}//${host}:8001`
                 ].filter(Boolean);
 
                 return [...new Set(candidates)];

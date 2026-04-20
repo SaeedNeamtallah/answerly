@@ -21,11 +21,9 @@ def index_project_task(self, project_id: int, do_reset: bool = False):
 
 
 async def _index_project(task_instance, project_id: int, do_reset: bool):
-    db_engine = None
-
     try:
         (
-            db_engine,
+            _db_engine,
             session_maker,
             document_loader,
             chunking_service,
@@ -71,19 +69,23 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
 
             logger.info(f"Generating embeddings for project {project_id} ({len(texts)} chunks)")
             embeddings = await embedding_service.generate_embeddings(texts)
+            if not embeddings:
+                raise ValueError(f"No embeddings generated for project: {project_id}")
 
             dimension = len(embeddings[0]) if embeddings else 0
 
             await vector_db.create_collection(
                 collection_name=collection_name,
                 dimension=dimension,
-                do_reset=do_reset
+                do_reset=do_reset,
+                session_maker=session_maker,
             )
 
             # 4) Add vectors
             chunk_ids = [chunk.id for chunk in chunks]
             vector_metadata = [
                 {
+                    "owner_id": project.owner_id,
                     "asset_id": chunk.asset_id,
                     "project_id": chunk.project_id,
                     "chunk_index": chunk.chunk_index,
@@ -96,6 +98,7 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
                 vectors=embeddings,
                 ids=chunk_ids,
                 metadata=vector_metadata,
+                session_maker=session_maker,
             )
 
             logger.info(
@@ -113,10 +116,3 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
     except Exception as e:
         logger.error(f"Task failed for project_id={project_id}: {str(e)}")
         raise
-
-    finally:
-        try:
-            if db_engine:
-                await db_engine.dispose()
-        except Exception as e:
-            logger.error(f"Error during cleanup: {str(e)}")

@@ -121,14 +121,15 @@ class Settings(BaseSettings):
     chunk_strategy: str = Field(default="parent_child", alias="CHUNK_STRATEGY")
 
     # Retrieval Configuration
-    retrieval_top_k: int = Field(default=5, alias="RETRIEVAL_TOP_K")
+    retrieval_top_k: int = Field(default=4, alias="RETRIEVAL_TOP_K")
     retrieval_top_k_max: int = Field(default=20, alias="RETRIEVAL_TOP_K_MAX")
-    retrieval_candidate_k: int = Field(default=20, alias="RETRIEVAL_CANDIDATE_K")
+    retrieval_candidate_k: int = Field(default=10, alias="RETRIEVAL_CANDIDATE_K")
     retrieval_hybrid_enabled: bool = Field(default=False, alias="RETRIEVAL_HYBRID_ENABLED")
     retrieval_hybrid_alpha: float = Field(default=0.7, alias="RETRIEVAL_HYBRID_ALPHA")
     retrieval_rerank_enabled: bool = Field(default=False, alias="RETRIEVAL_RERANK_ENABLED")
     retrieval_rerank_top_k: int = Field(default=10, alias="RETRIEVAL_RERANK_TOP_K")
     query_rewrite_enabled: bool = Field(default=False, alias="QUERY_REWRITE_ENABLED")
+    retrieval_hnsw_ef_search: int = Field(default=40, alias="RETRIEVAL_HNSW_EF_SEARCH")
     
     # API Configuration
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
@@ -178,7 +179,7 @@ class Settings(BaseSettings):
     )
 
     security_rate_limit_chat_requests_per_window: int = Field(
-        default=30,
+        default=90,
         alias="SECURITY_RATE_LIMIT_CHAT_REQUESTS_PER_WINDOW"
     )
     security_rate_limit_chat_window_seconds: int = Field(
@@ -186,12 +187,12 @@ class Settings(BaseSettings):
         alias="SECURITY_RATE_LIMIT_CHAT_WINDOW_SECONDS"
     )
     security_rate_limit_chat_max_in_flight: int = Field(
-        default=2,
+        default=6,
         alias="SECURITY_RATE_LIMIT_CHAT_MAX_IN_FLIGHT"
     )
 
     security_rate_limit_upload_requests_per_window: int = Field(
-        default=8,
+        default=20,
         alias="SECURITY_RATE_LIMIT_UPLOAD_REQUESTS_PER_WINDOW"
     )
     security_rate_limit_upload_window_seconds: int = Field(
@@ -199,7 +200,7 @@ class Settings(BaseSettings):
         alias="SECURITY_RATE_LIMIT_UPLOAD_WINDOW_SECONDS"
     )
     security_rate_limit_upload_max_in_flight: int = Field(
-        default=2,
+        default=4,
         alias="SECURITY_RATE_LIMIT_UPLOAD_MAX_IN_FLIGHT"
     )
 
@@ -255,7 +256,7 @@ class Settings(BaseSettings):
     celery_task_time_limit: int = Field(default=600, alias="CELERY_TASK_TIME_LIMIT")
     celery_task_acks_late: bool = Field(default=True, alias="CELERY_TASK_ACKS_LATE")
     celery_worker_concurrency: int = Field(default=2, alias="CELERY_WORKER_CONCURRENCY")
-    celery_flower_password: str = Field(default=None, alias="CELERY_FLOWER_PASSWORD")
+    celery_flower_password: str = Field(default="", alias="CELERY_FLOWER_PASSWORD")
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

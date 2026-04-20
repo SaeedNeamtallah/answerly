@@ -241,6 +241,9 @@ class DocumentController:
                     texts,
                     on_batch=on_embed_batch
                 )
+                if not embeddings:
+                    raise ValueError("No embeddings generated for processed document chunks")
+                embedding_dimension = len(embeddings[0]) if embeddings else 0
                 
                 # Store embeddings in chunks and vector DB
                 chunk_ids = [chunk.id for chunk in chunk_records]
@@ -263,6 +266,10 @@ class DocumentController:
                 )
 
                 vector_db = VectorDBProviderFactory.create_provider()
+                await vector_db.create_collection(
+                    collection_name=f"project_{asset.project_id}",
+                    dimension=embedding_dimension,
+                )
                 await vector_db.add_vectors(
                     collection_name=f"project_{asset.project_id}",
                     vectors=embeddings,

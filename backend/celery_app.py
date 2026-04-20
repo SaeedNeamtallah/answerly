@@ -3,10 +3,11 @@ Celery application configuration.
 Standalone entry point for Celery workers, separate from FastAPI main.py.
 """
 from celery import Celery
+from typing import Optional, Tuple
+
 from backend.config import settings
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from backend.providers.llm.factory import LLMProviderFactory
 from backend.providers.vectordb.factory import VectorDBProviderFactory
 from backend.services.embedding_service import EmbeddingService
 from backend.services.chunking_service import ChunkingService
@@ -14,15 +15,21 @@ from backend.services.document_loader import DocumentLoaderService
 from backend.services.file_service import FileService
 
 
-async def get_setup_utils():
-    """
-    Create independent DB engine, session, and service instances
-    for use inside Celery worker tasks. Each task invocation gets
-    its own connections so workers don't share state with FastAPI.
+SetupUtils = Tuple[
+    object,
+    async_sessionmaker,
+    DocumentLoaderService,
+    ChunkingService,
+    EmbeddingService,
+    object,
+    FileService,
+]
 
-    Returns a tuple of (db_engine, async_session_maker, document_loader,
-                        chunking_service, embedding_service, vector_db, file_service)
-    """
+_setup_utils_cache: Optional[SetupUtils] = None
+
+
+def _build_setup_utils() -> SetupUtils:
+    """Create shared DB/session/service instances for the current Celery worker process."""
     db_engine = create_async_engine(
         settings.database_url,
         echo=False,
@@ -55,6 +62,20 @@ async def get_setup_utils():
         vector_db,
         file_service,
     )
+
+
+async def get_setup_utils():
+    """
+    Return shared DB engine, session, and service instances for the current worker.
+    Initialized lazily once per Celery worker process.
+
+    Returns a tuple of (db_engine, async_session_maker, document_loader,
+                        chunking_service, embedding_service, vector_db, file_service)
+    """
+    global _setup_utils_cache
+    if _setup_utils_cache is None:
+        _setup_utils_cache = _build_setup_utils()
+    return _setup_utils_cache
 
 
 # Create Celery application instance
@@ -119,7 +140,7 @@ task_routes = {
     beat_schedule={
         "cleanup-old-task-records": {
             "task": "backend.tasks.maintenance.clean_celery_executions_table",
-            "schedule": 10,  
+            "schedule": 24*3600,  # every 24 hours
             "args": (),
         }
     },

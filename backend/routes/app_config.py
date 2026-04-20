@@ -32,6 +32,7 @@ class ProviderUpdate(BaseModel):
     retrieval_rerank_enabled: bool | None = None
     retrieval_rerank_top_k: int | None = Field(default=None, ge=1)
     query_rewrite_enabled: bool | None = None
+    retrieval_hnsw_ef_search: int | None = Field(default=None, ge=1)
     voyage_output_dimension: int | None = Field(default=None, ge=128)
 
 
@@ -64,6 +65,7 @@ async def get_providers() -> Dict[str, object]:
         "retrieval_rerank_enabled": get_runtime_value("retrieval_rerank_enabled", settings.retrieval_rerank_enabled),
         "retrieval_rerank_top_k": get_runtime_value("retrieval_rerank_top_k", settings.retrieval_rerank_top_k),
         "query_rewrite_enabled": get_runtime_value("query_rewrite_enabled", settings.query_rewrite_enabled),
+        "retrieval_hnsw_ef_search": get_runtime_value("retrieval_hnsw_ef_search", settings.retrieval_hnsw_ef_search),
     }
 
 
@@ -133,6 +135,8 @@ async def update_providers(
         updates["retrieval_rerank_top_k"] = payload.retrieval_rerank_top_k
     if payload.query_rewrite_enabled is not None:
         updates["query_rewrite_enabled"] = payload.query_rewrite_enabled
+    if payload.retrieval_hnsw_ef_search is not None:
+        updates["retrieval_hnsw_ef_search"] = payload.retrieval_hnsw_ef_search
     if payload.voyage_output_dimension is not None:
         updates["voyage_output_dimension"] = payload.voyage_output_dimension
 
@@ -155,5 +159,6 @@ async def update_providers(
         "retrieval_rerank_enabled": config.get("retrieval_rerank_enabled", settings.retrieval_rerank_enabled),
         "retrieval_rerank_top_k": config.get("retrieval_rerank_top_k", settings.retrieval_rerank_top_k),
         "query_rewrite_enabled": config.get("query_rewrite_enabled", settings.query_rewrite_enabled),
+        "retrieval_hnsw_ef_search": config.get("retrieval_hnsw_ef_search", settings.retrieval_hnsw_ef_search),
     }
 

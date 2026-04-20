@@ -105,9 +105,8 @@ class Chunk(Base):
     content = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)  # Position in document
     
-    # Vector embedding (stored as JSON/List for compatibility if pgvector is missing)
-    # Vector search is handled by Qdrant if pgvector is not available
-    embedding = Column(JSON, nullable=True)
+    # Native pgvector column. Dimension is left flexible to support multiple embedding providers.
+    embedding = Column(Vector(), nullable=True)
     
     # Metadata (renamed to avoid conflict)
     extra_metadata = Column("metadata", JSON, default={})  # page_number, section, etc.

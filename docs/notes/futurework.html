@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مراحل تطور النظام - System Evolution</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+/* 1. THE SETUP */
+* { box-sizing: border-box; }
+
+p { margin: 0; margin-bottom: 15px; }
+
+body {
+  background-color: #020617; /* Slate 950 */
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr;
+  margin: 0;
+  min-height: 100vh;
+  padding: 20px 0;
+  place-items: center;
+  font-family: 'Tajawal', sans-serif;
+  color: #e2e8f0; /* Slate 200 */
+}
+
+.slide-container {
+  align-items: center;
+  background-color: #0f172a; /* Slate 900 */
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  height: 720px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 60px;
+  position: relative;
+  width: 1280px;
+}
+
+/* Subtle background accent */
+.slide-container::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 100%; height: 100%;
+  background: radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 50%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.slide-container > * { position: relative; z-index: 1; }
+
+/* 2. CONSISTENT TYPOGRAPHY */
+.slide-container h1, .slide-container h2, .slide-container h3 {
+  color: #f8fafc; /* Slate 50 */
+  font-weight: 700;
+  margin: 0;
+}
+
+.slide-container h1 { font-size: 70px; }
+
+.slide-container .slide-title {
+  font-size: 40px;
+  font-weight: 700;
+  margin-bottom: 40px;
+  text-align: right;
+  width: 100%;
+  color: #38bdf8; /* Sky 400 */
+  border-right: 6px solid #10b981; /* Emerald 500 */
+  padding-right: 20px;
+  margin-right: -60px; /* Pull into padding for a bleeding accent */
+}
+
+.slide-container h3 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 15px;
+  color: #f8fafc;
+}
+
+.slide-container p, .slide-container li, .slide-container .subtitle {
+  font-size: 20px;
+  line-height: 1.6;
+  color: #cbd5e1; /* Slate 300 */
+}
+
+.slide-container .subtitle {
+  font-weight: 400;
+  margin: 20px auto;
+  color: #94a3b8; /* Slate 400 */
+  font-size: 24px;
+}
+
+.slide-container .content-area {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  justify-content: center;
+  width: 100%;
+}
+
+/* 3. LAYOUT DEFINITIONS */
+.title-layout { text-align: center; }
+
+.title-layout h1 {
+  background: linear-gradient(to left, #38bdf8, #10b981);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 20px;
+}
+
+.two-column {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 50px;
+  width: 100%;
+}
+
+.two-column.tiled { align-items: stretch; }
+
+.two-column.tiled > div {
+  background-color: #1e293b; /* Slate 800 */
+  border-radius: 12px;
+  border: 1px solid #334155; /* Slate 700 */
+  padding: 40px;
+}
+
+.two-column.tiled h3 { color: #38bdf8; }
+
+.two-column ul {
+  list-style: none;
+  margin: 0;
+  padding-right: 0; /* Override default */
+}
+
+.two-column li {
+  margin-bottom: 25px;
+  position: relative;
+  padding-right: 35px;
+}
+
+.two-column li::before {
+  content: '\f111'; /* FontAwesome solid circle */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  color: #10b981;
+  font-size: 10px;
+  position: absolute;
+  right: 5px;
+  top: 10px;
+}
+
+.two-column li strong {
+  color: #f8fafc;
+  font-size: 22px;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.image-wrapper {
+  border-radius: 12px;
+  height: 400px;
+  width: 100%;
+  overflow: hidden;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+}
+
+.image-wrapper img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.two-column .image-wrapper img {
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  background-color: #1e293b;
+}
+
+/* Insight Box (Speaker Note) */
+.insight-box {
+  background-color: rgba(16, 185, 129, 0.08);
+  border-right: 4px solid #10b981;
+  padding: 25px;
+  margin-top: 30px;
+  font-size: 20px;
+  color: #e2e8f0;
+  border-radius: 8px 0 0 8px;
+  width: 100%;
+}
+.insight-box i {
+  color: #10b981;
+  margin-left: 10px;
+  font-size: 24px;
+  vertical-align: middle;
+}
+
+/* Tiled Content */
+.tiled-content {
+  align-items: stretch;
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  width: 100%;
+}
+
+.tile {
+  align-items: flex-start; /* Align text to start in Arabic */
+  background-color: #1e293b;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 40px 30px;
+  text-align: right;
+  transition: transform 0.3s ease;
+}
+
+.tile .icon {
+  color: #10b981;
+  font-size: 45px;
+  margin-bottom: 25px;
+  background: rgba(16, 185, 129, 0.1);
+  width: 80px; height: 80px;
+  display: flex; justify-content: center; align-items: center;
+  border-radius: 16px;
+}
+
+/* Timeline Layout */
+.timeline-layout {
+  align-items: stretch;
+  display: flex;
+  height: stretch;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+  margin-top: 40px;
+}
+
+.timeline-layout .timeline-line {
+  background-color: #334155;
+  height: 4px;
+  right: 0; left: 0; /* Stretch full width */
+  position: absolute;
+  top: 50%;
+  transform: translateY(-2px);
+  z-index: 0;
+}
+
+.timeline-item {
+  position: relative;
+  text-align: center;
+  width: 16.666%; /* Updated from 20% to fit 6 items */
+}
+
+.timeline-item::after {
+  background-color: #0f172a;
+  border-radius: 50%;
+  border: 4px solid #38bdf8;
+  content: '';
+  height: 24px;
+  width: 24px;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.timeline-item:nth-child(even)::after {
+  border-color: #10b981;
+}
+
+.timeline-item .content-wrapper {
+  left: 0; right: 0;
+  position: absolute;
+  width: 100%;
+  padding: 0 15px;
+}
+
+.timeline-item:nth-child(odd) .content-wrapper {
+  bottom: 50%;
+  margin-bottom: 35px;
+}
+
+.timeline-item:nth-child(even) .content-wrapper {
+  margin-top: 35px;
+  top: 50%;
+}
+
+.timeline-item h3 {
+  color: #38bdf8;
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+.timeline-item:nth-child(even) h3 { color: #10b981; }
+
+.timeline-item p { font-size: 16px; color: #94a3b8; }
+
+/* Rounded Image Layout */
+.rounded-image-layout .image-wrapper {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 400px;
+  width: 400px;
+  max-width: 400px;
+  margin: 0 auto;
+  border: 8px solid #1e293b;
+}
+
+.rounded-image-layout.two-column { align-items: center; }
+
+/* Bleed Image Layout (RTL Adapted) */
+.slide-container.bleed-image-layout {
+  align-items: start;
+  display: grid;
+  gap: 50px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+}
+
+.slide-container.bleed-image-layout > .content-container {
+  padding: 60px 60px 60px 0; /* Right padding */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.slide-container.bleed-image-layout > .image-container {
+  height: 100%;
+  overflow: hidden;
+  width: 100%;
+}
+
+.slide-container.bleed-image-layout img.bleed-image-side {
+  border-radius: 8px 0 0 8px; /* Curve left side */
+  display: block;
+  height: 720px;
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
+}
+
+/* Q&A Layout */
+.qa-layout {
+  margin: 0 auto;
+  text-align: center;
+  width: 100%;
+  align-self: center;
+}
+.qa-layout h2 {
+  font-size: 80px;
+  color: #38bdf8;
+  margin-bottom: 20px;
+}
+.qa-layout .contact-info {
+  color: #10b981;
+  font-size: 24px;
+  margin-top: 50px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+    </style>
+</head>
+<body>
+
+<!-- Slide 1: Title_Slide -->
+<div class="slide-container" id="slide1">
+    <div class="title-layout">
+        <h1>تطور هيكلة النظام</h1>
+        <p class="subtitle">رحلة بناء نظام برمجي متكامل ومستدام</p>
+    </div>
+</div>
+
+<!-- Slide 2: Timeline -->
+<div class="slide-container" id="slide2">
+    <h2 class="slide-title">خارطة طريق التطور (Timeline)</h2>
+    <div class="content-area">
+        <div class="timeline-layout">
+            <div class="timeline-line"></div>
+            <div class="timeline-item">
+                <div class="content-wrapper">
+                    <h3>المرحلة 1</h3>
+                    <h3 style="color:#f8fafc; font-size:20px;">المنطق الأساسي</h3>
+                    <p>التحقق الذكي وجودة البيانات</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="content-wrapper">
+                    <h3>المرحلة 2</h3>
+                    <h3 style="color:#f8fafc; font-size:20px;">تحسين الأداء</h3>
+                    <p>التخزين المؤقت والمهام الخلفية</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="content-wrapper">
+                    <h3>المرحلة 3</h3>
+                    <h3 style="color:#f8fafc; font-size:20px;">الأمان</h3>
+                    <p>التشفير، الصلاحيات، والجدران النارية</p>
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="content-wrapper">
+                    <h3>المرحلة 4</h3>
+                    <h3 style="color:#f8fafc; font-size:20px;">العمليات (DevOps)</h3>
+                    <p>أتمتة النشر والحاويات</p>
+                </div>
+            </div>
+             <div class="timeline-item">
+                <div class="content-wrapper">
+                    <h3>المرحلة 5</h3>
+                     <h3 style="color:#f8fafc; font-size:20px;">المراقبة</h3>
+                    <p>تتبع الأخطاء والسجلات لحظياً</p>
+                </div>
+            </div>
+             <div class="timeline-item">
+                <div class="content-wrapper">
+                    <h3>المرحلة 6</h3>
+                     <h3 style="color:#f8fafc; font-size:20px;">المستخدمين</h3>
+                    <p>تعدد المستأجرين (SaaS)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 3: Image_Right_Text_Left (RTL Adapted -> Text Right, Image Left) -->
+<div class="slide-container" id="slide3">
+    <h2 class="slide-title">المرحلة الأولى: المنطق الأساسي والتحقق الذكي</h2>
+    <div class="content-area">
+        <div class="two-column">
+            <div>
+                <ul>
+                    <li>
+                        <strong>التحقق باستخدام (RegEx)</strong>
+                        تنظيف المدخلات تلقائياً (Input Sanitization) ومطابقة الأنماط لمنع البيانات الخبيثة.
+                    </li>
+                    <li>
+                        <strong>تقييم النموذج (Model Evaluation)</strong>
+                        تشغيل تقييم تلقائي لضمان جودة وتناسق المخرجات بصورة مستمرة.
+                    </li>
+                </ul>
+                <div class="insight-box">
+                    <i class="fa-solid fa-lightbulb"></i>
+                    <strong>الهدف:</strong> "البيانات جيدة بقدر جودة قواعد التحقق منها". ركزنا في هذه المرحلة على بناء أساس صلب لضمان سلامة البيانات من البداية.
+                </div>
+            </div>
+            <div>
+                <div class="image-wrapper">
+                    <img src="http://googleusercontent.com/image_collection/image_retrieval/2825208708116203354" alt="Abstract glowing digital network representing data validation">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 4: Two_Column_Tiled_Text -->
+<div class="slide-container" id="slide4">
+    <h2 class="slide-title">المرحلة الثانية: استراتيجيات تحسين الأداء</h2>
+    <div class="content-area" style="justify-content: flex-start;">
+        <div class="two-column tiled">
+            <div>
+                <h3>التخزين المؤقت (Redis & Caching)</h3>
+                <p>تقليل الحمل على قاعدة البيانات بشكل جذري وتوفير استجابة فورية وسريعة للطلبات المتكررة من قبل المستخدمين.</p>
+            </div>
+            <div>
+                <h3>المهام الخلفية (Celery & Tasks)</h3>
+                <p>معالجة المهام الثقيلة (مثل إرسال الإيميلات أو معالجة الصور) في الخلفية دون تعطيل أو إبطاء تجربة المستخدم.</p>
+            </div>
+        </div>
+        <div class="insight-box" style="margin-top: 50px;">
+            <i class="fa-solid fa-gauge-high"></i>
+            مع زيادة الاعتماد على النظام، كان الأداء هو التحدي التالي. دمجنا تقنيات التخزين المؤقت والمهام الخلفية لجعل النظام سريعاً وسلساً ومستعداً للتوسع (Scalable).
+        </div>
+    </div>
+</div>
+
+<!-- Slide 5: Bleed_Image_Right (RTL Adapted -> Image Bleeds on the Left side) -->
+<div class="slide-container bleed-image-layout" id="slide5">
+    <div class="content-container">
+        <h2 class="slide-title" style="margin-right: -60px;">المرحلة الثالثة: تأمين وتصلب النظام</h2>
+        <div class="content-area" style="align-items: flex-start;">
+            <ul>
+                <li>
+                    <strong>إدارة الصلاحيات والهوية</strong>
+                    تشفير الهوية وإدارة الجلسات باستخدام بروتوكولات JWT و OAuth2.
+                </li>
+                <li>
+                    <strong>تشفير البيانات الحساسة</strong>
+                    حماية البيانات أثناء التخزين (At rest) وأثناء النقل (In transit) لضمان السرية التامة.
+                </li>
+                 <li>
+                    <strong>جدران الحماية (Firewalls)</strong>
+                    حماية الخوادم من الهجمات الخبيثة وتطبيق سياسات تقييد الطلبات (Rate Limiting) لمنع الإغراق.
+                </li>
+            </ul>
+             <div class="insight-box">
+                <i class="fa-solid fa-shield-halved"></i>
+                الأمان لم يكن خطوة ثانوية. قمنا بتأمين كل نقطة اتصال في النظام من التوثيق إلى الشبكة.
+            </div>
+        </div>
+    </div>
+    <div class="image-container">
+        <img class="bleed-image-side" src="http://googleusercontent.com/image_collection/image_retrieval/9117198798540027318" alt="Cybersecurity digital lock and glowing shield concept">
+    </div>
+</div>
+
+<!-- Slide 6: Rounded_Image_and_Text -->
+<div class="slide-container" id="slide6">
+    <h2 class="slide-title">المرحلة الرابعة: أتمتة النشر والتطوير (DevOps)</h2>
+    <div class="content-area">
+        <div class="two-column rounded-image-layout">
+            <div>
+                <div class="image-wrapper">
+                    <img src="http://googleusercontent.com/image_collection/image_retrieval/18377731846702523308" alt="Glowing server racks and cloud computing abstract">
+                </div>
+            </div>
+            <div>
+                <ul>
+                    <li>
+                        <strong>الاعتماد على الحاويات (Docker)</strong>
+                        توحيد بيئة التشغيل وعزل الخدمات لضمان عمل النظام بكفاءة في أي مكان وتجنب مشاكل التوافق.
+                    </li>
+                    <li>
+                        <strong>مسارات النشر الآلي (CI/CD Pipelines)</strong>
+                        أتمتة عمليات بناء واختبار ونشر الأكواد لتسريع إطلاق التحديثات بأمان تام وتقليل التدخل البشري.
+                    </li>
+                </ul>
+                <div class="insight-box" style="margin-top:40px;">
+                    <i class="fa-solid fa-infinity"></i>
+                    باستخدام Docker ومسارات النشر الآلي، أصبح دمج الأكواد وإطلاق الميزات الجديدة عملية سريعة، موثوقة، وآمنة.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 7: Tiled_Text_With_Icons -->
+<div class="slide-container" id="slide7">
+    <h2 class="slide-title">المرحلة الخامسة: المراقبة وتتبع الأخطاء</h2>
+    <div class="content-area">
+        <div class="tiled-content">
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-list-check"></i></div>
+                <h3>تجميع السجلات (Logging)</h3>
+                <p>مركزية سجلات النظام باستخدام أدوات مثل ELK أو Loki لفهم الأحداث بدقة وسهولة الرجوع إليها.</p>
+            </div>
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-chart-line"></i></div>
+                <h3>المراقبة (Monitoring)</h3>
+                <p>تتبع صحة الخوادم، الموارد، وسرعة الاستجابة لحظياً من خلال لوحات بيانات تفاعلية (Prometheus).</p>
+            </div>
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-bug"></i></div>
+                <h3>تتبع الأخطاء (Error Tracking)</h3>
+                <p>اكتشاف المشاكل والانهيارات برمجياً عبر تنبيهات Sentry، حتى قبل أن يبلغ عنها المستخدمون.</p>
+            </div>
+        </div>
+        <div class="insight-box" style="margin-top: 40px;">
+            <i class="fa-solid fa-eye"></i>
+            في المرحلة النهائية، كان يجب أن نكون قادرين على رؤية ما يحدث داخل النظام بوضوح لاتخاذ قرارات استباقية وحل المشاكل فور حدوثها.
+        </div>
+    </div>
+</div>
+
+<!-- Slide 8: Backend Auth & Multi-tenancy -->
+<div class="slide-container" id="slide8">
+    <h2 class="slide-title">المرحلة السادسة: التحول لمنصة (SaaS) وإدارة المستخدمين</h2>
+    <div class="content-area">
+        <div class="tiled-content">
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-users-gear"></i></div>
+                <h3>قاعدة البيانات (DB Models)</h3>
+                <p>إنشاء جداول المستخدمين وربط المشاريع بمعرف المستخدم (Foreign Key) لضمان استقلالية وخصوصية بيانات كل مستأجر.</p>
+            </div>
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-key"></i></div>
+                <h3>المصادقة (JWT Auth)</h3>
+                <p>إعداد نظام مصادقة آمن لتشفير كلمات المرور (Bcrypt) وإصدار توكنز (JWT) للتحكم الآمن في جلسات تسجيل الدخول.</p>
+            </div>
+            <div class="tile">
+                <div class="icon"><i class="fa-solid fa-shield-cat"></i></div>
+                <h3>عزل البيانات (Data Isolation)</h3>
+                <p>حماية المسارات (Protected Routes) وتعديل متحكمات قواعد البيانات لترشيح البيانات بناءً على هوية المستخدم الحالي فقط.</p>
+            </div>
+        </div>
+        <div class="insight-box" style="margin-top: 40px;">
+            <i class="fa-solid fa-rocket"></i>
+            هذه الخطوة هي النقلة النوعية لتحويل المشروع من أداة شخصية (Personal Tool) إلى منصة مؤسسية سحابية متكاملة (SaaS) تدعم تعدد المستأجرين (Multi-tenancy).
+        </div>
+    </div>
+</div>
+
+<!-- Slide 9: Frontend Auth & Roles -->
+<div class="slide-container" id="slide9">
+    <h2 class="slide-title">المرحلة السادسة (تابع): واجهات الاستخدام وصلاحيات الإدارة</h2>
+    <div class="content-area">
+        <div class="two-column rounded-image-layout">
+            <div>
+                <div class="image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80" alt="لوحة تحكم وإدارة المستخدمين">
+                </div>
+            </div>
+            <div>
+                <ul>
+                    <li>
+                        <strong>تكامل الواجهة الأمامية (Frontend)</strong>
+                        بناء شاشات الدخول والتسجيل، وحفظ التوكن (Token) في التخزين المحلي (LocalStorage) لإرفاقه مع كل طلب خادم تلقائياً.
+                    </li>
+                    <li>
+                        <strong>إدارة الصلاحيات (Roles)</strong>
+                        إنشاء نظام صلاحيات يفصل بوضوح بين المستخدم العادي (User) والمدير (Admin).
+                    </li>
+                    <li>
+                        <strong>لوحة الإدارة (Admin Panel)</strong>
+                        تخصيص واجهات وتقارير خاصة للمديرين تعرض إحصائيات النظام الشاملة وتتيح إدارة حسابات المستخدمين.
+                    </li>
+                </ul>
+                <div class="insight-box" style="margin-top:40px;">
+                    <i class="fa-solid fa-user-shield"></i>
+                    بمجرد استلام الواجهة الأمامية للـ Token، يصبح النظام قادراً على تخصيص تجربة المستخدم بالكامل بناءً على هويته وصلاحياته.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 10: Q&A -->
+<div class="slide-container" id="slide10">
+    <div class="qa-layout">
+        <h2>شكراً لاستماعكم</h2>
+        <p style="font-size: 30px; margin-top: 20px;">الآن.. النظام جاهز للتوسع كمنصة SaaS متكاملة.</p>
+        <div class="contact-info">
+            هل لديكم أي أسئلة حول هيكلية النظام؟
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+```

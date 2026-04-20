@@ -183,6 +183,9 @@ async def _process_document(task_instance, asset_id: int):
                 logger.info(f"Generating embeddings for {total_chunks} chunks")
                 texts = [c.content for c in chunk_records]
                 embeddings = await embedding_service.generate_embeddings(texts)
+                if not embeddings:
+                    raise ValueError("No embeddings generated for processed document chunks")
+                embedding_dimension = len(embeddings[0]) if embeddings else 0
 
                 chunk_ids = [c.id for c in chunk_records]
                 vector_metadata = [
@@ -197,11 +200,18 @@ async def _process_document(task_instance, asset_id: int):
 
                 await _update_progress(db, asset, "indexing", total_chunks, total_chunks, 95)
 
+                await vector_db.create_collection(
+                    collection_name=f"project_{asset.project_id}",
+                    dimension=embedding_dimension,
+                    session_maker=session_maker,
+                )
+
                 await vector_db.add_vectors(
                     collection_name=f"project_{asset.project_id}",
                     vectors=embeddings,
                     ids=chunk_ids,
                     metadata=vector_metadata,
+                    session_maker=session_maker,
                 )
 
                 asset.status = "completed"

@@ -2,11 +2,16 @@
 Stats Routes.
 API endpoints for global statistics.
 """
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from backend.database import get_db
 from backend.database.models import Project, Asset, Chunk
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stats", tags=["Stats"])
 
@@ -22,5 +27,6 @@ async def get_global_stats(db: AsyncSession = Depends(get_db)):
             )
         )).one()
         return {"projects": row.p or 0, "documents": row.d or 0, "chunks": row.c or 0}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while fetching global stats")
+        raise HTTPException(status_code=500, detail="Internal server error")

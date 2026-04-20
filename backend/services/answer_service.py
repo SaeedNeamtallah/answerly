@@ -2,7 +2,7 @@
 Answer Generation Service.
 Handles generating AI-powered answers using LLM.
 """
-from typing import List, Dict, Any, Optional, AsyncIterator
+from typing import List, Dict, Any, Optional
 from backend.providers.llm.factory import LLMProviderFactory
 import logging
 
@@ -46,12 +46,14 @@ class AnswerService:
             # Build context from chunks
             context = self._build_context(context_chunks)
             
-            # Build prompt
+            # Build system + user prompts
+            system_prompt = self._build_system_prompt(language)
             prompt = self._build_prompt(query, context, language)
             
             # Generate answer
             answer = await self.llm_provider.generate_text(
                 prompt=prompt,
+                system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=25000
             )
@@ -75,39 +77,6 @@ class AnswerService:
             
         except Exception as e:
             logger.error(f"Error generating answer: {str(e)}")
-            raise
-
-    async def generate_answer_stream(
-        self,
-        query: str,
-        context_chunks: List[Dict[str, Any]],
-        language: str = "ar",
-    ) -> AsyncIterator[str]:
-        """
-        Stream answer tokens from LLM.
-
-        Yields raw text tokens as they arrive from the provider.
-        """
-        try:
-            context = self._build_context(context_chunks)
-            prompt = self._build_prompt(query, context, language)
-
-            emitted_any = False
-            async for token in self.llm_provider.generate_text_stream(
-                prompt=prompt,
-                temperature=0.7,
-                max_tokens=25000,
-            ):
-                if token:
-                    emitted_any = True
-                    yield token
-
-            if not emitted_any:
-                logger.warning("LLM stream returned no tokens, using fallback")
-                yield self._fallback_answer(language)
-
-        except Exception as e:
-            logger.error(f"Error streaming answer: {str(e)}")
             raise
     
     def _build_context(self, chunks: List[Dict[str, Any]]) -> str:
@@ -143,20 +112,18 @@ class AnswerService:
         
         return "\n\n".join(context_parts)
     
-    def _build_prompt(self, query: str, context: str, language: str) -> str:
+    def _build_system_prompt(self, language: str) -> str:
         """
-        Build prompt for LLM.
-        
+        Build system instruction for LLM.
+
         Args:
-            query: User question
-            context: Context text
             language: Response language
-            
+
         Returns:
-            Formatted prompt
+            System instruction text
         """
         if language == "ar":
-            system_prompt = """أنت مساعد احترافي على مستوى الشركات للإجابة بدقة اعتمادًا على سياق المستندات فقط.
+            return """أنت مساعد احترافي على مستوى الشركات للإجابة بدقة اعتمادًا على سياق المستندات فقط.
 اتّبع القواعد التالية بدقة:
 1) اعتمد فقط على السياق المقدم. إذا لم تجد الإجابة في السياق، قل ذلك بوضوح.
 2) قدّم إجابة مباشرة ومختصرة أولاً، ثم أضف تفاصيل داعمة عند الحاجة.
@@ -169,16 +136,7 @@ class AnswerService:
 - فقرة إجابة واضحة.
 - عند اللزوم، قائمة نقاط موجزة مع الاستشهادات."""
 
-            prompt = f"""{system_prompt}
-
-السياق:
-{context}
-
-السؤال: {query}
-
-الإجابة:"""
-        else:
-            system_prompt = """You are an enterprise-grade assistant answering strictly from the provided document context.
+        return """You are an enterprise-grade assistant answering strictly from the provided document context.
 Follow these rules:
 1) Use only the given context. If the answer is not in the context, state that clearly.
 2) Provide a concise direct answer first, then add supporting detail if needed.
@@ -191,9 +149,27 @@ Output:
 - One clear answer paragraph.
 - If helpful, a short bullet list with citations."""
 
-            prompt = f"""{system_prompt}
+    def _build_prompt(self, query: str, context: str, language: str) -> str:
+        """
+        Build user prompt for LLM.
+        
+        Args:
+            query: User question
+            context: Context text
+            language: Response language
+            
+        Returns:
+            Formatted user prompt
+        """
+        if language == "ar":
+            prompt = f"""السياق:
+{context}
 
-Context:
+السؤال: {query}
+
+الإجابة:"""
+        else:
+            prompt = f"""Context:
 {context}
 
 Question: {query}
