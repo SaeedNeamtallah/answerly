@@ -107,8 +107,22 @@ services:
       - backend
     restart: always
 
+    #8 بالطبع الفرونت إند (React) - إضافة مهمة
+
+  frontend:
+    build:
+      context: .. # المسار لفولدر الفرونت إند بالنسبة لفولدر الدوكر
+      dockerfile: front.Dockerfile
+    container_name: ragmind-frontend
+    ports:
+      - "80:80"  # كدة الموقع هيفتح على localhost علطول (بورت 80)
+    depends_on:
+      - backend
+    restart: always
+
 volumes:
   postgres_data:
   qdrant_data:
   rabbitmq_data:
   redis_data:
+
