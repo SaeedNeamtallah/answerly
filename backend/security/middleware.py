@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import re
 from threading import Lock
 from typing import Optional, Pattern
@@ -11,9 +12,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.config import settings
+from backend.security.jwt_utils import decode_jwt_access_token
 from backend.security.event_service import log_event
 from backend.security.rate_limit import InMemoryRateLimiter, RateLimitResult
 from backend.security.security_event import SecurityEventType, SecuritySeverity
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -114,6 +119,23 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
             return request.client.host
         return "unknown"
 
+    @staticmethod
+    def _identity_key(request: Request, fallback_ip: str) -> str:
+        """Use JWT subject when present to avoid shared-IP bottlenecks."""
+        authorization = request.headers.get("authorization", "")
+        if authorization.lower().startswith("bearer "):
+            token = authorization.split(" ", 1)[1].strip()
+            if token:
+                try:
+                    payload = decode_jwt_access_token(token)
+                    subject = str(payload.get("sub", "")).strip()
+                    if subject:
+                        return f"user:{subject}"
+                except Exception:
+                    # Keep throttling functional even for invalid/malformed tokens.
+                    logger.debug("Could not derive rate-limit identity from bearer token", exc_info=True)
+        return f"ip:{fallback_ip}"
+
     def _is_exempt(self, path: str) -> bool:
         return any(path.startswith(prefix) for prefix in self._exempt_paths)
 
@@ -174,7 +196,8 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
         self,
         *,
         request: Request,
-        client_key: str,
+        client_ip: str,
+        identity_key: str,
         rule_name: str,
         detail: str,
         retry_after: int,
@@ -184,12 +207,13 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
             {
                 "event_type": event_type or self._event_type_for_rule(rule_name),
                 "severity": self._severity_for_rule(rule_name),
-                "ip_address": client_key,
+                "ip_address": client_ip,
                 "message": detail,
                 "metadata": {
                     "path": request.url.path,
                     "method": request.method,
                     "rule": rule_name,
+                    "identity_key": identity_key,
                     "retry_after": max(1, int(retry_after)),
                 },
             }
@@ -220,17 +244,19 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.security_rate_limit_enabled or self._is_exempt(path):
             return await call_next(request)
 
-        client_key = self._client_ip(request)
+        client_ip = self._client_ip(request)
+        identity_key = self._identity_key(request, client_ip)
         matched_rules = [rule for rule in self._rules if self._matches(rule, method, path)]
 
         global_result: Optional[RateLimitResult] = None
         if self._global_limiter:
-            global_result = self._global_limiter.check(f"global:{client_key}")
+            global_result = self._global_limiter.check(f"global:{identity_key}")
             if not global_result.allowed:
                 detail = self._rate_limit_message("global")
                 self._log_rate_limit_event(
                     request=request,
-                    client_key=client_key,
+                    client_ip=client_ip,
+                    identity_key=identity_key,
                     rule_name="global",
                     detail=detail,
                     retry_after=global_result.reset_seconds,
@@ -244,12 +270,13 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
 
         per_rule_results: list[tuple[EndpointRateRule, RateLimitResult]] = []
         for rule in matched_rules:
-            rule_result = rule.limiter.check(f"{rule.name}:{client_key}")
+            rule_result = rule.limiter.check(f"{rule.name}:{identity_key}")
             if not rule_result.allowed:
                 detail = self._rate_limit_message(rule.name)
                 self._log_rate_limit_event(
                     request=request,
-                    client_key=client_key,
+                    client_ip=client_ip,
+                    identity_key=identity_key,
                     rule_name=rule.name,
                     detail=detail,
                     retry_after=rule_result.reset_seconds,
@@ -265,14 +292,15 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
         for rule in matched_rules:
             if rule.max_in_flight <= 0:
                 continue
-            lock_key = f"{rule.name}:{client_key}"
+            lock_key = f"{rule.name}:{identity_key}"
             if not self._try_acquire_in_flight(lock_key, rule.max_in_flight):
                 for acquired in acquired_locks:
                     self._release_in_flight(acquired)
                 detail = self._concurrency_message(rule.name)
                 self._log_rate_limit_event(
                     request=request,
-                    client_key=client_key,
+                    client_ip=client_ip,
+                    identity_key=identity_key,
                     rule_name=rule.name,
                     detail=detail,
                     retry_after=1,

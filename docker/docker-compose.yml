@@ -1,3 +1,19 @@
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql+asyncpg://ragmind:ragmind123@postgres:5432/ragmind
+  QDRANT_URL: http://qdrant:6333
+  CELERY_BROKER_URL: amqp://minirag_user:minirag_rabbitmq_2222@rabbitmq:5672/minirag_vhost
+  CELERY_RESULT_BACKEND: redis://:minirag_redis_2222@redis:6379/0
+
+x-app-depends-on: &app-depends-on
+  postgres:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+  redis:
+    condition: service_started
+  qdrant:
+    condition: service_started
+
 services:
   # 1. قاعدة البيانات (PostgreSQL + pgvector)
   postgres:
@@ -5,15 +21,15 @@ services:
     container_name: ragmind-postgres
     environment:
       POSTGRES_USER: ragmind
-      POSTGRES_PASSWORD: ragmind123  # نفس اللي في الـ .env
+      POSTGRES_PASSWORD: ragmind123 # نفس اللي في الـ .env
       POSTGRES_DB: ragmind
     ports:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ../backend/alembic/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ragmind -d ragmind"]
+      test: [ "CMD-SHELL", "pg_isready -U ragmind -d ragmind" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,7 +60,7 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: always
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
       timeout: 10s
       retries: 5
 
@@ -57,54 +73,49 @@ services:
     volumes:
       - redis_data:/data
     restart: always
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "minirag_redis_2222"]
+    command: [ "redis-server", "--appendonly", "yes", "--requirepass", "minirag_redis_2222" ]
 
   # 5. الباكند (FastAPI) - إضافة مهمة
   backend:
-    build: 
+    build:
       context: .. # بيفترض إن الـ Dockerfile في الفولدر الرئيسي
-      dockerfile: backend.Dockerfile 
+      dockerfile: docker/backend.Dockerfile
+    image: ragmind-app:local
     container_name: ragmind-backend
     env_file: ../.env
+    environment: *app-environment
     ports:
       - "8000:8000"
-
-    depends_on:
-    - postgres
-    - redis
-    - rabbitmq
-
-
+    depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads
     restart: always
 
   # 6. معالج المهام (Celery Worker) - إضافة مهمة
   worker:
-    build:
-      context: ..
-      dockerfile: backend.Dockerfile
+    image: ragmind-app:local
     container_name: ragmind-worker
     # أمر تشغيل السلري الخاص بمشروعك
     command: celery -A backend.celery_app worker --loglevel=info -Q default,file_processing
     env_file: ../.env
-    depends_on:
-      - redis
-      - rabbitmq
+    environment: *app-environment
+    depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads
     restart: always
 
   # 7. بوت التليجرام (اختياري)
   telegram_bot:
-    build:
-      context: ..
-      dockerfile: backend.Dockerfile
+    image: ragmind-app:local
     container_name: ragmind-bot
     command: python -m telegram_bot.bot
     env_file: ../.env
+    environment:
+      <<: *app-environment
+      API_BASE_URL: http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     restart: always
 
     #8 بالطبع الفرونت إند (React) - إضافة مهمة

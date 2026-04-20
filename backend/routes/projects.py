@@ -3,6 +3,7 @@ Project Routes.
 API endpoints for project management.
 """
 from datetime import datetime
+import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.controllers.project_controller import ProjectController
+from backend.tasks.data_indexing import index_project_task
 from backend.database import get_db
 from backend.database.models import User
 from backend.security.auth import get_current_db_user
@@ -17,6 +19,8 @@ from backend.security.event_service import log_event
 from backend.security.sanitization import sanitize_metadata, sanitize_optional_text, sanitize_project_name
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 
+
+logger = logging.getLogger(__name__)
 
 # SECURITY RULE: never trust client ownership fields; all access is scoped by JWT user.
 router = APIRouter(prefix="/projects", tags=["Projects"], dependencies=[Depends(get_current_db_user)])
@@ -36,6 +40,10 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+
+
+class ProjectIndexRequest(BaseModel):
+    do_reset: bool = False
 
 
 class ProjectResponse(BaseModel):
@@ -98,8 +106,9 @@ async def create_project(
         return project
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while creating project")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/", response_model=PaginatedProjectsResponse)
@@ -119,8 +128,9 @@ async def list_projects(
             limit=limit,
         )
         return {"items": projects, "total_count": total_count}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while listing projects")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -148,8 +158,60 @@ async def get_project(
         return project
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while fetching project")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{project_id}/index")
+async def index_project(
+    project_id: int,
+    payload: ProjectIndexRequest,
+    current_user: User = Depends(get_current_db_user),
+    db: AsyncSession = Depends(get_db),
+    project_controller: ProjectController = Depends(ProjectController)
+):
+    """Trigger project-level indexing via Celery."""
+    try:
+        project = await project_controller.get_project(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,
+        )
+        if not project:
+            _log_project_denied(
+                user_id=current_user.id,
+                project_id=project_id,
+                action="index_project",
+                message="Project indexing denied",
+            )
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        # task = index_project_task.delay(
+        #     project_id=project_id,
+        #     do_reset=payload.do_reset
+        # )
+
+        task = index_project_task.apply_async(
+            kwargs={
+                "project_id": project_id,
+                "do_reset": payload.do_reset
+            },
+            queue="data_indexing"
+        )
+
+
+        return {
+            "task_id": task.id,
+            "status": "queued",
+            "project_id": project_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unexpected error while queueing project indexing")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{project_id}/stats", response_model=ProjectStatsResponse)
@@ -187,8 +249,9 @@ async def get_project_stats(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while fetching project stats")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)
@@ -243,8 +306,9 @@ async def update_project(
         return project
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while updating project")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{project_id}", status_code=204)
@@ -272,5 +336,6 @@ async def delete_project(
         return None
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while deleting project")
+        raise HTTPException(status_code=500, detail="Internal server error")

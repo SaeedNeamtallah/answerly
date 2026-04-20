@@ -1,9 +1,15 @@
-
 """
 Database connection management with async SQLAlchemy.
 Provides engine and session factory.
 """
+import asyncio
+from pathlib import Path
+from typing import AsyncGenerator
+
+from alembic import command
+from alembic.config import Config
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
 from backend.config import settings
 import logging
 
@@ -31,7 +37,7 @@ async_session_maker = async_sessionmaker(
 )
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency function to get database session.
     Use with FastAPI Depends().
@@ -48,84 +54,31 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
-    """Initialize database - create tables if they don't exist."""
-    from backend.database.models import Base
+    """Initialize database extensions and apply Alembic migrations."""
     from sqlalchemy import text
 
-    async def ensure_projects_owner_id_schema(conn):
-        """Backfill legacy schemas that predate multi-user owner_id on projects."""
-        # Ensure owner_id column exists on legacy databases.
-        await conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id INTEGER"))
-        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_projects_owner_id ON projects(owner_id)"))
-
-        # Pick a fallback owner for legacy rows without ownership data.
-        fallback_owner_id = (
-            await conn.execute(text("SELECT id FROM users ORDER BY id LIMIT 1"))
-        ).scalar_one_or_none()
-
-        if fallback_owner_id is None:
-            await conn.execute(
-                text(
-                    """
-                    INSERT INTO users (username, hashed_password)
-                    VALUES ('__migration_owner__', '__disabled__')
-                    ON CONFLICT (username) DO NOTHING
-                    """
-                )
-            )
-            fallback_owner_id = (
-                await conn.execute(
-                    text("SELECT id FROM users WHERE username = '__migration_owner__' LIMIT 1")
-                )
-            ).scalar_one()
-
-        await conn.execute(
-            text("UPDATE projects SET owner_id = :owner_id WHERE owner_id IS NULL"),
-            {"owner_id": fallback_owner_id},
-        )
-
-        # Ensure FK exists even for old schemas.
-        await conn.execute(
-            text(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint WHERE conname = 'fk_projects_owner_id_users'
-                    ) THEN
-                        ALTER TABLE projects
-                        ADD CONSTRAINT fk_projects_owner_id_users
-                        FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE;
-                    END IF;
-                END;
-                $$;
-                """
-            )
-        )
-
-        # Enforce non-null ownership after backfill.
-        await conn.execute(text("ALTER TABLE projects ALTER COLUMN owner_id SET NOT NULL"))
+    def run_alembic_upgrade() -> None:
+        project_root = Path(__file__).resolve().parents[2]
+        alembic_cfg = Config(str(project_root / "backend" / "alembic" / "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", str(project_root / "backend" / "alembic"))
+        command.upgrade(alembic_cfg, "head")
 
     try:
         async with engine.begin() as conn:
-            # Enable pgvector extension
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            
-            # Create all tables
-            await conn.run_sync(Base.metadata.create_all)
-            await ensure_projects_owner_id_schema(conn)
-            logger.info("Database initialized successfully with pgvector")
+            try:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                logger.info("pgvector extension is available")
+            except Exception as ext_error:
+                logger.warning(f"Could not initialize pgvector extension: {str(ext_error)}")
     except Exception as e:
-        logger.warning(f"Could not initialize pgvector extension: {str(e)}")
-        logger.info("Attempting to initialize other tables...")
-        try:
-            async with engine.begin() as conn:
-                # Try to create tables one by one or skip those that fail
-                await conn.run_sync(Base.metadata.create_all)
-                await ensure_projects_owner_id_schema(conn)
-                logger.info("Database tables initialized (some might have failed)")
-        except Exception as e2:
-            logger.error(f"Failed to initialize database tables: {str(e2)}")
+        logger.warning(f"Could not open database connection for extension setup: {str(e)}")
+
+    try:
+        await asyncio.to_thread(run_alembic_upgrade)
+        logger.info("Database schema is up to date via Alembic")
+    except Exception as migration_error:
+        logger.error(f"Failed to apply Alembic migrations: {str(migration_error)}")
+        raise
 
 
 async def close_db():

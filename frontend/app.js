@@ -4,7 +4,7 @@
  */
 
 // Configuration
-let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || 'http://localhost:8001').replace(/\/+$/, '');
+let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || 'http://localhost:8000').replace(/\/+$/, '');
 
 // Translations
 const i18n = {
@@ -381,8 +381,9 @@ function getApiBaseCandidates() {
         fromQuery,
         normalizeBaseUrl(localStorage.getItem('ragmind_api_base_url')),
         normalizeBaseUrl(API_BASE_URL),
-        `${protocol}//${host}:8001`,
-        `${protocol}//${host}:8000`
+        `${protocol}//${host}:8000`,
+        `${protocol}//${host}:8101`,
+        `${protocol}//${host}:8001`
     ].filter(Boolean);
 
     return [...new Set(candidates)];
@@ -2045,100 +2046,20 @@ async function handleChatSubmit() {
             payload.top_k = state.retrievalTopK;
         }
 
-        // ── Stream via SSE (fetch + ReadableStream) ──
-        const response = await fetchWithApiRecovery(`/projects/${projectId}/query/stream`, {
-            method: 'POST',
-            headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify(payload),
-        });
-
-        if (response.status === 401) {
-            clearAuthAndRedirect('expired');
-            throw new Error('Unauthorized');
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullAnswer = '';
-        let sources = null;
-
-        // Remove typing indicator as soon as first token arrives
-        let indicatorRemoved = false;
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // keep incomplete line in buffer
-
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const dataStr = line.slice(6).trim();
-                if (dataStr === '[DONE]') continue;
-
-                try {
-                    const evt = JSON.parse(dataStr);
-
-                    if (evt.type === 'sources') {
-                        sources = evt.sources;
-                    } else if (evt.type === 'token') {
-                        if (!indicatorRemoved) {
-                            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-                            if (ind) ind.remove();
-                            indicatorRemoved = true;
-                        }
-                        fullAnswer += evt.token;
-                        // Live-render the accumulated text
-                        const textEl = document.querySelector(`#msg-${thinkingId} .msg-text`);
-                        if (textEl) {
-                            textEl.classList.add('streaming');
-                            textEl.innerHTML = formatAnswerHtml(fullAnswer) || escapeHtml(fullAnswer);
-                            textEl.dir = detectTextDirection(fullAnswer);
-                        }
-                        // Auto-scroll
-                        const container = document.getElementById('chat-messages');
-                        container.scrollTop = container.scrollHeight;
-                    } else if (evt.type === 'error') {
-                        fullAnswer = evt.message || i18n[state.lang].error_generic;
-                    }
-                } catch (_) { /* skip malformed JSON */ }
-            }
-        }
-
-        // Finalize: attach sources + copy button
-        finalizeBotMessage(thinkingId, fullAnswer, sources);
+        const result = await api.post(`/projects/${projectId}/query`, payload);
+        const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+        if (ind) ind.remove();
+        finalizeBotMessage(thinkingId, result.answer, result.sources);
 
     } catch (error) {
-        // Fallback: try non-streaming endpoint
-        console.warn('Stream failed, falling back to non-streaming:', error.message);
-        try {
-            const payload = { query, language };
-            if (Number.isInteger(state.retrievalTopK)) {
-                payload.top_k = state.retrievalTopK;
-            }
-            const result = await api.post(`/projects/${projectId}/query`, payload);
-            // Remove indicator
-            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-            if (ind) ind.remove();
-            finalizeBotMessage(thinkingId, result.answer, result.sources);
-        } catch (fallbackErr) {
-            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-            if (ind) ind.remove();
-            finalizeBotMessage(thinkingId, i18n[state.lang].error_generic, null);
-        }
+        const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+        if (ind) ind.remove();
+        finalizeBotMessage(thinkingId, i18n[state.lang].error_generic, null);
     }
 }
 
 /**
- * Finalize a bot message after streaming completes:
- * render final formatted text, attach sources and copy button.
+ * Finalize a bot message by rendering text, attaching sources, and adding copy action.
  */
 function finalizeBotMessage(id, text, sources) {
     const msgDiv = document.getElementById(`msg-${id}`);

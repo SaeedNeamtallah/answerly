@@ -20,8 +20,13 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. نسخ كل ملفات المشروع لداخل الحاوية
-COPY . .
+# 6. نسخ ملفات runtime فقط لتقليل build context وتحسين الكاش
+COPY backend ./backend
+COPY telegram_bot ./telegram_bot
+COPY app_config.json ./app_config.json
+COPY bot_config.json ./bot_config.json
+
+RUN mkdir -p /app/uploads
 
 # 7. البورت اللي الباكند هيشتغل عليه
 EXPOSE 8000

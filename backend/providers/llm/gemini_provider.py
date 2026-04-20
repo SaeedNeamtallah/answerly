@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 class GeminiProvider(LLMInterface):
     """Google Gemini LLM provider implementation."""
 
+    _EMBED_MODEL_DIMENSIONS = {
+        "models/gemini-embedding-001": 3072,
+        "models/text-embedding-004": 768,
+    }
+
     @staticmethod
     def _get_attr_or_key(obj: Any, name: str, default: Any = None) -> Any:
         if obj is None:
@@ -91,7 +96,20 @@ class GeminiProvider(LLMInterface):
         # Initialize models
         self.chat_model = genai.GenerativeModel(self.model_name)
         self.embedding_model = settings.gemini_embed_model
+        self._detected_embedding_dimension: Optional[int] = None
         logger.info(f"Gemini provider initialized with model: {self.model_name}")
+
+    def _infer_embedding_dimension_from_model(self) -> int:
+        model_key = (self.embedding_model or "").strip().lower()
+        if model_key in self._EMBED_MODEL_DIMENSIONS:
+            return self._EMBED_MODEL_DIMENSIONS[model_key]
+
+        # Conservative fallback for unknown Gemini embedding models.
+        if "embedding-001" in model_key:
+            return 3072
+        if "text-embedding" in model_key:
+            return 768
+        return 3072
     
     async def generate_text(
         self,
@@ -235,6 +253,9 @@ class GeminiProvider(LLMInterface):
             
             # Execute in parallel
             embeddings = await asyncio.gather(*tasks)
+
+            if embeddings and embeddings[0]:
+                self._detected_embedding_dimension = len(embeddings[0])
             
             return list(embeddings)
             
@@ -247,5 +268,7 @@ class GeminiProvider(LLMInterface):
         return self.model_name
     
     def get_embedding_dimension(self) -> int:
-        """Get embedding dimension for Gemini (768)."""
-        return 768
+        """Get embedding dimension for Gemini embedding model."""
+        if self._detected_embedding_dimension:
+            return int(self._detected_embedding_dimension)
+        return self._infer_embedding_dimension_from_model()

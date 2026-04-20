@@ -6,11 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Form
 from pydantic import BaseModel
 from typing import Optional
 import json
+import logging
 import os
 import httpx
 from telegram_bot.config import bot_settings
 from backend.security.auth import AuthUser, require_mutation_auth_if_enabled
 from backend.security.sanitization import sanitize_text
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bot", tags=["Bot Config"])
 
@@ -72,5 +76,6 @@ async def update_bot_profile(
             
             return {"status": "success", "message": "Bot profile updated"}
             
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while updating bot profile")
+        raise HTTPException(status_code=500, detail="Internal server error")

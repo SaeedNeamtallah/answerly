@@ -13,7 +13,7 @@ from backend.celery_app import celery_app, get_setup_utils
 from backend.config import settings
 from backend.database.models import Asset, Chunk, Project
 from backend.runtime_config import get_runtime_value
-from backend.providers.vectordb.factory import VectorDBProviderFactory
+from backend.utils.idempotency_manager import IdempotencyManager
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +23,10 @@ logger = logging.getLogger(__name__)
     name="backend.tasks.file_processing.process_document_task",
 )
 def process_document_task(self, asset_id: int):
-    """
-    Celery entry point. Runs the async processing logic
-    inside a new event loop (Celery workers are synchronous).
-    """
-    asyncio.run(_process_document(self, asset_id))
+    return asyncio.run(_process_document(self, asset_id))
 
 
 async def _process_document(task_instance, asset_id: int):
-    """
-    Full document processing pipeline executed inside a Celery worker.
-    Opens its own DB engine and cleans up in `finally`.
-    """
     db_engine = None
 
     try:
@@ -48,13 +40,64 @@ async def _process_document(task_instance, asset_id: int):
             file_service,
         ) = await get_setup_utils()
 
+        idempotency_manager = IdempotencyManager()
+
         async with session_maker() as db:
-            # Fetch asset
+            task_args = {
+                "asset_id": asset_id,
+            }
+            task_name = "backend.tasks.file_processing.process_document_task"
+
+            should_execute, existing_task = await idempotency_manager.should_execute_task(
+                db=db,
+                task_name=task_name,
+                task_args=task_args,
+                task_time_limit=settings.celery_task_time_limit,
+            )
+
+            if not should_execute:
+                return {
+                    "status": "skipped",
+                    "message": f"Task already exists with status: {existing_task.status}",
+                    "existing_execution_id": existing_task.execution_id,
+                    "existing_result": existing_task.result,
+                }
+
+            if existing_task:
+                await idempotency_manager.update_task_status(
+                    db=db,
+                    execution_id=existing_task.execution_id,
+                    status="PENDING",
+                )
+                task_record = existing_task
+            else:
+                task_record = await idempotency_manager.create_task_record(
+                    db=db,
+                    task_name=task_name,
+                    task_args=task_args,
+                    celery_task_id=task_instance.request.id,
+                )
+
+            await idempotency_manager.update_task_status(
+                db=db,
+                execution_id=task_record.execution_id,
+                status="STARTED",
+            )
+
             asset_stmt = select(Asset).where(Asset.id == asset_id)
             asset_result = await db.execute(asset_stmt)
             asset = asset_result.scalar_one_or_none()
 
             if asset is None:
+
+                error_result = {"error": f"Asset not found: {asset_id}"}
+                await idempotency_manager.update_task_status(
+                    db=db,
+                    execution_id=task_record.execution_id,
+                    status="FAILURE",
+                    result=error_result,
+                )
+                task_instance.update_state(state="FAILURE", meta=error_result)
                 raise ValueError(f"Asset not found: {asset_id}")
 
             # SECURITY RULE: owner_id is persisted in vector payload for strict isolation.
@@ -64,30 +107,41 @@ async def _process_document(task_instance, asset_id: int):
             if owner_id is None:
                 raise ValueError(f"Project owner not found for project {asset.project_id}")
 
+            if asset.status == "completed":
+                final_result = {
+                    "asset_id": asset.id,
+                    "status": "completed",
+                    "total_chunks": asset.extra_metadata.get("total_chunks", 0) if asset.extra_metadata else 0,
+                    "message": "Document already processed",
+                }
+                await idempotency_manager.update_task_status(
+                    db=db,
+                    execution_id=task_record.execution_id,
+                    status="SUCCESS",
+                    result=final_result,
+                )
+                return final_result
+
+
+
             # Mark as processing
+
             asset.status = "processing"
+            asset.error_message = None
             await db.commit()
 
             try:
-                # 1. Extract text
                 logger.info(f"Extracting text from {asset.original_filename}")
                 text = await document_loader.load_document(asset.file_path)
 
-                # 2. Chunk text
                 logger.info(f"Chunking text ({len(text)} characters)")
                 await _update_progress(db, asset, "chunking", 0, 0, 0)
 
-                chunk_strategy = get_runtime_value(
-                    "chunk_strategy", settings.chunk_strategy
-                )
+                chunk_strategy = get_runtime_value("chunk_strategy", settings.chunk_strategy)
                 chunk_size = get_runtime_value("chunk_size", settings.chunk_size)
                 chunk_overlap = get_runtime_value("chunk_overlap", settings.chunk_overlap)
-                parent_chunk_size = get_runtime_value(
-                    "parent_chunk_size", settings.parent_chunk_size
-                )
-                parent_chunk_overlap = get_runtime_value(
-                    "parent_chunk_overlap", settings.parent_chunk_overlap
-                )
+                parent_chunk_size = get_runtime_value("parent_chunk_size", settings.parent_chunk_size)
+                parent_chunk_overlap = get_runtime_value("parent_chunk_overlap", settings.parent_chunk_overlap)
 
                 from backend.services.chunking_service import ChunkingService as CS
 
@@ -108,7 +162,6 @@ async def _process_document(task_instance, asset_id: int):
                     chunk_strategy=chunk_strategy,
                 )
 
-                # 3. Create chunk DB records
                 chunk_records = []
                 for i, chunk_data in enumerate(chunks_data):
                     chunk_records.append(
@@ -127,13 +180,13 @@ async def _process_document(task_instance, asset_id: int):
                 total_chunks = len(chunk_records)
                 await _update_progress(db, asset, "embedding", 0, total_chunks, 0)
 
-                # 4. Generate embeddings
                 logger.info(f"Generating embeddings for {total_chunks} chunks")
                 texts = [c.content for c in chunk_records]
-
                 embeddings = await embedding_service.generate_embeddings(texts)
+                if not embeddings:
+                    raise ValueError("No embeddings generated for processed document chunks")
+                embedding_dimension = len(embeddings[0]) if embeddings else 0
 
-                # 5. Store vectors
                 chunk_ids = [c.id for c in chunk_records]
                 vector_metadata = [
                     {
@@ -145,8 +198,12 @@ async def _process_document(task_instance, asset_id: int):
                     for c in chunk_records
                 ]
 
-                await _update_progress(
-                    db, asset, "indexing", total_chunks, total_chunks, 95
+                await _update_progress(db, asset, "indexing", total_chunks, total_chunks, 95)
+
+                await vector_db.create_collection(
+                    collection_name=f"project_{asset.project_id}",
+                    dimension=embedding_dimension,
+                    session_maker=session_maker,
                 )
 
                 await vector_db.add_vectors(
@@ -154,31 +211,48 @@ async def _process_document(task_instance, asset_id: int):
                     vectors=embeddings,
                     ids=chunk_ids,
                     metadata=vector_metadata,
+                    session_maker=session_maker,
                 )
 
-                # 6. Mark completed
                 asset.status = "completed"
+                asset.error_message = None
                 asset.processed_at = datetime.utcnow()
-                await _update_progress(
-                    db, asset, "completed", total_chunks, total_chunks, 100
-                )
+
+                meta = dict(asset.extra_metadata or {})
+                meta["total_chunks"] = total_chunks
+                asset.extra_metadata = meta
+                flag_modified(asset, "extra_metadata")
+
+                await _update_progress(db, asset, "completed", total_chunks, total_chunks, 100)
                 await db.commit()
 
-                logger.info(
-                    f"Completed processing document {asset.id}: "
-                    f"{total_chunks} chunks created"
-                )
-
-                return {
+                final_result = {
                     "asset_id": asset.id,
                     "status": "completed",
                     "total_chunks": total_chunks,
                 }
 
+                await idempotency_manager.update_task_status(
+                    db=db,
+                    execution_id=task_record.execution_id,
+                    status="SUCCESS",
+                    result=final_result,
+                )
+
+                logger.info(f"Completed processing document {asset.id}: {total_chunks} chunks created")
+                return final_result
+
             except Exception as e:
                 asset.status = "failed"
                 asset.error_message = str(e)
                 await db.commit()
+
+                await idempotency_manager.update_task_status(
+                    db=db,
+                    execution_id=task_record.execution_id,
+                    status="FAILURE",
+                    result={"error": str(e)},
+                )
                 raise
 
     except Exception as e:
@@ -193,10 +267,7 @@ async def _process_document(task_instance, asset_id: int):
             logger.error(f"Error during cleanup: {str(e)}")
 
 
-async def _update_progress(
-    db, asset: Asset, stage: str, processed: int, total: int, progress: int
-) -> None:
-    """Helper to persist processing progress in asset metadata."""
+async def _update_progress(db, asset: Asset, stage: str, processed: int, total: int, progress: int) -> None:
     meta = dict(asset.extra_metadata or {})
     meta.update(
         {
