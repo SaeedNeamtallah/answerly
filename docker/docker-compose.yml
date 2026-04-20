@@ -113,6 +113,7 @@ services:
     environment:
       <<: *app-environment
       API_BASE_URL: http://backend:8000
+      BOT_ACTIVE_PROJECT_ID: 5  # <--- غير الرقم ده خليه 5
     depends_on:
       backend:
         condition: service_started
@@ -123,7 +124,7 @@ services:
   frontend:
     build:
       context: .. # المسار لفولدر الفرونت إند بالنسبة لفولدر الدوكر
-      dockerfile: front.Dockerfile
+      dockerfile: docker/front.Dockerfile
     container_name: ragmind-frontend
     ports:
       - "80:80"  # كدة الموقع هيفتح على localhost علطول (بورت 80)

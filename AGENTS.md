@@ -333,6 +333,9 @@ Vector DB:
   - `start_command()`
   - `help_command()`
   - `handle_message()`
+    - resolves active project from `bot_config.json` (or `BOT_ACTIVE_PROJECT_ID`)
+    - obtains JWT via `/auth/login` using `BOT_API_USERNAME/BOT_API_PASSWORD` (fallback to `AUTH_ADMIN_*`)
+    - on `403/404`, auto-selects first accessible project for bot user, persists it to `bot_config.json`, and retries once
 - `telegram_bot/bot.py`
   - `print_bot_link()`
   - `setup_handlers()`
