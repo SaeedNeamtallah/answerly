@@ -4,6 +4,8 @@
 !backend/**
 !telegram_bot/
 !telegram_bot/**
+!frontend/
+!frontend/**
 !docker/
 !docker/**
 !app_config.json

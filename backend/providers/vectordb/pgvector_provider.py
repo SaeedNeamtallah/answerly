@@ -407,6 +407,42 @@ class PGVectorProvider(VectorDBInterface):
         except Exception as e:
             logger.error(f"Error deleting collection: {str(e)}")
             raise
+
+    async def delete_vectors(
+        self,
+        collection_name: str,
+        *,
+        filter_dict: Dict[str, Any],
+        **kwargs
+    ) -> bool:
+        """
+        Delete chunk rows matching the provided filter.
+
+        For pgvector, vectors live inside PostgreSQL rows, so deleting vectors
+        means deleting the matching `chunks` rows.
+        """
+        try:
+            session_maker = self._get_session_maker(kwargs.get("session_maker"))
+            async with session_maker() as session:
+                stmt = delete(Chunk)
+
+                asset_id = filter_dict.get("asset_id")
+                project_id = filter_dict.get("project_id")
+
+                if asset_id is not None:
+                    stmt = stmt.where(Chunk.asset_id == asset_id)
+                if project_id is not None:
+                    stmt = stmt.where(Chunk.project_id == project_id)
+
+                await session.execute(stmt)
+                await session.commit()
+
+            logger.info("Deleted pgvector-backed chunk rows for filter %s", filter_dict)
+            return True
+
+        except Exception as e:
+            logger.error(f"Error deleting vectors: {str(e)}")
+            raise
     
     async def collection_exists(
         self,

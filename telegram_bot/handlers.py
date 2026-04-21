@@ -3,20 +3,20 @@ Telegram Bot Handlers.
 Command and message handlers for the bot using pyTelegramBotAPI.
 """
 import base64
-import httpx
-from telegram_bot.config import bot_settings
 import logging
 import json
 import os
 import time
-from pathlib import Path
 from typing import Optional
+
+import httpx
+
+from telegram_bot.config import BOT_CONFIG_PATH, bot_settings
 
 logger = logging.getLogger(__name__)
 
 # Bot instance (will be set from bot.py)
 bot = None
-_BOT_CONFIG_FILE = Path(__file__).resolve().parent.parent / "bot_config.json"
 _TOKEN_REFRESH_SKEW_SECONDS = 30
 _token_cache = {
     "access_token": None,
@@ -91,18 +91,9 @@ def _obtain_access_token(client: httpx.Client, force_refresh: bool = False) -> s
 
 
 def _resolve_active_project_id() -> Optional[int]:
-    env_project_id = (os.getenv("BOT_ACTIVE_PROJECT_ID") or "").strip()
-    if env_project_id:
-        try:
-            project_id = int(env_project_id)
-            if project_id > 0:
-                return project_id
-        except ValueError:
-            logger.warning("Invalid BOT_ACTIVE_PROJECT_ID value: %s", env_project_id)
-
     try:
-        if _BOT_CONFIG_FILE.exists():
-            with _BOT_CONFIG_FILE.open("r", encoding="utf-8") as fh:
+        if BOT_CONFIG_PATH.exists():
+            with BOT_CONFIG_PATH.open("r", encoding="utf-8") as fh:
                 config = json.load(fh)
             raw_id = config.get("active_project_id")
             if raw_id is not None:
@@ -112,21 +103,31 @@ def _resolve_active_project_id() -> Optional[int]:
     except Exception as exc:
         logger.warning("Failed to read bot config file: %s", exc)
 
+    env_project_id = (os.getenv("BOT_ACTIVE_PROJECT_ID") or "").strip()
+    if env_project_id:
+        try:
+            project_id = int(env_project_id)
+            if project_id > 0:
+                return project_id
+        except ValueError:
+            logger.warning("Invalid BOT_ACTIVE_PROJECT_ID value: %s", env_project_id)
+
     return None
 
 
 def _save_active_project_id(project_id: int) -> None:
     try:
         config = {}
-        if _BOT_CONFIG_FILE.exists():
-            with _BOT_CONFIG_FILE.open("r", encoding="utf-8") as fh:
+        if BOT_CONFIG_PATH.exists():
+            with BOT_CONFIG_PATH.open("r", encoding="utf-8") as fh:
                 config = json.load(fh)
                 if not isinstance(config, dict):
                     config = {}
 
         config["active_project_id"] = int(project_id)
-        with _BOT_CONFIG_FILE.open("w", encoding="utf-8") as fh:
-            json.dump(config, fh, ensure_ascii=False)
+        BOT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with BOT_CONFIG_PATH.open("w", encoding="utf-8") as fh:
+            json.dump(config, fh, ensure_ascii=False, indent=2)
     except Exception as exc:
         logger.warning("Failed to persist active project id to bot config: %s", exc)
 

@@ -3,16 +3,14 @@ Document Routes.
 API endpoints for document management.
 """
 import logging
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from backend.database import get_db
-from backend.database.models import CeleryTaskExecution, User
+from backend.database.models import User
 from backend.controllers.document_controller import DocumentController
 from backend.controllers.project_controller import ProjectController
 from backend.tasks.file_processing import process_document_task
@@ -22,6 +20,13 @@ from backend.security.auth import get_current_db_user
 from backend.security.event_service import log_event
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 from backend.security.sanitization import sanitize_filename
+from backend.utils.idempotency_manager import IdempotencyManager
+from backend.utils.task_tracking import (
+    get_tracked_task_record,
+    reconcile_process_and_index_workflow,
+    record_task_owner,
+    task_belongs_to_user,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -29,102 +34,60 @@ logger = logging.getLogger(__name__)
 # SECURITY RULE: derive ownership from JWT only, never from request payload.
 router = APIRouter(tags=["Documents"], dependencies=[Depends(get_current_db_user)])
 
-# Best-effort ownership binding for process task status checks.
-_TASK_OWNER_MAP: Dict[str, int] = {}
+_TERMINAL_TASK_STATUSES = {"SUCCESS", "FAILURE"}
 
 
-async def _record_task_owner(
+async def _sync_tracked_task_from_celery(
     db: AsyncSession,
     *,
-    task_id: str,
-    owner_id: int,
-    task_name: str,
-    task_args: Dict[str, Any],
-) -> None:
-    """Persist task ownership so status checks survive API process restarts."""
-    _TASK_OWNER_MAP[task_id] = owner_id
+    task_record,
+    celery_result,
+):
+    if task_record is None or task_record.status in _TERMINAL_TASK_STATUSES:
+        return task_record
+    if not celery_result.ready():
+        return task_record
 
-    try:
-        task_uuid = UUID(str(task_id))
-    except ValueError:
-        logger.warning("Task id '%s' is not a UUID; skipping persistent owner mapping", task_id)
-        return
-
-    payload_args: Dict[str, Any] = dict(task_args or {})
-    payload_args["owner_id"] = owner_id
-    payload_args["task_id"] = str(task_id)
-
-    try:
-        existing_stmt = (
-            select(CeleryTaskExecution)
-            .where(CeleryTaskExecution.celery_task_id == task_uuid)
-            .order_by(CeleryTaskExecution.created_at.desc())
-        )
-        existing_record = (await db.execute(existing_stmt)).scalars().first()
-
-        if existing_record is None:
-            db.add(
-                CeleryTaskExecution(
-                    task_name=task_name,
-                    task_args_hash=f"owner:{owner_id}:{task_id}",
-                    celery_task_id=task_uuid,
-                    status="PENDING",
-                    task_args=payload_args,
-                    started_at=datetime.utcnow(),
-                )
-            )
-        else:
-            existing_record.task_name = task_name
-            existing_record.task_args = payload_args
-            if not existing_record.status:
-                existing_record.status = "PENDING"
-            if existing_record.started_at is None:
-                existing_record.started_at = datetime.utcnow()
-
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        logger.exception("Failed to persist task owner mapping", extra={"task_id": task_id, "owner_id": owner_id})
+    manager = IdempotencyManager()
+    status = "SUCCESS" if celery_result.successful() else "FAILURE"
+    result = celery_result.result if celery_result.successful() else {"error": str(celery_result.result)}
+    await manager.update_task_status(
+        db=db,
+        execution_id=task_record.execution_id,
+        status=status,
+        result=result,
+    )
+    return await get_tracked_task_record(db, task_id=str(task_record.celery_task_id))
 
 
-async def _task_belongs_to_user(
+async def _resolve_workflow_task_status(
     db: AsyncSession,
     *,
-    task_id: str,
-    owner_id: int,
-) -> bool:
-    """Check task ownership from cache first, then durable DB mapping."""
-    cached_owner = _TASK_OWNER_MAP.get(task_id)
-    if cached_owner is not None:
-        return cached_owner == owner_id
+    task_record,
+):
+    return await reconcile_process_and_index_workflow(
+        db,
+        workflow_task_id=str(task_record.celery_task_id),
+    )
 
-    try:
-        task_uuid = UUID(str(task_id))
-    except ValueError:
-        return False
 
-    try:
-        stmt = (
-            select(CeleryTaskExecution.task_args)
-            .where(CeleryTaskExecution.celery_task_id == task_uuid)
-            .order_by(CeleryTaskExecution.created_at.desc())
-        )
-        task_args = (await db.execute(stmt)).scalars().first() or {}
-    except Exception:
-        logger.exception("Failed to load task owner mapping", extra={"task_id": task_id})
-        return False
-
-    db_owner_id = task_args.get("owner_id")
-    try:
-        normalized_db_owner_id = int(db_owner_id)
-    except (TypeError, ValueError):
-        return False
-
-    if normalized_db_owner_id == owner_id:
-        _TASK_OWNER_MAP[task_id] = owner_id
-        return True
-
-    return False
+def _build_tracked_task_response(task_id: str, task_record) -> Dict[str, Any]:
+    response: Dict[str, Any] = {
+        "task_id": task_id,
+        "status": task_record.status,
+    }
+    payload = task_record.result
+    if task_record.status == "SUCCESS":
+        if payload is not None:
+            response["result"] = payload
+    elif task_record.status == "FAILURE":
+        if isinstance(payload, dict) and payload.get("error"):
+            response["error"] = payload["error"]
+        elif payload is not None:
+            response["error"] = str(payload)
+    elif payload:
+        response["meta"] = payload
+    return response
 
 
 # Response Models
@@ -269,7 +232,7 @@ async def upload_document(
 
         # Dispatch processing to Celery worker
         task = process_document_task.delay(asset_id=asset.id)
-        await _record_task_owner(
+        await record_task_owner(
             db,
             task_id=task.id,
             owner_id=current_user.id,
@@ -365,7 +328,7 @@ async def process_document(
 
         # Dispatch to Celery
         task = process_document_task.delay(asset_id=asset_id)
-        await _record_task_owner(
+        await record_task_owner(
             db,
             task_id=task.id,
             owner_id=current_user.id,
@@ -413,7 +376,7 @@ async def process_and_index_document(
             },
             queue="file_processing",
         )
-        await _record_task_owner(
+        await record_task_owner(
             db,
             task_id=task.id,
             owner_id=current_user.id,
@@ -479,7 +442,7 @@ async def get_task_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Check the status of a Celery background task."""
-    if not await _task_belongs_to_user(db, task_id=task_id, owner_id=current_user.id):
+    if not await task_belongs_to_user(db, task_id=task_id, owner_id=current_user.id):
         log_event(
             {
                 "event_type": SecurityEventType.AUTHZ_DENIED,
@@ -491,7 +454,24 @@ async def get_task_status(
         )
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    tracked_task = await get_tracked_task_record(db, task_id=task_id)
     result = celery_app.AsyncResult(task_id)
+
+    if tracked_task is not None:
+        if tracked_task.task_name == "backend.tasks.process_workflow.process_and_index_workflow":
+            tracked_task = await _resolve_workflow_task_status(db, task_record=tracked_task)
+        else:
+            tracked_task = await _sync_tracked_task_from_celery(
+                db,
+                task_record=tracked_task,
+                celery_result=result,
+            )
+
+        response = _build_tracked_task_response(task_id, tracked_task)
+        if "meta" not in response and tracked_task.status not in _TERMINAL_TASK_STATUSES and result.info:
+            response["meta"] = result.info
+        return response
+
     response = {
         "task_id": task_id,
         "status": result.status,

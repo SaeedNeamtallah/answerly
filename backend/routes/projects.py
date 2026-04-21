@@ -18,6 +18,7 @@ from backend.security.auth import get_current_db_user
 from backend.security.event_service import log_event
 from backend.security.sanitization import sanitize_metadata, sanitize_optional_text, sanitize_project_name
 from backend.security.security_event import SecurityEventType, SecuritySeverity
+from backend.utils.task_tracking import record_task_owner
 
 
 logger = logging.getLogger(__name__)
@@ -195,9 +196,19 @@ async def index_project(
         task = index_project_task.apply_async(
             kwargs={
                 "project_id": project_id,
-                "do_reset": payload.do_reset
+                "do_reset": payload.do_reset,
             },
-            queue="data_indexing"
+        )
+
+        await record_task_owner(
+            db,
+            task_id=task.id,
+            owner_id=current_user.id,
+            task_name="backend.tasks.data_indexing.index_project_task",
+            task_args={
+                "project_id": project_id,
+                "do_reset": payload.do_reset,
+            },
         )
 
 

@@ -47,7 +47,7 @@ Cross-cutting layers:
 
 - `backend/security/*`: auth, rate limiting, sanitization, event logging
 - `backend/tasks/*`: Celery background processing/indexing workflows
-- `backend/runtime_config.py`: runtime toggles persisted outside static env config
+- `backend/runtime_config.py`: runtime toggles persisted outside static env config via shared JSON under `uploads/config/`
 
 Top-level repo organization:
 
@@ -57,10 +57,13 @@ Top-level repo organization:
 - `tools/`: maintenance and one-off repo utilities
   - includes `tools/test_all.py` as the authenticated smoke test entrypoint
 - `docs/`: notes and extra documentation
+  - includes `docs/project-graph.md` as the current runtime/API/service/data/frontend graph
+  - includes `docs/database.md` as the current storage/database map and sync verdict
 - `assets/`: static project assets
+- `uploads/config/`: shared runtime config for backend, worker, and telegram bot (`app_config.json`, `bot_config.json`)
 - `uploads/logs/`: runtime logs, probes, and local command output
 - `tmp/`: generated local artifacts
-- root keeps only repo-critical/runtime-root files such as `.env*`, `README.md`, `LICENSE`, `AGENTS.md`, `app_config.json`, and `bot_config.json`; Alembic runtime files now live under `backend/alembic/` (`backend/alembic/alembic.ini`, `backend/alembic/init-db.sql`)
+- root keeps only repo-critical/runtime-root files such as `.env*`, `README.md`, `LICENSE`, `AGENTS.md`, `app_config.json`, and `bot_config.json`; the two root config JSON files now act as legacy/bootstrap copies and live config should be read from `uploads/config/`; Alembic runtime files now live under `backend/alembic/` (`backend/alembic/alembic.ini`, `backend/alembic/init-db.sql`)
 
 Main persistence model:
 
@@ -96,7 +99,8 @@ Main persistence model:
   - `scripts\dev\start.bat --build` (only when Docker image inputs changed)
 - `start.bat` behavior:
   - starts `docker/docker-compose.yml` services
-  - waits for backend health at `http://127.0.0.1:8000/health`
+  - waits for backend readiness at `http://127.0.0.1:8000/health` until the JSON response reports `status == "healthy"`
+  - if host-side health probing is blocked, falls back to checking `/health` from inside `ragmind-backend` and logs a warning before continuing
   - serves frontend on `http://localhost:8080`
   - opens `http://localhost:8080/login.html?api=http://localhost:8000`
   - writes runtime logs into `uploads/logs/` (`start.log`, `docker_stack.log`, `frontend.log`, `docker_ps.log`)
@@ -166,6 +170,7 @@ Schema management rules:
   - `security_events_stream()`
 - `backend/routes/health.py`
   - `health_check()`
+    - full readiness probe for database, Celery broker, result backend, live worker ping, shared config path readiness, and vector store connectivity
   - `root()`
 - `backend/routes/stats.py`
   - `get_global_stats()`
@@ -268,11 +273,14 @@ Vector DB:
 
 - `backend/providers/vectordb/interface.py`
   - `VectorDBInterface`
+  - `delete_vectors()` for targeted metadata-filtered cleanup
 - `backend/providers/vectordb/factory.py`
   - `VectorDBProviderFactory.create_provider()`
 - Implementations:
   - `PGVectorProvider`
+    - targeted vector deletion maps to deleting matching `Chunk` rows
   - `QdrantProvider`
+    - targeted vector deletion uses Qdrant payload filters (`owner_id` / `project_id` / `asset_id`)
 
 ### Security Layer
 
@@ -297,30 +305,45 @@ Vector DB:
 - `backend/tasks/file_processing.py`
   - `process_document_task()`
   - `_process_document()`
+    - clears stale per-asset chunks/vectors before retry and on failure
+    - reconciles parent `process-and-index` workflow status after terminal child updates
   - `_update_progress()`
 - `backend/tasks/data_indexing.py`
   - `index_project_task()`
   - `_index_project()`
+    - reconciles parent `process-and-index` workflow status after terminal child updates
 - `backend/tasks/process_workflow.py`
   - `push_after_process_task()`
   - `process_and_index_workflow()`
   - `_process_and_index_workflow()`
+    - records child task ids (`process_task_id`, `index_task_id`) in the parent workflow result payload for downstream reconciliation
 - `backend/tasks/maintenance.py`
   - `clean_celery_executions_table()`
 
 ### Utility Layer
 
+- `backend/shared_config_paths.py`
+  - resolves shared config paths for `app_config.json` and `bot_config.json`
+  - copies legacy root config files into `uploads/config/` on first access when needed
 - `backend/runtime_config.py`
   - `load_runtime_config()`
   - `save_runtime_config()`
   - `update_runtime_config()`
   - `get_runtime_value()`
 - `backend/utils/idempotency_manager.py`
-  - task deduplication and execution records
+  - task deduplication and execution records keyed by normalized task args plus `celery_task_id`
+  - self-heals duplicate `celery_task_executions` rows by merging duplicate `celery_task_id` records on lookup and cleanup
+- `backend/utils/task_tracking.py`
+  - `record_task_owner()`
+  - `get_tracked_task_record()`
+  - `task_belongs_to_user()`
+  - `reconcile_process_and_index_workflow()`
 
 ### Repo Utilities
 
 - `tools/combine_code.py`
+  - default mode still writes `tmp/all_project_code.txt`
+  - `--profile database` writes focused storage/database snippets to `tmp/database_code.txt`
 - `tools/test_all.py`
   - authenticated smoke test for `health -> signup/login -> project -> upload/process -> query -> cleanup`
   - supports `RAGMIND_BASE_URL`, `RAGMIND_REQUEST_TIMEOUT`, `RAGMIND_PROCESSING_TIMEOUT`, and `RAGMIND_STRICT_QUERY=1`
@@ -329,13 +352,14 @@ Vector DB:
 
 - `telegram_bot/config.py`
   - `BotSettings`
+  - `BOT_CONFIG_PATH`
 - `telegram_bot/handlers.py`
   - `start_command()`
   - `help_command()`
   - `handle_message()`
-    - resolves active project from `bot_config.json` (or `BOT_ACTIVE_PROJECT_ID`)
-    - obtains JWT via `/auth/login` using `BOT_API_USERNAME/BOT_API_PASSWORD` (fallback to `AUTH_ADMIN_*`)
-    - on `403/404`, auto-selects first accessible project for bot user, persists it to `bot_config.json`, and retries once
+    - resolves active project from shared `uploads/config/bot_config.json`, then falls back to `BOT_ACTIVE_PROJECT_ID` only if the shared config is unset
+    - obtains JWT via `/auth/login` using `BOT_API_USERNAME/BOT_API_PASSWORD` (fallback to `AUTH_ADMIN_*`), which now provisions or syncs a DB-backed service account row on successful login
+    - on `403/404`, auto-selects first accessible project for bot user, persists it to shared bot config, and retries once
 - `telegram_bot/bot.py`
   - `print_bot_link()`
   - `setup_handlers()`
@@ -377,6 +401,8 @@ Vector DB:
 - Vector search providers expect owner-aware filtering.
 - Any change to retrieval/indexing must preserve `owner_id` in vector metadata.
 - Any route calling `ProjectController.get_project()` or `DocumentController.get_document()` must pass `owner_id`.
+- `POST /bot/config` now requires a real JWT-backed DB user and only accepts `active_project_id` values owned by that user.
+- Configured `BOT_API_*` / `AUTH_ADMIN_*` service-account usernames are reserved from normal signup/password rotation, and successful service-account login keeps a matching DB user row available for `get_current_db_user()`.
 
 ## Review Findings
 
@@ -412,8 +438,8 @@ Recently fixed:
   `setup.bat` writes `uploads/logs/setup.log`; `start.bat` writes `uploads/logs/start.log`, follows container output into `uploads/logs/docker_stack.log`, snapshots `docker compose ps` into `uploads/logs/docker_ps.log`, and redirects the local static frontend server to `uploads/logs/frontend.log`; `stop.bat` writes `uploads/logs/stop.log` and appends pre/post-stop stack state to `uploads/logs/docker_ps.log`.
 14. `frontend/app.js`, `frontend/login.html`, and `frontend/signup.html`
    Frontend API autodiscovery now defaults to `http://localhost:8000` and probes port `8000` before legacy ports like `8101`; keep query-string and `localStorage` overrides intact for non-local environments.
-15. `backend/routes/documents.py`
-  `process_and_index_document()` now records workflow task ownership in `_TASK_OWNER_MAP` so `GET /tasks/{id}` no longer fails with `403` for the creator when checking the workflow task id.
+15. `backend/utils/task_tracking.py`, `backend/utils/idempotency_manager.py`, `backend/routes/projects.py`, `backend/routes/documents.py`, `backend/tasks/data_indexing.py`, `backend/tasks/file_processing.py`, `backend/tasks/process_workflow.py`, and `backend/celery_app.py`
+  Task ownership is now persisted by `celery_task_id` instead of relying on in-memory-only `_TASK_OWNER_MAP`, manual project reindex uses the default worker queue plus durable owner tracking, worker tasks reuse the pre-created execution row instead of duplicating it, duplicate historical rows are merged away by `celery_task_id`, and `process-and-index` parent workflows now finalize from child-task reconciliation instead of needing `/tasks/{id}` polling to reach a terminal state.
 16. `backend/providers/llm/factory.py` and `backend/routes/app_config.py`
   Embedding provider alias handling is now consistent: `get_available_embedding_providers()` is registry-backed, so aliases like `hf-bge-m3` pass `/config/providers` validation and match factory capabilities.
 17. `backend/providers/llm/factory.py`
@@ -426,6 +452,16 @@ Recently fixed:
   Rate limiting now keys authenticated traffic by JWT subject (`user:<sub>`) with IP fallback to reduce shared-IP bottlenecks, and default throughput caps were raised (`chat` and `upload` request/in-flight limits) while retaining endpoint-specific throttling.
 21. `backend/config.py`, `.env`, and `.env.example`
   The default Google LLM model was switched to `gemma-4-26b-a4b-it` (via `GEMINI_MODEL`) while keeping the provider as `gemini`, so new and local setups use Gemma 4 by default in Google AI Studio-backed flows.
+22. `backend/shared_config_paths.py`, `backend/runtime_config.py`, `backend/routes/bot_config.py`, `telegram_bot/config.py`, `telegram_bot/handlers.py`, and `docker/docker-compose.yml`
+  Runtime app/bot config now resolves through shared files under `uploads/config/`, Compose passes `RAGMIND_SHARED_CONFIG_DIR` to backend/worker/bot and mounts `uploads/` into the bot, the hardcoded `BOT_ACTIVE_PROJECT_ID` compose override was removed, `/bot/config` now requires an authenticated DB user plus owned-project validation, and the bot idles instead of crash-looping when `TELEGRAM_BOT_TOKEN` is blank.
+23. `backend/security/auth.py` and `backend/services/auth_service.py`
+  `BOT_API_*` and `AUTH_ADMIN_*` credentials now act as managed service accounts during `/auth/login`: successful login provisions or syncs a DB-backed user row so JWT subjects continue to resolve through `get_current_db_user()`, and those reserved usernames are blocked from normal signup/password rotation.
+24. `docker/docker-compose.yml` and `backend/tasks/maintenance.py`
+  Compose now runs a dedicated Celery beat scheduler service (`ragmind-scheduler`) so periodic cleanup tasks like `clean_celery_executions_table()` are actually scheduled in the default local stack.
+25. `backend/providers/vectordb/interface.py`, `backend/providers/vectordb/pgvector_provider.py`, `backend/providers/vectordb/qdrant_provider.py`, and `backend/tasks/file_processing.py`
+  Targeted stale-vector cleanup is now available across vector providers: `delete_vectors(...)` deletes by metadata filter, and document-processing retries/failures now clear old vectors for the current asset before rebuilding chunks/embeddings.
+26. `backend/routes/health.py` and `scripts/dev/start.bat`
+  Startup readiness now reflects the actual stack: `/health` returns `healthy` only when database, broker, result backend, Celery worker, shared config, and vector store are reachable, and `start.bat` waits for that JSON-ready state instead of any HTTP 200.
 
 ## Known Drift Between Docs and Code
 

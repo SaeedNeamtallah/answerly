@@ -5,6 +5,7 @@ import base64
 import hashlib
 import os
 import time
+from dataclasses import dataclass
 from hmac import compare_digest
 from pathlib import Path
 from typing import List, Optional, Set
@@ -13,7 +14,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
@@ -41,6 +42,14 @@ _ENGINEER_USERNAMES_CACHE_TTL_SECONDS = 2.0
 class AuthUser(BaseModel):
     username: str
     roles: List[str]
+
+
+@dataclass(frozen=True)
+class ServiceAccountCredentials:
+    username: str
+    source: str
+    plain_password: str | None = None
+    password_hash: str | None = None
 
 
 def _normalize_username(value: str) -> str:
@@ -176,10 +185,90 @@ def _verify_admin_password(password: str) -> bool:
     return compare_digest(password, settings.auth_admin_password)
 
 
+def _read_explicit_env_value(name: str) -> str | None:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return None
+    cleaned = raw_value.strip()
+    return cleaned or None
+
+
+def _configured_bot_service_account() -> ServiceAccountCredentials | None:
+    username = _read_explicit_env_value("BOT_API_USERNAME")
+    password = _read_explicit_env_value("BOT_API_PASSWORD")
+    if not username or not password:
+        return None
+
+    normalized_username = _normalize_username(username)
+    if not normalized_username:
+        return None
+
+    return ServiceAccountCredentials(
+        username=normalized_username,
+        source="bot_api",
+        plain_password=password,
+    )
+
+
+def _configured_admin_service_account() -> ServiceAccountCredentials | None:
+    password_hash = _read_explicit_env_value("AUTH_ADMIN_PASSWORD_HASH")
+    password = _read_explicit_env_value("AUTH_ADMIN_PASSWORD")
+    if not password_hash and not password:
+        return None
+
+    normalized_username = _normalize_username(settings.auth_admin_username)
+    if not normalized_username:
+        return None
+
+    return ServiceAccountCredentials(
+        username=normalized_username,
+        source="auth_admin",
+        plain_password=password,
+        password_hash=password_hash,
+    )
+
+
+def get_service_account_credentials(username: str) -> ServiceAccountCredentials | None:
+    normalized_username = _normalize_username(username)
+    if not normalized_username:
+        return None
+
+    bot_account = _configured_bot_service_account()
+    if bot_account and bot_account.username == normalized_username:
+        return bot_account
+
+    admin_account = _configured_admin_service_account()
+    if admin_account and admin_account.username == normalized_username:
+        return admin_account
+
+    return None
+
+
+def get_reserved_service_account_usernames() -> Set[str]:
+    reserved_usernames: Set[str] = set()
+    for account in (_configured_bot_service_account(), _configured_admin_service_account()):
+        if account is not None and account.username:
+            reserved_usernames.add(account.username)
+    return reserved_usernames
+
+
+def verify_service_account_password(
+    service_account: ServiceAccountCredentials,
+    password: str,
+) -> bool:
+    if service_account.password_hash:
+        return _verify_pbkdf2_sha256(password, service_account.password_hash)
+    if service_account.plain_password is None:
+        return False
+    return compare_digest(password, service_account.plain_password)
+
+
 def authenticate_admin(username: str, password: str) -> bool:
     """Authenticate admin credentials from environment settings."""
-    clean_username = sanitize_text(username, max_length=128, strip_html=True, allow_newlines=False)
-    return compare_digest(clean_username, settings.auth_admin_username) and _verify_admin_password(password)
+    service_account = get_service_account_credentials(username)
+    if service_account is None or service_account.source != "auth_admin":
+        return False
+    return verify_service_account_password(service_account, password)
 
 
 def create_access_token(username: str, roles: Optional[List[str]] = None) -> str:
@@ -291,7 +380,13 @@ async def get_current_db_user(
         )
 
     token_user = _decode_access_token(credentials.credentials)
-    user_stmt = select(User).where(User.username == token_user.username)
+    normalized_username = _normalize_username(token_user.username)
+    user_stmt = (
+        select(User)
+        .where(func.lower(User.username) == normalized_username)
+        .order_by(User.id.asc())
+        .limit(1)
+    )
     user_result = await db.execute(user_stmt)
     user = user_result.scalar_one_or_none()
 
