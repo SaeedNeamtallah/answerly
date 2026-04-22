@@ -26,6 +26,23 @@ const i18n = {
         security_login_failures: "Login Failures",
         security_blocked_attacks: "Blocked Attacks",
         security_brute_force_alerts: "Brute Force Alerts",
+        security_open_incidents: "الحوادث المفتوحة",
+        security_high_severity_incidents: "حوادث شدة عالية",
+        security_active_users: "المستخدمون النشطون",
+        security_suspended_users: "المستخدمون الموقوفون",
+        security_blocked_users: "المستخدمون المحظورون",
+        security_user_actions_title: "إجراءات حالة المستخدم",
+        security_duration_minutes_label: "مدة الإيقاف (دقيقة)",
+        security_suspend_btn: "تعليق",
+        security_block_btn: "حظر",
+        security_restore_btn: "استعادة",
+        security_admin_only_actions: "فقط المشرف يمكنه تنفيذ هذه الإجراءات.",
+        security_action_user_id_required: "أدخل معرف مستخدم صالح",
+        security_action_reason_required: "السبب مطلوب للتعليق أو الحظر",
+        security_action_duration_invalid: "مدة التعليق يجب أن تكون بين 1 و 10080 دقيقة",
+        security_action_suspend_success: "تم تعليق المستخدم بنجاح",
+        security_action_block_success: "تم حظر المستخدم بنجاح",
+        security_action_restore_success: "تمت استعادة المستخدم بنجاح",
         security_events_title: "Security Events Feed",
         security_col_timestamp: "Timestamp",
         security_col_username: "Actor",
@@ -39,7 +56,83 @@ const i18n = {
         security_simulate_btn: "Start Attack Simulation",
         security_simulate_running: "Running simulation...",
         security_simulate_success: "Simulation events generated",
+        security_simulate_escalation_blocked: "Simulation escalated: user blocked",
         security_access_denied: "غير مسموح: Security Center متاح فقط لـ Cybersecurity Engineer",
+        security_tab_events: "سجل الأحداث",
+        security_tab_incidents: "Incidents",
+        security_incidents_title: "Incidents",
+        incident_col_id: "Incident ID",
+        incident_col_type: "Type",
+        incident_col_severity: "Severity",
+        incident_col_status: "Status",
+        incident_col_created_at: "Created At",
+        incident_col_false_positive: "False Positive",
+        incident_empty: "No incidents yet",
+        incident_filter_all_status: "All Status",
+        incident_filter_all_severity: "All Severity",
+        incident_filter_false_positive: "False Positive",
+        incident_filter_fp_all: "All",
+        incident_filter_fp_true: "True",
+        incident_filter_fp_false: "False",
+        incident_refresh_btn: "Refresh",
+        incident_refresh_success: "تم تحديث الحوادث",
+        incident_back_to_events_btn: "الرجوع إلى سجل الأحداث",
+        incident_details_title: "Incident Details",
+        incident_label_id: "Incident ID",
+        incident_label_type: "Type",
+        incident_label_severity: "Severity",
+        incident_label_status: "Status",
+        incident_label_created_at: "Created At",
+        incident_label_false_positive: "False Positive",
+        incident_actor_title: "Actor Info",
+        incident_notes_title: "Investigation Notes",
+        incident_notes_placeholder: "Add investigation details, evidence, and conclusions...",
+        incident_notes_save_btn: "Save Notes",
+        incident_actions_title: "Actions",
+        incident_action_reason_label: "سبب الإجراء",
+        incident_action_suspend_minutes_label: "مدة الإيقاف (دقيقة)",
+        incident_action_reason_required: "السبب مطلوب لتنفيذ هذا الإجراء",
+        incident_action_suspend_minutes_invalid: "مدة الإيقاف يجب أن تكون بين 1 و 10080 دقيقة",
+        incident_assign_btn: "Assign to me",
+        incident_mark_investigating_btn: "Mark as Investigating",
+        incident_resolve_btn: "Resolve",
+        incident_close_btn: "Close",
+        incident_mark_false_positive_btn: "Mark False Positive",
+        incident_clear_false_positive_btn: "Clear False Positive",
+        incident_block_user_btn: "Block User",
+        incident_suspend_user_btn: "Suspend User",
+        incident_reactivate_user_btn: "إعادة تفعيل المستخدم",
+        incident_ignore_btn: "Ignore (false positive)",
+        incident_timeline_title: "Timeline",
+        incident_timeline_empty: "No logs yet",
+        incident_timeline_timestamp: "Timestamp",
+        incident_timeline_action: "Action",
+        incident_timeline_result: "Result",
+        incident_timeline_metadata: "Metadata",
+        incident_result_success: "Success",
+        incident_result_failed: "Failed",
+        incident_select_first: "اختر incident أولًا",
+        incident_load_error: "Failed to load incidents",
+        incident_action_assign_success: "Incident assigned to you",
+        incident_action_status_success: "Incident status updated",
+        incident_action_apply_success: "Incident action applied",
+        incident_action_reactivate_success: "تمت إعادة تفعيل المستخدم",
+        incident_notes_saved: "Incident notes updated",
+        incident_false_positive_marked: "Incident marked as false positive",
+        incident_false_positive_cleared: "False-positive flag cleared",
+        incident_new_alert_single: "تم اكتشاف حادثة جديدة",
+        incident_new_alert_multiple: "حوادث جديدة تم اكتشافها",
+        incident_actor_unknown: "Unknown",
+        incident_actor_label: "Actor",
+        incident_assigned_label: "Assigned",
+        incident_created_by_label: "Created by",
+        incident_false_positive_label: "False Positive",
+        incident_false_positive_yes: "Yes",
+        incident_false_positive_no: "No",
+        incident_status_open: "OPEN",
+        incident_status_investigating: "INVESTIGATING",
+        incident_status_resolved: "RESOLVED",
+        incident_status_closed: "CLOSED",
         recent_projects: "المشاريع الأخيرة",
         view_all: "عرض الكل",
         your_projects: "مشاريعك",
@@ -82,6 +175,9 @@ const i18n = {
         gen_provider_label: "مزود التوليد",
         embed_provider_label: "مزود التضمين",
         select_project_ph: "اختر مشروعاً...",
+        chat_responding_status: "الوكيل يرد الآن...",
+        chat_stop_response: "إيقاف الرد",
+        chat_response_stopped: "تم إيقاف الرد",
         delete_confirm: "هل أنت متأكد؟",
         success_saved: "تم الحفظ بنجاح",
         error_generic: "حدث خطأ ما",
@@ -119,6 +215,7 @@ const i18n = {
         account_change_password_btn: "تحديث كلمة المرور",
         account_role_user: "مستخدم",
         account_role_admin: "مدير",
+        account_role_security_engineer: "مهندس أمن",
         account_role_cybersecurity_engineer: "مهندس أمن سيبراني",
         language_ar: "العربية",
         language_en: "English",
@@ -157,6 +254,23 @@ const i18n = {
         security_login_failures: "Login Failures",
         security_blocked_attacks: "Blocked Attacks",
         security_brute_force_alerts: "Brute Force Alerts",
+        security_open_incidents: "Open Incidents",
+        security_high_severity_incidents: "High Severity Incidents",
+        security_active_users: "Active Users",
+        security_suspended_users: "Suspended Users",
+        security_blocked_users: "Blocked Users",
+        security_user_actions_title: "User Status Actions",
+        security_duration_minutes_label: "Suspend Duration (minutes)",
+        security_suspend_btn: "Suspend",
+        security_block_btn: "Block",
+        security_restore_btn: "Restore",
+        security_admin_only_actions: "Only admin users can run these actions.",
+        security_action_user_id_required: "Enter a valid user ID",
+        security_action_reason_required: "Reason is required for suspend/block actions",
+        security_action_duration_invalid: "Suspend duration must be between 1 and 10080 minutes",
+        security_action_suspend_success: "User suspended successfully",
+        security_action_block_success: "User blocked successfully",
+        security_action_restore_success: "User restored successfully",
         security_events_title: "Security Events Feed",
         security_col_timestamp: "Timestamp",
         security_col_username: "Actor",
@@ -170,7 +284,83 @@ const i18n = {
         security_simulate_btn: "Start Attack Simulation",
         security_simulate_running: "Running simulation...",
         security_simulate_success: "Simulation events generated",
+        security_simulate_escalation_blocked: "Simulation escalated: user blocked",
         security_access_denied: "Access denied: Security Center is only for Cybersecurity Engineer",
+        security_tab_events: "Events Feed",
+        security_tab_incidents: "Incidents",
+        security_incidents_title: "Incidents",
+        incident_col_id: "Incident ID",
+        incident_col_type: "Type",
+        incident_col_severity: "Severity",
+        incident_col_status: "Status",
+        incident_col_created_at: "Created At",
+        incident_col_false_positive: "False Positive",
+        incident_empty: "No incidents yet",
+        incident_filter_all_status: "All Status",
+        incident_filter_all_severity: "All Severity",
+        incident_filter_false_positive: "False Positive",
+        incident_filter_fp_all: "All",
+        incident_filter_fp_true: "True",
+        incident_filter_fp_false: "False",
+        incident_refresh_btn: "Refresh",
+        incident_refresh_success: "Incidents refreshed",
+        incident_back_to_events_btn: "Back to Events Feed",
+        incident_details_title: "Incident Details",
+        incident_label_id: "Incident ID",
+        incident_label_type: "Type",
+        incident_label_severity: "Severity",
+        incident_label_status: "Status",
+        incident_label_created_at: "Created At",
+        incident_label_false_positive: "False Positive",
+        incident_actor_title: "Actor Info",
+        incident_notes_title: "Investigation Notes",
+        incident_notes_placeholder: "Add investigation details, evidence, and conclusions...",
+        incident_notes_save_btn: "Save Notes",
+        incident_actions_title: "Actions",
+        incident_action_reason_label: "Action Reason",
+        incident_action_suspend_minutes_label: "Suspend Duration (minutes)",
+        incident_action_reason_required: "Reason is required for this action",
+        incident_action_suspend_minutes_invalid: "Suspend duration must be between 1 and 10080 minutes",
+        incident_assign_btn: "Assign to me",
+        incident_mark_investigating_btn: "Mark as Investigating",
+        incident_resolve_btn: "Resolve",
+        incident_close_btn: "Close",
+        incident_mark_false_positive_btn: "Mark False Positive",
+        incident_clear_false_positive_btn: "Clear False Positive",
+        incident_block_user_btn: "Block User",
+        incident_suspend_user_btn: "Suspend User",
+        incident_reactivate_user_btn: "Restore User",
+        incident_ignore_btn: "Ignore (false positive)",
+        incident_timeline_title: "Timeline",
+        incident_timeline_empty: "No logs yet",
+        incident_timeline_timestamp: "Timestamp",
+        incident_timeline_action: "Action",
+        incident_timeline_result: "Result",
+        incident_timeline_metadata: "Metadata",
+        incident_result_success: "Success",
+        incident_result_failed: "Failed",
+        incident_select_first: "Select an incident first",
+        incident_load_error: "Failed to load incidents",
+        incident_action_assign_success: "Incident assigned to you",
+        incident_action_status_success: "Incident status updated",
+        incident_action_apply_success: "Incident action applied",
+        incident_action_reactivate_success: "User restored successfully",
+        incident_notes_saved: "Incident notes updated",
+        incident_false_positive_marked: "Incident marked as false positive",
+        incident_false_positive_cleared: "False-positive flag cleared",
+        incident_new_alert_single: "New incident detected",
+        incident_new_alert_multiple: "new incidents detected",
+        incident_actor_unknown: "Unknown",
+        incident_actor_label: "Actor",
+        incident_assigned_label: "Assigned",
+        incident_created_by_label: "Created by",
+        incident_false_positive_label: "False Positive",
+        incident_false_positive_yes: "Yes",
+        incident_false_positive_no: "No",
+        incident_status_open: "OPEN",
+        incident_status_investigating: "INVESTIGATING",
+        incident_status_resolved: "RESOLVED",
+        incident_status_closed: "CLOSED",
         recent_projects: "Recent Projects",
         view_all: "View All",
         your_projects: "Your Projects",
@@ -213,6 +403,9 @@ const i18n = {
         gen_provider_label: "Generation Provider",
         embed_provider_label: "Embedding Provider",
         select_project_ph: "Select a project...",
+        chat_responding_status: "Agent is responding...",
+        chat_stop_response: "Stop Response",
+        chat_response_stopped: "Response stopped",
         delete_confirm: "Are you sure?",
         success_saved: "Saved successfully",
         error_generic: "Something went wrong",
@@ -250,6 +443,7 @@ const i18n = {
         account_change_password_btn: "Update Password",
         account_role_user: "User",
         account_role_admin: "Administrator",
+        account_role_security_engineer: "Security Engineer",
         account_role_cybersecurity_engineer: "Cybersecurity Engineer",
         language_ar: "Arabic",
         language_en: "English",
@@ -280,11 +474,34 @@ const state = {
     currentUser: null,
     selectedProject: null,
     chatMessages: [],
+    chatRequestInProgress: false,
+    chatAbortController: null,
+    chatThinkingMessageId: null,
     isUploading: false,
     retrievalTopK: null,
     docPoller: null,
     securityStreamAbortController: null,
     securityStreamReconnectTimer: null,
+    securityEventsRefreshController: null,
+    securityEventsRefreshInProgress: false,
+    securityEventsRefreshTimer: null,
+    securityEventsLabelTimer: null,
+    securityEventsLastUpdatedAt: 0,
+    securityEventsLastInteractionAt: 0,
+    incidentOverviewTimer: null,
+    incidentOverviewRefreshTimer: null,
+    securityUsersRefreshTimer: null,
+    securityActiveTab: 'events',
+    securityIncidents: [],
+    latestIncidentSeenId: 0,
+    incidentBaselineInitialized: false,
+    unseenIncidentCount: 0,
+    selectedIncident: null,
+    incidentDetailsRequestToken: 0,
+    incidentDetailsCloseTimer: null,
+    incidentPanelOutsideClickHandler: null,
+    incidentPanelKeydownHandler: null,
+    incidentBackToEventsScrollHandler: null,
     lang: localStorage.getItem('lang') || 'ar',
     theme: localStorage.getItem('theme') || 'dark'
 };
@@ -308,8 +525,15 @@ const elements = {
 const ACTIVE_DOC_STATUSES = new Set(['uploaded', 'queued', 'pending', 'processing']);
 const ACCESS_TOKEN_KEY = 'access_token';
 const SECURITY_STREAM_RECONNECT_MS = 1500;
+const INCIDENT_OVERVIEW_POLL_MS = 7000;
+const INCIDENT_OVERVIEW_STREAM_SYNC_DELAY_MS = 1200;
+const SECURITY_USERS_REFRESH_DELAY_MS = 1200;
+const SECURITY_EVENTS_AUTO_REFRESH_MS = 8000;
+const SECURITY_EVENTS_INTERACTION_GRACE_MS = 2500;
+const INCIDENT_PANEL_CLOSE_ANIMATION_MS = 180;
 const ROLE_USER = 'user';
 const ROLE_ADMIN = 'admin';
+const ROLE_SECURITY_ENGINEER = 'security_engineer';
 const ROLE_CYBERSECURITY_ENGINEER = 'cybersecurity_engineer';
 
 function getAccessToken() {
@@ -364,7 +588,10 @@ function withAuthHeaders(extraHeaders = {}) {
 
 function normalizeBaseUrl(url) {
     if (!url) return '';
-    return String(url).trim().replace(/\/+$/, '');
+    return String(url)
+        .trim()
+        .replace(/\^+$/, '')
+        .replace(/\/+$/, '');
 }
 
 function isDocumentActive(status) {
@@ -646,6 +873,41 @@ const api = {
         }
     },
 
+    async patch(endpoint, data) {
+        try {
+            const response = await fetchWithApiRecovery(endpoint, {
+                method: 'PATCH',
+                headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(data || {})
+            });
+
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
+
+            if (!response.ok) {
+                let errorData = {};
+                try {
+                    errorData = await response.json();
+                } catch (_) {
+                    errorData = {};
+                }
+                const apiError = new Error(errorData.detail || 'Error');
+                apiError.status = response.status;
+                throw apiError;
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error(`API Patch Error (${endpoint}):`, error);
+            if (error.message !== 'Unauthorized') {
+                showNotification(error.message, 'error');
+            }
+            throw error;
+        }
+    },
+
     async delete(endpoint) {
         try {
             const response = await fetchWithApiRecovery(endpoint, {
@@ -708,6 +970,15 @@ function normalizeUserRoles(user) {
     const appendRole = (rawRole) => {
         const role = String(rawRole || '').trim().toLowerCase();
         if (!role) return;
+
+        // Keep both engineer role names for backward compatibility.
+        if (role === ROLE_SECURITY_ENGINEER && !normalizedRoles.includes(ROLE_CYBERSECURITY_ENGINEER)) {
+            normalizedRoles.push(ROLE_CYBERSECURITY_ENGINEER);
+        }
+        if (role === ROLE_CYBERSECURITY_ENGINEER && !normalizedRoles.includes(ROLE_SECURITY_ENGINEER)) {
+            normalizedRoles.push(ROLE_SECURITY_ENGINEER);
+        }
+
         if (!normalizedRoles.includes(role)) {
             normalizedRoles.push(role);
         }
@@ -735,8 +1006,8 @@ function formatPrimaryRoleLabel(user = state.currentUser) {
     const roles = normalizeUserRoles(user);
     const primaryRole = roles[0] || ROLE_USER;
 
-    if (primaryRole === ROLE_CYBERSECURITY_ENGINEER) {
-        return t.account_role_cybersecurity_engineer || primaryRole;
+    if (primaryRole === ROLE_SECURITY_ENGINEER || primaryRole === ROLE_CYBERSECURITY_ENGINEER) {
+        return t.account_role_security_engineer || t.account_role_cybersecurity_engineer || primaryRole;
     }
 
     if (primaryRole === ROLE_ADMIN) {
@@ -746,7 +1017,7 @@ function formatPrimaryRoleLabel(user = state.currentUser) {
     return t.account_role_user || primaryRole;
 }
 
-function formatLocaleDateTime(value) {
+function formatLocaleDateTime(value, locale = null) {
     if (!value) return '-';
 
     const date = new Date(value);
@@ -754,7 +1025,8 @@ function formatLocaleDateTime(value) {
         return '-';
     }
 
-    return date.toLocaleString(state.lang === 'ar' ? 'ar-EG' : 'en-US');
+    const resolvedLocale = locale || (state.lang === 'ar' ? 'ar-EG' : 'en-US');
+    return date.toLocaleString(resolvedLocale);
 }
 
 function getSessionExpiryLabel() {
@@ -768,7 +1040,7 @@ function getSessionExpiryLabel() {
 
 function canAccessSecurityCenter(user = state.currentUser) {
     const roles = normalizeUserRoles(user);
-    return roles.includes(ROLE_CYBERSECURITY_ENGINEER) || roles.includes(ROLE_ADMIN);
+    return roles.includes(ROLE_SECURITY_ENGINEER) || roles.includes(ROLE_CYBERSECURITY_ENGINEER) || roles.includes(ROLE_ADMIN);
 }
 
 function applySecurityCenterNavAccess() {
@@ -817,9 +1089,99 @@ function normalizeSecurityStats(payload) {
     };
 }
 
-async function fetchSecurityJson(endpoint) {
+function normalizeSecurityUserStatusSummary(payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const toCount = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0) return 0;
+        return Math.floor(numeric);
+    };
+
+    return {
+        total_active: toCount(data.total_active),
+        total_suspended: toCount(data.total_suspended),
+        total_blocked: toCount(data.total_blocked)
+    };
+}
+
+function formatSecurityEventsLastUpdatedLabel(timestamp) {
+    const numericTimestamp = Number(timestamp);
+    if (!Number.isFinite(numericTimestamp) || numericTimestamp <= 0) {
+        return 'Last updated • just now';
+    }
+
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - numericTimestamp) / 1000));
+    if (elapsedSeconds < 5) {
+        return 'Last updated • just now';
+    }
+    if (elapsedSeconds < 60) {
+        return `Last updated • ${elapsedSeconds}s ago`;
+    }
+
+    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+    if (elapsedMinutes < 60) {
+        return `Last updated • ${elapsedMinutes}m ago`;
+    }
+
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+    return `Last updated • ${elapsedHours}h ago`;
+}
+
+function updateSecurityEventsLastUpdatedLabel() {
+    const label = document.getElementById('security-events-last-updated');
+    if (!label) return;
+
+    label.textContent = formatSecurityEventsLastUpdatedLabel(state.securityEventsLastUpdatedAt);
+    const numericTimestamp = Number(state.securityEventsLastUpdatedAt);
+    const isStale = Number.isFinite(numericTimestamp)
+        && numericTimestamp > 0
+        && (Date.now() - numericTimestamp) >= 5000;
+    label.classList.toggle('is-stale', isStale);
+}
+
+function markSecurityEventsFeedUpdated(timestamp = Date.now()) {
+    state.securityEventsLastUpdatedAt = Number(timestamp) || Date.now();
+    updateSecurityEventsLastUpdatedLabel();
+}
+
+function markSecurityEventsFeedInteraction() {
+    state.securityEventsLastInteractionAt = Date.now();
+}
+
+function isSecurityEventsAutoRefreshAllowed() {
+    if (!isSecurityCenterView() || state.securityActiveTab !== 'events') return false;
+    if (document.visibilityState && document.visibilityState !== 'visible') return false;
+
+    return Date.now() - Number(state.securityEventsLastInteractionAt || 0) >= SECURITY_EVENTS_INTERACTION_GRACE_MS;
+}
+
+function setSecurityEventsRefreshButtonLoading(isLoading) {
+    const button = document.getElementById('security-events-refresh-btn');
+    if (!button) return;
+
+    button.disabled = Boolean(isLoading);
+    button.classList.toggle('is-loading', Boolean(isLoading));
+
+    const icon = button.querySelector('i');
+    if (icon) {
+        icon.className = isLoading ? 'fas fa-spinner' : 'fas fa-arrows-rotate';
+    }
+}
+
+function preserveElementScrollState(element) {
+    return element && typeof element.scrollTop === 'number' ? element.scrollTop : 0;
+}
+
+function restoreElementScrollState(element, scrollTop) {
+    if (element && typeof element.scrollTop === 'number') {
+        element.scrollTop = scrollTop;
+    }
+}
+
+async function fetchSecurityJson(endpoint, options = {}) {
     const response = await fetchWithApiRecovery(endpoint, {
-        headers: withAuthHeaders()
+        headers: withAuthHeaders(),
+        ...options
     });
 
     if (response.status === 401) {
@@ -840,16 +1202,24 @@ async function fetchSecurityJson(endpoint) {
     return response.json();
 }
 
-async function fetchSecurityDashboardData(limit = 20) {
+async function fetchSecurityDashboardData(limit = 20, options = {}) {
     const safeLimit = limit === 50 ? 50 : 20;
     const [statsPayload, eventsPayload] = await Promise.all([
-        fetchSecurityJson('/security/stats'),
-        fetchSecurityJson(`/security/events?limit=${safeLimit}`)
+        fetchSecurityJson('/security/stats', options),
+        fetchSecurityJson(`/security/events?limit=${safeLimit}`, options)
     ]);
 
     return {
         stats: normalizeSecurityStats(statsPayload),
         events: Array.isArray(eventsPayload) ? eventsPayload : []
+    };
+}
+
+async function fetchSecurityUserStatusData() {
+    const summaryPayload = await fetchSecurityJson('/security/users/status-summary');
+
+    return {
+        summary: normalizeSecurityUserStatusSummary(summaryPayload)
     };
 }
 
@@ -898,6 +1268,38 @@ function formatSecurityClockTime(timestamp) {
     });
 }
 
+function getSortTimestampValue(value) {
+    const parsed = Date.parse(String(value || ''));
+    if (!Number.isFinite(parsed)) {
+        return 0;
+    }
+    return parsed;
+}
+
+function scrollSecurityTableToTop(tableBody) {
+    if (!tableBody) return;
+    const tableWrap = tableBody.closest('.security-events-table-wrap');
+    if (tableWrap) {
+        tableWrap.scrollTop = 0;
+    }
+}
+
+function syncSecurityStickyFirstRowOffset(tableBody) {
+    if (!tableBody) return;
+
+    const tableWrap = tableBody.closest('.security-events-table-wrap');
+    const table = tableBody.closest('table');
+    if (!tableWrap || !table) return;
+
+    const headerRow = table.querySelector('thead tr');
+    if (!headerRow) return;
+
+    const headerHeight = Math.ceil(headerRow.getBoundingClientRect().height || 0);
+    if (headerHeight > 0) {
+        tableWrap.style.setProperty('--security-header-sticky-offset', `${headerHeight}px`);
+    }
+}
+
 function extractSecurityEventUser(event) {
     const directUsername = String(event && event.username ? event.username : '').trim();
     if (directUsername) {
@@ -919,12 +1321,19 @@ function extractSecurityEventUser(event) {
     return 'System';
 }
 
+function getSecurityCenterTranslations() {
+    const currentView = state.currentView;
+    const securityView = currentView === 'securityCenter' || currentView === 'security-center';
+    return securityView ? i18n.en : i18n[state.lang];
+}
+
 function renderSecurityLiveFeed(events) {
     const feedList = document.getElementById('security-live-feed-list');
     if (!feedList) return;
+    const t = getSecurityCenterTranslations();
 
     if (!Array.isArray(events) || events.length === 0) {
-        feedList.innerHTML = `<li class="security-live-feed-empty">${escapeHtml(i18n[state.lang].security_live_feed_empty)}</li>`;
+        feedList.innerHTML = `<li class="security-live-feed-empty">${escapeHtml(t.security_live_feed_empty)}</li>`;
         return;
     }
 
@@ -962,16 +1371,51 @@ function renderSecurityCounters(stats, shouldAnimate = false) {
     setCounter('security-stat-brute-force', safeStats.brute_force_attempts);
 }
 
-function renderSecurityEventsTable(events) {
-    const tableBody = document.getElementById('security-events-body');
-    if (!tableBody) return;
+function renderSecurityUserStatusCounters(summary, shouldAnimate = false) {
+    const safeSummary = normalizeSecurityUserStatusSummary(summary || {});
 
-    if (!Array.isArray(events) || events.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="5" class="security-empty-row">${escapeHtml(i18n[state.lang].security_events_empty)}</td></tr>`;
+    if (shouldAnimate) {
+        animateCounter('security-stat-active-users', safeSummary.total_active);
+        animateCounter('security-stat-suspended-users', safeSummary.total_suspended);
+        animateCounter('security-stat-blocked-users', safeSummary.total_blocked);
         return;
     }
 
-    tableBody.innerHTML = events.map((event) => {
+    const setCounter = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = Number(value || 0).toLocaleString();
+        }
+    };
+
+    setCounter('security-stat-active-users', safeSummary.total_active);
+    setCounter('security-stat-suspended-users', safeSummary.total_suspended);
+    setCounter('security-stat-blocked-users', safeSummary.total_blocked);
+}
+
+function renderSecurityEventsTable(events, options = {}) {
+    const tableBody = document.getElementById('security-events-body');
+    if (!tableBody) return;
+    const t = getSecurityCenterTranslations();
+    const preserveScroll = Boolean(options.preserveScroll);
+
+    syncSecurityStickyFirstRowOffset(tableBody);
+
+    if (!Array.isArray(events) || events.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="security-empty-row">${escapeHtml(t.security_events_empty)}</td></tr>`;
+        if (!preserveScroll) {
+            scrollSecurityTableToTop(tableBody);
+        }
+        return;
+    }
+
+    const orderedEvents = [...events].sort((left, right) => {
+        const rightTs = getSortTimestampValue(right && right.timestamp ? right.timestamp : '');
+        const leftTs = getSortTimestampValue(left && left.timestamp ? left.timestamp : '');
+        return rightTs - leftTs;
+    });
+
+    tableBody.innerHTML = orderedEvents.map((event) => {
         const eventType = String(event && event.event_type ? event.event_type : 'UNKNOWN').toUpperCase();
         const severity = String(event && event.severity ? event.severity : 'MEDIUM').toUpperCase();
         const username = extractSecurityEventUser(event);
@@ -989,6 +1433,1409 @@ function renderSecurityEventsTable(events) {
             </tr>
         `;
     }).join('');
+
+    if (!preserveScroll) {
+        scrollSecurityTableToTop(tableBody);
+    }
+}
+
+async function refreshSecurityUserStatusPanel(options = {}) {
+    const animateCounters = Boolean(options.animateCounters);
+    const payload = await fetchSecurityUserStatusData();
+    renderSecurityUserStatusCounters(payload.summary, animateCounters);
+}
+
+async function refreshSecurityEventsFeed(options = {}) {
+    const source = String(options.source || 'manual');
+    const silent = Boolean(options.silent);
+    const force = Boolean(options.force);
+
+    if (!isSecurityCenterView() || state.securityActiveTab !== 'events') {
+        return null;
+    }
+
+    if (!force && !isSecurityEventsAutoRefreshAllowed()) {
+        return null;
+    }
+
+    if (state.securityEventsRefreshInProgress) {
+        if (source === 'manual' && state.securityEventsRefreshController) {
+            state.securityEventsRefreshController.abort();
+        } else {
+            return null;
+        }
+    }
+
+    const controller = new AbortController();
+    state.securityEventsRefreshController = controller;
+    state.securityEventsRefreshInProgress = true;
+
+    const eventsTableWrap = document.querySelector('#security-events-panel .security-events-table-wrap');
+    const liveFeedList = document.getElementById('security-live-feed-list');
+    const eventsTableScrollTop = preserveElementScrollState(eventsTableWrap);
+    const liveFeedScrollTop = preserveElementScrollState(liveFeedList);
+
+    if (source === 'manual') {
+        setSecurityEventsRefreshButtonLoading(true);
+    }
+
+    try {
+        const payload = await fetchSecurityDashboardData(20, { signal: controller.signal });
+
+        if (controller.signal.aborted || state.securityEventsRefreshController !== controller) {
+            return null;
+        }
+
+        renderSecurityCounters(payload.stats, false);
+        renderSecurityEventsTable(payload.events, { preserveScroll: true });
+        renderSecurityLiveFeed(payload.events);
+        restoreElementScrollState(eventsTableWrap, eventsTableScrollTop);
+        restoreElementScrollState(liveFeedList, liveFeedScrollTop);
+        markSecurityEventsFeedUpdated();
+
+        return payload;
+    } catch (error) {
+        if (!controller.signal.aborted && error && error.message !== 'Unauthorized' && !silent) {
+            console.error('Security events refresh failed:', error);
+        }
+        return null;
+    } finally {
+        if (state.securityEventsRefreshController === controller) {
+            state.securityEventsRefreshController = null;
+        }
+        state.securityEventsRefreshInProgress = false;
+        if (source === 'manual') {
+            setSecurityEventsRefreshButtonLoading(false);
+        }
+    }
+}
+
+function clearSecurityEventsRefreshTimers() {
+    if (state.securityEventsRefreshTimer) {
+        clearInterval(state.securityEventsRefreshTimer);
+        state.securityEventsRefreshTimer = null;
+    }
+
+    if (state.securityEventsLabelTimer) {
+        clearInterval(state.securityEventsLabelTimer);
+        state.securityEventsLabelTimer = null;
+    }
+}
+
+function stopSecurityEventsRefreshSystem() {
+    clearSecurityEventsRefreshTimers();
+
+    if (state.securityEventsRefreshController) {
+        state.securityEventsRefreshController.abort();
+        state.securityEventsRefreshController = null;
+    }
+
+    state.securityEventsRefreshInProgress = false;
+    state.securityEventsLastInteractionAt = 0;
+}
+
+function setupSecurityEventsRefreshAction() {
+    const refreshButton = document.getElementById('security-events-refresh-btn');
+    if (!refreshButton) return;
+
+    if (refreshButton.dataset.refreshBound === 'true') {
+        return;
+    }
+
+    refreshButton.addEventListener('click', () => {
+        markSecurityEventsFeedInteraction();
+        refreshSecurityEventsFeed({ source: 'manual', force: true, silent: false }).then((result) => {
+            if (!result) {
+                showNotification('Unable to refresh security events right now.', 'warning');
+            }
+        });
+    });
+    refreshButton.dataset.refreshBound = 'true';
+}
+
+function startSecurityEventsRefreshSystem() {
+    stopSecurityEventsRefreshSystem();
+
+    if (!isSecurityCenterView() || state.securityActiveTab !== 'events') {
+        updateSecurityEventsLastUpdatedLabel();
+        return;
+    }
+
+    const registerInteraction = () => {
+        markSecurityEventsFeedInteraction();
+    };
+
+    const eventsPanel = document.getElementById('security-events-panel');
+    const liveFeedList = document.getElementById('security-live-feed-list');
+    const eventsTableWrap = document.querySelector('#security-events-panel .security-events-table-wrap');
+
+    if (eventsPanel && !eventsPanel.dataset.refreshInteractionBound) {
+        eventsPanel.addEventListener('pointerdown', registerInteraction, { passive: true });
+        eventsPanel.addEventListener('wheel', registerInteraction, { passive: true });
+        eventsPanel.addEventListener('touchstart', registerInteraction, { passive: true });
+        eventsPanel.addEventListener('keydown', registerInteraction);
+        eventsPanel.dataset.refreshInteractionBound = 'true';
+    }
+
+    if (liveFeedList && !liveFeedList.dataset.refreshScrollBound) {
+        liveFeedList.addEventListener('scroll', registerInteraction, { passive: true });
+        liveFeedList.dataset.refreshScrollBound = 'true';
+    }
+
+    if (eventsTableWrap && !eventsTableWrap.dataset.refreshScrollBound) {
+        eventsTableWrap.addEventListener('scroll', registerInteraction, { passive: true });
+        eventsTableWrap.dataset.refreshScrollBound = 'true';
+    }
+
+    updateSecurityEventsLastUpdatedLabel();
+
+    state.securityEventsRefreshTimer = setInterval(() => {
+        if (!isSecurityEventsAutoRefreshAllowed()) {
+            return;
+        }
+        refreshSecurityEventsFeed({ source: 'auto', silent: true });
+    }, SECURITY_EVENTS_AUTO_REFRESH_MS);
+
+    state.securityEventsLabelTimer = setInterval(() => {
+        updateSecurityEventsLastUpdatedLabel();
+    }, 5000);
+
+    updateSecurityEventsLastUpdatedLabel();
+}
+
+function normalizeIncidentSeverity(severity) {
+    const normalized = String(severity || 'MEDIUM').trim().toUpperCase();
+    if (normalized === 'HIGH' || normalized === 'LOW') {
+        return normalized;
+    }
+    return 'MEDIUM';
+}
+
+function calculateIncidentMetrics(incidents) {
+    const items = Array.isArray(incidents) ? incidents : [];
+
+    return items.reduce((acc, incident) => {
+        const status = normalizeIncidentStatus(incident && incident.status ? incident.status : 'OPEN');
+        const severity = normalizeIncidentSeverity(incident && incident.severity ? incident.severity : 'MEDIUM');
+
+        if (status === 'OPEN') {
+            acc.open_incidents += 1;
+        }
+        if (severity === 'HIGH') {
+            acc.high_severity_incidents += 1;
+        }
+
+        return acc;
+    }, {
+        open_incidents: 0,
+        high_severity_incidents: 0
+    });
+}
+
+function renderIncidentCounters(metrics, shouldAnimate = false) {
+    const safeMetrics = metrics && typeof metrics === 'object' ? metrics : {};
+    const openIncidents = Number.isFinite(Number(safeMetrics.open_incidents))
+        ? Number(safeMetrics.open_incidents)
+        : 0;
+    const highSeverity = Number.isFinite(Number(safeMetrics.high_severity_incidents))
+        ? Number(safeMetrics.high_severity_incidents)
+        : 0;
+
+    const setCounter = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = Number(value || 0).toLocaleString();
+        }
+    };
+
+    if (shouldAnimate) {
+        animateCounter('security-stat-open-incidents', openIncidents);
+        animateCounter('security-stat-high-severity-incidents', highSeverity);
+        return;
+    }
+
+    setCounter('security-stat-open-incidents', openIncidents);
+    setCounter('security-stat-high-severity-incidents', highSeverity);
+}
+
+function updateIncidentNewBadge() {
+    const badge = document.getElementById('security-incidents-new-badge');
+    if (!badge) return;
+
+    const count = Number(state.unseenIncidentCount) || 0;
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.remove('hidden');
+        return;
+    }
+
+    badge.textContent = '0';
+    badge.classList.add('hidden');
+}
+
+function acknowledgeIncidentNewAlerts() {
+    state.unseenIncidentCount = 0;
+    updateIncidentNewBadge();
+}
+
+function detectAndHandleNewIncidents(allIncidents, options = {}) {
+    const announceNew = options.announceNew !== false;
+    const items = Array.isArray(allIncidents) ? allIncidents : [];
+    const incidentIds = items
+        .map((incident) => Number(incident && incident.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+    const maxId = incidentIds.length > 0 ? Math.max(...incidentIds) : 0;
+    if (!state.incidentBaselineInitialized) {
+        state.latestIncidentSeenId = maxId;
+        state.incidentBaselineInitialized = true;
+        updateIncidentNewBadge();
+        return;
+    }
+
+    if (maxId <= state.latestIncidentSeenId) {
+        return;
+    }
+
+    const previousMax = state.latestIncidentSeenId;
+    state.latestIncidentSeenId = maxId;
+
+    const newCount = items.reduce((count, incident) => {
+        const incidentId = Number(incident && incident.id);
+        if (!Number.isFinite(incidentId) || incidentId <= previousMax) {
+            return count;
+        }
+        return count + 1;
+    }, 0);
+
+    if (newCount <= 0) {
+        return;
+    }
+
+    if (state.securityActiveTab === 'incidents') {
+        acknowledgeIncidentNewAlerts();
+    } else {
+        state.unseenIncidentCount += newCount;
+        updateIncidentNewBadge();
+    }
+
+    if (announceNew) {
+        const t = getSecurityCenterTranslations();
+        const message = newCount === 1
+            ? (t.incident_new_alert_single || 'New incident detected')
+            : `${newCount} ${t.incident_new_alert_multiple || 'new incidents detected'}`;
+        showNotification(message, 'warning');
+    }
+}
+
+async function refreshIncidentOverview(options = {}) {
+    const announceNew = options.announceNew !== false;
+    const animateCounters = Boolean(options.animateCounters);
+    const incidentsPayload = await fetchSecurityJson('/incidents');
+    const allIncidents = Array.isArray(incidentsPayload) ? incidentsPayload : [];
+
+    renderIncidentCounters(calculateIncidentMetrics(allIncidents), animateCounters);
+    detectAndHandleNewIncidents(allIncidents, { announceNew });
+}
+
+function normalizeIncidentStatus(status) {
+    const normalized = String(status || '').trim().toUpperCase();
+    if (normalized === 'INVESTIGATING' || normalized === 'RESOLVED' || normalized === 'CLOSED') {
+        return normalized;
+    }
+    return 'OPEN';
+}
+
+function getIncidentStatusLabel(status) {
+    const t = getSecurityCenterTranslations();
+    const normalized = normalizeIncidentStatus(status);
+    const keyMap = {
+        OPEN: 'incident_status_open',
+        INVESTIGATING: 'incident_status_investigating',
+        RESOLVED: 'incident_status_resolved',
+        CLOSED: 'incident_status_closed'
+    };
+
+    return t[keyMap[normalized]] || normalized;
+}
+
+function getIncidentStatusClass(status) {
+    const normalized = normalizeIncidentStatus(status).toLowerCase();
+    return `incident-status-${normalized}`;
+}
+
+function isIncidentFalsePositive(value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+}
+
+function getIncidentFalsePositiveLabel(value) {
+    const t = getSecurityCenterTranslations();
+    return isIncidentFalsePositive(value)
+        ? (t.incident_false_positive_yes || 'Yes')
+        : (t.incident_false_positive_no || 'No');
+}
+
+function renderIncidentFalsePositiveBadge(value) {
+    const isTrue = isIncidentFalsePositive(value);
+    const badgeClass = isTrue ? 'incident-fp-yes' : 'incident-fp-no';
+    return `<span class="incident-fp-badge ${badgeClass}">${escapeHtml(getIncidentFalsePositiveLabel(isTrue))}</span>`;
+}
+
+function extractIncidentActorLabel(incident) {
+    const username = String(incident && incident.actor_username ? incident.actor_username : '').trim();
+    if (username) {
+        return username;
+    }
+
+    const actorId = Number(incident && incident.actor_id);
+    if (Number.isFinite(actorId) && actorId > 0) {
+        return `user_${actorId}`;
+    }
+
+    return getSecurityCenterTranslations().incident_actor_unknown || 'Unknown';
+}
+
+function setSecurityActiveTab(tabName, options = {}) {
+    const normalizedTab = tabName === 'incidents' ? 'incidents' : 'events';
+    const shouldScrollIntoView = Boolean(options && options.scrollIntoView);
+    state.securityActiveTab = normalizedTab;
+
+    const eventsTablePanel = document.getElementById('security-events-table-panel');
+    const eventsPanel = document.getElementById('security-events-panel');
+    const incidentsTablePanel = document.getElementById('security-incidents-table-panel');
+    const incidentsPanel = document.getElementById('security-incidents-panel');
+    if (eventsTablePanel) {
+        eventsTablePanel.classList.toggle('hidden', normalizedTab !== 'events');
+    }
+    if (eventsPanel) {
+        eventsPanel.classList.toggle('hidden', normalizedTab !== 'events');
+    }
+    if (incidentsTablePanel) {
+        incidentsTablePanel.classList.toggle('hidden', normalizedTab !== 'incidents');
+    }
+    if (incidentsPanel) {
+        incidentsPanel.classList.toggle('hidden', normalizedTab !== 'incidents');
+    }
+
+    document.querySelectorAll('.security-tab-btn').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.tab === normalizedTab);
+    });
+
+    if (normalizedTab === 'incidents') {
+        acknowledgeIncidentNewAlerts();
+    }
+
+    if (normalizedTab === 'events') {
+        setupSecurityEventsRefreshAction();
+        startSecurityEventsRefreshSystem();
+        refreshSecurityEventsFeed({ source: 'manual', force: true, silent: true });
+    } else {
+        stopSecurityEventsRefreshSystem();
+    }
+
+    if (shouldScrollIntoView) {
+        const targetPanel = normalizedTab === 'incidents' ? incidentsPanel : eventsPanel;
+        const eventsTableTop = normalizedTab === 'events' ? eventsTablePanel : null;
+        const incidentsTableTop = normalizedTab === 'incidents' ? incidentsTablePanel : null;
+        const targetCard = targetPanel && normalizedTab !== 'incidents'
+            ? targetPanel.querySelector('.security-events-card')
+            : null;
+        const scrollTarget = incidentsTableTop || eventsTableTop || targetCard || targetPanel;
+        if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
+            scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    updateIncidentBackToEventsFloatingButtonVisibility();
+}
+
+function setupSecurityCenterTabs() {
+    const tabButtons = document.querySelectorAll('.security-tab-btn');
+    tabButtons.forEach((button) => {
+        button.onclick = () => {
+            setSecurityActiveTab(button.dataset.tab || 'events', { scrollIntoView: true });
+        };
+    });
+
+    setSecurityActiveTab(state.securityActiveTab, { scrollIntoView: false });
+}
+
+function renderSecurityIncidentsTable(incidents) {
+    const tableBody = document.getElementById('security-incidents-body');
+    if (!tableBody) return;
+    const t = getSecurityCenterTranslations();
+
+    syncSecurityStickyFirstRowOffset(tableBody);
+
+    const items = Array.isArray(incidents) ? [...incidents] : [];
+    items.sort((left, right) => {
+        const rightTs = getSortTimestampValue(right && right.created_at ? right.created_at : '');
+        const leftTs = getSortTimestampValue(left && left.created_at ? left.created_at : '');
+        if (rightTs !== leftTs) {
+            return rightTs - leftTs;
+        }
+
+        const rightId = Number(right && right.id);
+        const leftId = Number(left && left.id);
+        const safeRightId = Number.isFinite(rightId) ? rightId : 0;
+        const safeLeftId = Number.isFinite(leftId) ? leftId : 0;
+        return safeRightId - safeLeftId;
+    });
+
+    if (items.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="security-empty-row">${escapeHtml(t.incident_empty)}</td></tr>`;
+        scrollSecurityTableToTop(tableBody);
+        return;
+    }
+
+    tableBody.innerHTML = items.map((incident) => {
+        const incidentId = Number(incident && incident.id);
+        const typeLabel = String(incident && incident.type ? incident.type : '-');
+        const severity = String(incident && incident.severity ? incident.severity : 'MEDIUM').toUpperCase();
+        const status = normalizeIncidentStatus(incident && incident.status ? incident.status : 'OPEN');
+        const isFalsePositive = isIncidentFalsePositive(incident && incident.is_false_positive);
+        const createdAt = formatLocaleDateTime(
+            incident && incident.created_at ? incident.created_at : null,
+            'en-US'
+        );
+        const severityClass = getSecuritySeverityClass(severity);
+        const statusClass = getIncidentStatusClass(status);
+        const selectedIncidentId = Number(state.selectedIncident && state.selectedIncident.id);
+        const selectedClass = incidentId === selectedIncidentId ? 'is-selected' : '';
+
+        return `
+            <tr class="security-incident-row ${selectedClass}" data-incident-id="${incidentId}">
+                <td>#${escapeHtml(String(incidentId))}</td>
+                <td>${escapeHtml(typeLabel)}</td>
+                <td><span class="security-severity ${severityClass}">${escapeHtml(severity)}</span></td>
+                <td><span class="incident-status-pill ${statusClass}">${escapeHtml(getIncidentStatusLabel(status))}</span></td>
+                <td>${renderIncidentFalsePositiveBadge(isFalsePositive)}</td>
+                <td class="security-col-time">${escapeHtml(createdAt)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    scrollSecurityTableToTop(tableBody);
+}
+
+function getSelectedIncidentId() {
+    const incidentId = Number(state.selectedIncident && state.selectedIncident.id);
+    if (!Number.isFinite(incidentId) || incidentId <= 0) {
+        return null;
+    }
+    return incidentId;
+}
+
+function clearIncidentDetailsCloseTimer() {
+    if (!state.incidentDetailsCloseTimer) return;
+    clearTimeout(state.incidentDetailsCloseTimer);
+    state.incidentDetailsCloseTimer = null;
+}
+
+function showIncidentDetailsPanel(detailsPanel) {
+    if (!detailsPanel || !state.selectedIncident) return;
+
+    clearIncidentDetailsCloseTimer();
+    detailsPanel.classList.remove('hidden', 'is-closing');
+    detailsPanel.scrollTop = 0;
+
+    requestAnimationFrame(() => {
+        detailsPanel.classList.add('is-open');
+        detailsPanel.setAttribute('aria-hidden', 'false');
+    });
+}
+
+function hideIncidentDetailsPanel(detailsPanel) {
+    if (!detailsPanel) return;
+
+    clearIncidentDetailsCloseTimer();
+
+    const alreadyHidden = detailsPanel.classList.contains('hidden') && !detailsPanel.classList.contains('is-open');
+    if (alreadyHidden) {
+        detailsPanel.setAttribute('aria-hidden', 'true');
+        return;
+    }
+
+    detailsPanel.classList.remove('is-open');
+    detailsPanel.classList.add('is-closing');
+    detailsPanel.setAttribute('aria-hidden', 'true');
+
+    state.incidentDetailsCloseTimer = setTimeout(() => {
+        detailsPanel.classList.add('hidden');
+        detailsPanel.classList.remove('is-closing');
+        state.incidentDetailsCloseTimer = null;
+    }, INCIDENT_PANEL_CLOSE_ANIMATION_MS);
+}
+
+function clearIncidentDetailsPanel(options = {}) {
+    const rerenderIncidents = options.rerenderIncidents !== false;
+    state.incidentDetailsRequestToken += 1;
+    state.selectedIncident = null;
+
+    const detailsPanel = document.getElementById('incident-details-panel');
+    if (detailsPanel) {
+        hideIncidentDetailsPanel(detailsPanel);
+    }
+
+    const timeline = document.getElementById('incident-timeline-list');
+    if (timeline) {
+        timeline.innerHTML = `<li class="incident-timeline-empty">${escapeHtml(getSecurityCenterTranslations().incident_timeline_empty)}</li>`;
+    }
+
+    const detailsFalsePositive = document.getElementById('incident-details-false-positive');
+    if (detailsFalsePositive) {
+        detailsFalsePositive.textContent = '-';
+    }
+
+    const notesInput = document.getElementById('incident-notes-input');
+    if (notesInput) {
+        notesInput.value = '';
+    }
+
+    syncIncidentActionButtons(null);
+    if (rerenderIncidents) {
+        renderSecurityIncidentsTable(state.securityIncidents);
+    }
+    updateIncidentBackToEventsFloatingButtonVisibility();
+}
+
+function syncIncidentActionButtons(incident) {
+    const assignBtn = document.getElementById('incident-assign-btn');
+    const investigatingBtn = document.getElementById('incident-mark-investigating-btn');
+    const resolveBtn = document.getElementById('incident-resolve-btn');
+    const closeBtn = document.getElementById('incident-close-btn');
+    const markFalsePositiveBtn = document.getElementById('incident-mark-false-positive-btn');
+    const clearFalsePositiveBtn = document.getElementById('incident-clear-false-positive-btn');
+    const saveNotesBtn = document.getElementById('incident-save-notes-btn');
+    const blockBtn = document.getElementById('incident-block-user-btn');
+    const suspendBtn = document.getElementById('incident-suspend-user-btn');
+    const reactivateBtn = document.getElementById('incident-reactivate-user-btn');
+    const ignoreBtn = document.getElementById('incident-ignore-btn');
+
+    const allButtons = [
+        assignBtn,
+        investigatingBtn,
+        resolveBtn,
+        closeBtn,
+        markFalsePositiveBtn,
+        clearFalsePositiveBtn,
+        saveNotesBtn,
+        blockBtn,
+        suspendBtn,
+        reactivateBtn,
+        ignoreBtn
+    ].filter(Boolean);
+
+    if (!incident) {
+        allButtons.forEach((button) => {
+            button.disabled = true;
+        });
+        return;
+    }
+
+    const currentStatus = normalizeIncidentStatus(incident.status);
+    const hasActor = Number.isFinite(Number(incident.actor_id)) && Number(incident.actor_id) > 0;
+    const falsePositive = isIncidentFalsePositive(incident.is_false_positive);
+
+    if (assignBtn) assignBtn.disabled = false;
+    if (investigatingBtn) investigatingBtn.disabled = currentStatus !== 'OPEN';
+    if (resolveBtn) resolveBtn.disabled = currentStatus !== 'INVESTIGATING';
+    if (closeBtn) closeBtn.disabled = currentStatus !== 'RESOLVED';
+    if (markFalsePositiveBtn) markFalsePositiveBtn.disabled = falsePositive;
+    if (clearFalsePositiveBtn) clearFalsePositiveBtn.disabled = !falsePositive;
+    if (saveNotesBtn) saveNotesBtn.disabled = false;
+    if (blockBtn) blockBtn.disabled = !hasActor;
+    if (suspendBtn) suspendBtn.disabled = !hasActor;
+    if (reactivateBtn) reactivateBtn.disabled = !hasActor;
+    if (ignoreBtn) ignoreBtn.disabled = false;
+}
+
+function getIncidentLogResult(entry) {
+    const metadata = entry && typeof entry.extra_metadata === 'object' && !Array.isArray(entry.extra_metadata)
+        ? entry.extra_metadata
+        : {};
+    const explicitResult = String(
+        entry && entry.result ? entry.result : (metadata.result || '')
+    ).trim().toLowerCase();
+
+    if (["failed", "failure", "error", "denied", "blocked", "false"].includes(explicitResult)) {
+        return 'FAILED';
+    }
+
+    if (["success", "ok", "succeeded", "passed", "true"].includes(explicitResult)) {
+        return 'SUCCESS';
+    }
+
+    const action = String(entry && entry.event_type ? entry.event_type : '').toUpperCase();
+    if (/(FAIL|DENY|ERROR|INVALID)/.test(action)) {
+        return 'FAILED';
+    }
+
+    return 'SUCCESS';
+}
+
+function formatIncidentLogMetadata(entry) {
+    const metadata = entry && typeof entry.extra_metadata === 'object' && !Array.isArray(entry.extra_metadata)
+        ? entry.extra_metadata
+        : {};
+
+    if (Object.keys(metadata).length === 0) {
+        return '-';
+    }
+
+    return JSON.stringify(metadata, null, 2);
+}
+
+function getIncidentLogResultLabel(result) {
+    const t = getSecurityCenterTranslations();
+    if (result === 'FAILED') {
+        return t.incident_result_failed || 'Failed';
+    }
+    return t.incident_result_success || 'Success';
+}
+
+function renderIncidentTimeline(logs) {
+    const timeline = document.getElementById('incident-timeline-list');
+    if (!timeline) return;
+    const t = getSecurityCenterTranslations();
+
+    const items = Array.isArray(logs) ? logs : [];
+    if (items.length === 0) {
+        timeline.innerHTML = `<li class="incident-timeline-empty">${escapeHtml(t.incident_timeline_empty)}</li>`;
+        return;
+    }
+
+    const orderedItems = [...items].sort((a, b) => {
+        const left = Date.parse(a && a.created_at ? a.created_at : '');
+        const right = Date.parse(b && b.created_at ? b.created_at : '');
+        const leftValue = Number.isFinite(left) ? left : 0;
+        const rightValue = Number.isFinite(right) ? right : 0;
+        return leftValue - rightValue;
+    });
+
+    timeline.innerHTML = orderedItems.map((entry) => {
+        const action = String(entry && entry.event_type ? entry.event_type : 'LOG').toUpperCase();
+        const timestamp = formatLocaleDateTime(entry && entry.created_at ? entry.created_at : null);
+        const result = getIncidentLogResult(entry);
+        const resultClass = result === 'FAILED' ? 'failed' : 'success';
+        const resultLabel = getIncidentLogResultLabel(result);
+        const metadataText = formatIncidentLogMetadata(entry);
+
+        return `
+            <li class="incident-timeline-item">
+                <div class="incident-timeline-field">
+                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_timestamp || 'Timestamp')}</span>
+                    <span class="incident-timeline-value">${escapeHtml(timestamp)}</span>
+                </div>
+                <div class="incident-timeline-field">
+                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_action || 'Action')}</span>
+                    <span class="incident-timeline-value incident-timeline-action">${escapeHtml(action)}</span>
+                </div>
+                <div class="incident-timeline-field">
+                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_result || 'Result')}</span>
+                    <span class="incident-log-result-badge ${resultClass}">${escapeHtml(resultLabel)}</span>
+                </div>
+                <div class="incident-timeline-field incident-timeline-field-wide">
+                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_metadata || 'Metadata')}</span>
+                    <pre class="incident-timeline-metadata">${escapeHtml(metadataText)}</pre>
+                </div>
+            </li>
+        `;
+    }).join('');
+}
+
+function renderIncidentDetails(incident) {
+    const detailsPanel = document.getElementById('incident-details-panel');
+    if (!detailsPanel || !incident) return;
+
+    const detailsId = document.getElementById('incident-details-id');
+    const detailsType = document.getElementById('incident-details-type');
+    const detailsSeverity = document.getElementById('incident-details-severity');
+    const detailsStatus = document.getElementById('incident-details-status');
+    const detailsFalsePositive = document.getElementById('incident-details-false-positive');
+    const detailsCreatedAt = document.getElementById('incident-details-created-at');
+    const actorInfo = document.getElementById('incident-actor-info');
+    const notesInput = document.getElementById('incident-notes-input');
+
+    const severity = String(incident.severity || 'MEDIUM').toUpperCase();
+    const severityClass = getSecuritySeverityClass(severity);
+    const status = normalizeIncidentStatus(incident.status || 'OPEN');
+    const statusClass = getIncidentStatusClass(status);
+    const falsePositive = isIncidentFalsePositive(incident.is_false_positive);
+    const actorLabel = extractIncidentActorLabel(incident);
+    const assigneeLabel = String(incident.assigned_to_username || '').trim() || '-';
+    const createdByLabel = String(incident.created_by || '').trim() || 'system';
+    const t = getSecurityCenterTranslations();
+
+    if (detailsId) detailsId.textContent = `#${incident.id}`;
+    if (detailsType) detailsType.textContent = String(incident.type || '-');
+    if (detailsSeverity) {
+        detailsSeverity.innerHTML = `<span class="security-severity ${severityClass}">${escapeHtml(severity)}</span>`;
+    }
+    if (detailsStatus) {
+        detailsStatus.innerHTML = `<span class="incident-status-pill ${statusClass}">${escapeHtml(getIncidentStatusLabel(status))}</span>`;
+    }
+    if (detailsFalsePositive) {
+        detailsFalsePositive.innerHTML = renderIncidentFalsePositiveBadge(falsePositive);
+    }
+    if (detailsCreatedAt) detailsCreatedAt.textContent = formatLocaleDateTime(incident.created_at);
+    if (notesInput) {
+        notesInput.value = String(incident && incident.notes ? incident.notes : '');
+        notesInput.placeholder = t.incident_notes_placeholder || 'Add investigation notes...';
+    }
+
+    if (actorInfo) {
+        actorInfo.textContent = `${t.incident_actor_label || 'Actor'}: ${actorLabel} | ${t.incident_assigned_label || 'Assigned'}: ${assigneeLabel} | ${t.incident_created_by_label || 'Created by'}: ${createdByLabel} | ${t.incident_false_positive_label || 'False Positive'}: ${getIncidentFalsePositiveLabel(falsePositive)}`;
+    }
+
+    renderIncidentTimeline(incident.logs || []);
+    syncIncidentActionButtons(incident);
+    showIncidentDetailsPanel(detailsPanel);
+    updateIncidentBackToEventsFloatingButtonVisibility();
+}
+
+async function openIncidentDetails(incidentId, options = {}) {
+    const numericId = Number(incidentId);
+    if (!Number.isFinite(numericId) || numericId <= 0) return null;
+
+    const silent = Boolean(options && options.silent);
+    const shouldScrollIntoView = Boolean(options && options.scrollIntoView);
+    const requestToken = state.incidentDetailsRequestToken + 1;
+    state.incidentDetailsRequestToken = requestToken;
+
+    state.selectedIncident = { id: numericId };
+    renderSecurityIncidentsTable(state.securityIncidents);
+
+    try {
+        const details = await api.get(`/incidents/${numericId}`);
+
+        if (state.incidentDetailsRequestToken !== requestToken) {
+            return null;
+        }
+
+        if (getSelectedIncidentId() !== numericId) {
+            return null;
+        }
+
+        state.selectedIncident = details;
+        renderSecurityIncidentsTable(state.securityIncidents);
+        renderIncidentDetails(details);
+
+        if (shouldScrollIntoView) {
+            const detailsPanel = document.getElementById('incident-details-panel');
+            if (detailsPanel && typeof detailsPanel.scrollIntoView === 'function') {
+                detailsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                requestAnimationFrame(() => {
+                    updateIncidentBackToEventsFloatingButtonVisibility();
+                });
+            }
+        }
+
+        return details;
+    } catch (error) {
+        console.error('Incident details load error:', error);
+        clearIncidentDetailsPanel({ rerenderIncidents: true });
+        if (!silent && error.message !== 'Unauthorized') {
+            showNotification(getSecurityCenterTranslations().incident_load_error, 'warning');
+        }
+        return null;
+    }
+}
+
+async function loadSecurityIncidents(options = {}) {
+    const keepSelected = options.keepSelected !== false;
+    const refreshOverview = options.refreshOverview !== false;
+    const animateIncidentCounters = options.animateIncidentCounters === true;
+    const announceNew = options.announceNew === true;
+    const forceRefresh = options.forceRefresh === true;
+    const statusFilter = document.getElementById('incident-filter-status');
+    const severityFilter = document.getElementById('incident-filter-severity');
+    const falsePositiveFilter = document.getElementById('incident-filter-false-positive');
+    const query = new URLSearchParams();
+
+    if (statusFilter && statusFilter.value) {
+        query.set('status', String(statusFilter.value).trim().toUpperCase());
+    }
+    if (severityFilter && severityFilter.value) {
+        query.set('severity', String(severityFilter.value).trim().toUpperCase());
+    }
+    if (falsePositiveFilter && falsePositiveFilter.value !== '') {
+        query.set('false_positive', falsePositiveFilter.value === 'true' ? 'true' : 'false');
+    }
+    if (forceRefresh) {
+        query.set('_ts', String(Date.now()));
+    }
+
+    const queryString = query.toString();
+    const endpoint = queryString ? `/incidents?${queryString}` : '/incidents';
+    const incidents = await api.get(endpoint);
+
+    state.securityIncidents = Array.isArray(incidents) ? incidents : [];
+    renderSecurityIncidentsTable(state.securityIncidents);
+
+    if (!keepSelected) {
+        clearIncidentDetailsPanel({ rerenderIncidents: true });
+    } else {
+        const selectedId = getSelectedIncidentId();
+        if (Number.isFinite(selectedId) && selectedId > 0) {
+            const exists = state.securityIncidents.some((item) => Number(item && item.id) === selectedId);
+            if (exists) {
+                await openIncidentDetails(selectedId, { silent: true });
+            } else {
+                clearIncidentDetailsPanel({ rerenderIncidents: true });
+            }
+        }
+    }
+
+    if (refreshOverview) {
+        await refreshIncidentOverview({
+            announceNew,
+            animateCounters: animateIncidentCounters,
+        }).catch((error) => {
+            console.error('Incident overview refresh error:', error);
+        });
+    }
+}
+
+function setupIncidentFilters() {
+    const filterToggleBtn = document.getElementById('incident-filter-toggle');
+    const filterToggleArrow = document.getElementById('incident-filter-toggle-arrow');
+    const filterContent = document.getElementById('incident-filter-content');
+    const statusFilter = document.getElementById('incident-filter-status');
+    const severityFilter = document.getElementById('incident-filter-severity');
+    const falsePositiveFilter = document.getElementById('incident-filter-false-positive');
+    const refreshBtn = document.getElementById('incident-filter-refresh');
+    const refreshBtnIcon = refreshBtn ? refreshBtn.querySelector('i') : null;
+    const defaultRefreshIconClass = refreshBtnIcon ? refreshBtnIcon.className : '';
+
+    cleanupIncidentBackToEventsFloatingButton();
+
+    const setFilterPanelExpanded = (isExpanded) => {
+        if (!filterToggleBtn || !filterContent) return;
+
+        filterContent.classList.toggle('is-collapsed', !isExpanded);
+        filterToggleBtn.classList.toggle('is-expanded', isExpanded);
+        filterToggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+
+        if (filterToggleArrow) {
+            filterToggleArrow.textContent = isExpanded ? '▼' : '▶';
+        }
+    };
+
+    if (filterToggleBtn && filterContent) {
+        const startExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
+        setFilterPanelExpanded(startExpanded);
+
+        filterToggleBtn.onclick = () => {
+            const expanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
+            setFilterPanelExpanded(!expanded);
+        };
+    }
+
+    const setRefreshLoading = (isLoading) => {
+        if (!refreshBtn) return;
+        refreshBtn.disabled = isLoading;
+        if (refreshBtnIcon) {
+            refreshBtnIcon.className = isLoading
+                ? 'fas fa-spinner fa-spin'
+                : defaultRefreshIconClass;
+        }
+    };
+
+    const runLoad = async (options = {}) => {
+        const triggeredByButton = options.triggeredByButton === true;
+        const forceRefresh = options.forceRefresh === true;
+        const t = getSecurityCenterTranslations();
+
+        if (triggeredByButton) {
+            setRefreshLoading(true);
+        }
+
+        try {
+            await loadSecurityIncidents({
+                keepSelected: true,
+                forceRefresh,
+                refreshOverview: true,
+                announceNew: false,
+            });
+
+            if (triggeredByButton) {
+                showNotification(
+                    t.incident_refresh_success || 'Incidents refreshed',
+                    'info'
+                );
+            }
+        } catch (error) {
+            console.error('Incident filter load error:', error);
+            if (error && error.message !== 'Unauthorized') {
+                showNotification(t.incident_load_error || 'Failed to load incidents', 'warning');
+            }
+        } finally {
+            if (triggeredByButton) {
+                setRefreshLoading(false);
+            }
+        }
+    };
+
+    if (statusFilter) {
+        statusFilter.onchange = () => runLoad();
+    }
+    if (severityFilter) {
+        severityFilter.onchange = () => runLoad();
+    }
+    if (falsePositiveFilter) {
+        falsePositiveFilter.onchange = () => runLoad();
+    }
+    if (refreshBtn) {
+        refreshBtn.onclick = () => runLoad({ triggeredByButton: true, forceRefresh: true });
+    }
+
+    setupIncidentBackToEventsFloatingButton();
+}
+
+function setupIncidentTableInteraction() {
+    const incidentsBody = document.getElementById('security-incidents-body');
+    if (!incidentsBody) return;
+
+    incidentsBody.onclick = (event) => {
+        const row = event.target.closest('tr[data-incident-id]');
+        if (!row) return;
+        const incidentId = Number(row.dataset.incidentId);
+
+        const selectedId = getSelectedIncidentId();
+        if (selectedId !== null && incidentId === selectedId) {
+            clearIncidentDetailsPanel({ rerenderIncidents: true });
+            return;
+        }
+
+        openIncidentDetails(incidentId);
+    };
+}
+
+function cleanupIncidentDetailsDismissActions() {
+    clearIncidentDetailsCloseTimer();
+
+    const closeBtn = document.getElementById('incident-details-close-btn');
+    if (closeBtn) {
+        closeBtn.onclick = null;
+    }
+
+    if (state.incidentPanelOutsideClickHandler) {
+        document.removeEventListener('pointerdown', state.incidentPanelOutsideClickHandler);
+        state.incidentPanelOutsideClickHandler = null;
+    }
+
+    if (state.incidentPanelKeydownHandler) {
+        document.removeEventListener('keydown', state.incidentPanelKeydownHandler);
+        state.incidentPanelKeydownHandler = null;
+    }
+}
+
+function setupIncidentDetailsDismissActions() {
+    cleanupIncidentDetailsDismissActions();
+
+    const detailsPanel = document.getElementById('incident-details-panel');
+    const closeBtn = document.getElementById('incident-details-close-btn');
+    if (!detailsPanel) return;
+
+    if (closeBtn) {
+        closeBtn.onclick = () => {
+            clearIncidentDetailsPanel({ rerenderIncidents: true });
+        };
+    }
+
+    const outsideClickHandler = (event) => {
+        const panelOpen = Boolean(
+            isSecurityCenterView()
+            && state.securityActiveTab === 'incidents'
+            && state.selectedIncident
+            && detailsPanel.classList.contains('is-open')
+            && !detailsPanel.classList.contains('hidden')
+        );
+        if (!panelOpen) return;
+
+        const target = event.target;
+        if (target instanceof Element && detailsPanel.contains(target)) {
+            return;
+        }
+        if (target instanceof Element && target.closest('#security-incidents-body tr[data-incident-id]')) {
+            return;
+        }
+
+        clearIncidentDetailsPanel({ rerenderIncidents: true });
+    };
+
+    const keydownHandler = (event) => {
+        if (event.key !== 'Escape') return;
+        if (!isSecurityCenterView()) return;
+        if (state.securityActiveTab !== 'incidents') return;
+        if (!state.selectedIncident) return;
+
+        clearIncidentDetailsPanel({ rerenderIncidents: true });
+    };
+
+    state.incidentPanelOutsideClickHandler = outsideClickHandler;
+    state.incidentPanelKeydownHandler = keydownHandler;
+
+    document.addEventListener('pointerdown', outsideClickHandler);
+    document.addEventListener('keydown', keydownHandler);
+}
+
+function setupIncidentActionHandlers() {
+    const assignBtn = document.getElementById('incident-assign-btn');
+    const investigatingBtn = document.getElementById('incident-mark-investigating-btn');
+    const resolveBtn = document.getElementById('incident-resolve-btn');
+    const closeBtn = document.getElementById('incident-close-btn');
+    const markFalsePositiveBtn = document.getElementById('incident-mark-false-positive-btn');
+    const clearFalsePositiveBtn = document.getElementById('incident-clear-false-positive-btn');
+    const saveNotesBtn = document.getElementById('incident-save-notes-btn');
+    const notesInput = document.getElementById('incident-notes-input');
+    const blockBtn = document.getElementById('incident-block-user-btn');
+    const suspendBtn = document.getElementById('incident-suspend-user-btn');
+    const reactivateBtn = document.getElementById('incident-reactivate-user-btn');
+    const ignoreBtn = document.getElementById('incident-ignore-btn');
+    const actionReasonInput = document.getElementById('incident-action-reason-input');
+    const suspendMinutesInput = document.getElementById('incident-suspend-minutes-input');
+    const t = getSecurityCenterTranslations();
+
+    const resolveSelectedIncidentId = () => {
+        const incidentId = getSelectedIncidentId();
+        if (!Number.isFinite(incidentId) || incidentId <= 0) {
+            showNotification(t.incident_select_first, 'warning');
+            return null;
+        }
+        return incidentId;
+    };
+
+    const runAction = async (executor, successMessage) => {
+        const incidentId = resolveSelectedIncidentId();
+        if (!incidentId) return;
+
+        const buttons = Array.from(document.querySelectorAll('.incident-action-btn'));
+        buttons.forEach((button) => {
+            button.disabled = true;
+        });
+
+        try {
+            await executor(incidentId);
+            showNotification(successMessage, 'success');
+            await loadSecurityIncidents({ keepSelected: true });
+            await openIncidentDetails(incidentId, { silent: true });
+        } catch (error) {
+            console.error('Incident action error:', error);
+        } finally {
+            syncIncidentActionButtons(state.selectedIncident);
+        }
+    };
+
+    const parseActionReason = () => {
+        const reason = String(actionReasonInput && actionReasonInput.value ? actionReasonInput.value : '').trim();
+        if (reason.length < 3) {
+            showNotification(t.incident_action_reason_required || 'Reason is required for this action', 'warning');
+            return null;
+        }
+        return reason;
+    };
+
+    const parseSuspendMinutes = () => {
+        const value = Number(suspendMinutesInput && suspendMinutesInput.value);
+        if (!Number.isInteger(value) || value < 1 || value > 10080) {
+            showNotification(
+                t.incident_action_suspend_minutes_invalid || 'Suspend duration must be between 1 and 10080 minutes',
+                'warning'
+            );
+            return null;
+        }
+        return value;
+    };
+
+    if (assignBtn) {
+        assignBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.post(`/incidents/${incidentId}/assign`, {}),
+                t.incident_action_assign_success
+            );
+        };
+    }
+
+    if (investigatingBtn) {
+        investigatingBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.patch(`/incidents/${incidentId}`, { status: 'INVESTIGATING' }),
+                t.incident_action_status_success
+            );
+        };
+    }
+
+    if (resolveBtn) {
+        resolveBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.patch(`/incidents/${incidentId}`, { status: 'RESOLVED' }),
+                t.incident_action_status_success
+            );
+        };
+    }
+
+    if (closeBtn) {
+        closeBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.patch(`/incidents/${incidentId}`, { status: 'CLOSED' }),
+                t.incident_action_status_success
+            );
+        };
+    }
+
+    if (saveNotesBtn) {
+        saveNotesBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.patch(`/incidents/${incidentId}/notes`, {
+                    notes: notesInput ? notesInput.value : '',
+                    metadata: {
+                        reason: 'manual investigation notes update'
+                    }
+                }),
+                t.incident_notes_saved
+            );
+        };
+    }
+
+    if (markFalsePositiveBtn) {
+        markFalsePositiveBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.patch(`/incidents/${incidentId}/false-positive`, {
+                    is_false_positive: true,
+                    metadata: {
+                        reason: 'marked false positive by analyst'
+                    }
+                }),
+                t.incident_false_positive_marked
+            );
+        };
+    }
+
+    if (clearFalsePositiveBtn) {
+        clearFalsePositiveBtn.onclick = async () => {
+            await runAction(
+                (incidentId) => api.patch(`/incidents/${incidentId}/false-positive`, {
+                    is_false_positive: false,
+                    metadata: {
+                        reason: 'false positive cleared by analyst'
+                    }
+                }),
+                t.incident_false_positive_cleared
+            );
+        };
+    }
+
+    if (blockBtn) {
+        blockBtn.onclick = async () => {
+            const reason = parseActionReason();
+            if (!reason) return;
+
+            await runAction(
+                (incidentId) => api.post(`/incidents/${incidentId}/action`, {
+                    action_type: 'block_user',
+                    metadata: { reason }
+                }),
+                t.incident_action_apply_success
+            );
+        };
+    }
+
+    if (suspendBtn) {
+        suspendBtn.onclick = async () => {
+            const reason = parseActionReason();
+            if (!reason) return;
+
+            const suspensionMinutes = parseSuspendMinutes();
+            if (!suspensionMinutes) return;
+
+            await runAction(
+                (incidentId) => api.post(`/incidents/${incidentId}/action`, {
+                    action_type: 'suspend_user',
+                    metadata: {
+                        reason,
+                        suspension_minutes: suspensionMinutes
+                    }
+                }),
+                t.incident_action_apply_success
+            );
+        };
+    }
+
+    if (reactivateBtn) {
+        reactivateBtn.onclick = async () => {
+            const reason = parseActionReason();
+            if (!reason) return;
+
+            await runAction(
+                (incidentId) => api.post(`/incidents/${incidentId}/action`, {
+                    action_type: 'reactivate_user',
+                    metadata: { reason }
+                }),
+                t.incident_action_reactivate_success
+            );
+        };
+    }
+
+    if (ignoreBtn) {
+        ignoreBtn.onclick = async () => {
+            const reason = parseActionReason();
+            if (!reason) return;
+
+            await runAction(
+                (incidentId) => api.post(`/incidents/${incidentId}/action`, {
+                    action_type: 'ignore',
+                    metadata: { reason }
+                }),
+                t.incident_false_positive_marked
+            );
+        };
+    }
+
+    syncIncidentActionButtons(null);
+}
+
+function buildSecurityExportFilename() {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `security-events-${datePart}_${timePart}.csv`;
+}
+
+function extractDownloadFilenameFromResponse(response) {
+    const disposition = String(response && response.headers ? (response.headers.get('Content-Disposition') || '') : '').trim();
+    if (!disposition) return '';
+
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match && utf8Match[1]) {
+        try {
+            return decodeURIComponent(String(utf8Match[1]).replace(/"/g, '').trim());
+        } catch (_) {
+            // Fall back to plain filename parsing.
+        }
+    }
+
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+    if (plainMatch && plainMatch[1]) {
+        return String(plainMatch[1]).trim();
+    }
+
+    return '';
+}
+
+function downloadBlobAsFile(blob, filename) {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+    }, 0);
+}
+
+function setupSecurityExportAction() {
+    const exportButtons = [
+        document.getElementById('security-export-logs-btn'),
+        document.getElementById('security-events-export-btn')
+    ].filter(Boolean);
+
+    if (exportButtons.length === 0) return;
+
+    exportButtons.forEach((button) => {
+        const icon = button.querySelector('i');
+        if (icon && !icon.dataset.defaultIconClass) {
+            icon.dataset.defaultIconClass = icon.className;
+        }
+    });
+
+    const setLoadingState = (isLoading) => {
+        exportButtons.forEach((button) => {
+            button.disabled = isLoading;
+            button.classList.toggle('is-loading', isLoading);
+
+            const icon = button.querySelector('i');
+            if (!icon) return;
+
+            const defaultClass = icon.dataset.defaultIconClass || 'fas fa-file-arrow-down';
+            icon.className = isLoading ? 'fas fa-spinner fa-spin' : defaultClass;
+        });
+    };
+
+    const runExport = async () => {
+        if (exportButtons.some((button) => button.disabled)) return;
+
+        setLoadingState(true);
+        try {
+            const response = await fetchWithApiRecovery('/security/events/export?limit=5000', {
+                method: 'GET',
+                headers: withAuthHeaders({ Accept: 'text/csv' })
+            });
+
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
+
+            if (!response.ok) {
+                let errorMessage = state.lang === 'ar'
+                    ? 'فشل تصدير سجلات الأمان'
+                    : 'Failed to export security logs';
+                try {
+                    const errorData = await response.json();
+                    if (errorData && errorData.detail) {
+                        errorMessage = String(errorData.detail);
+                    }
+                } catch (_) {
+                    // Keep fallback error text.
+                }
+                throw new Error(errorMessage);
+            }
+
+            const payload = await response.blob();
+            if (!payload || payload.size <= 0) {
+                throw new Error(
+                    state.lang === 'ar'
+                        ? 'لا توجد سجلات متاحة للتصدير'
+                        : 'No logs available to export'
+                );
+            }
+
+            const filename = extractDownloadFilenameFromResponse(response) || buildSecurityExportFilename();
+            downloadBlobAsFile(payload, filename);
+            showNotification(
+                state.lang === 'ar'
+                    ? 'تم تصدير سجلات الأمان بنجاح'
+                    : 'Security logs exported successfully',
+                'success'
+            );
+        } catch (error) {
+            console.error('Security logs export failed:', error);
+            if (error && error.message !== 'Unauthorized') {
+                showNotification(
+                    error.message || (state.lang === 'ar' ? 'فشل تصدير سجلات الأمان' : 'Failed to export security logs'),
+                    'error'
+                );
+            }
+        } finally {
+            setLoadingState(false);
+        }
+    };
+
+    exportButtons.forEach((button) => {
+        button.onclick = runExport;
+    });
 }
 
 function setupSecuritySimulationAction() {
@@ -1000,6 +2847,7 @@ function setupSecuritySimulationAction() {
     const defaultIconClass = icon ? icon.className : '';
 
     button.onclick = async () => {
+        const t = getSecurityCenterTranslations();
         if (button.disabled) return;
 
         button.disabled = true;
@@ -1008,18 +2856,35 @@ function setupSecuritySimulationAction() {
             icon.className = 'fas fa-spinner fa-spin';
         }
         if (label) {
-            label.textContent = i18n[state.lang].security_simulate_running;
+            label.textContent = t.security_simulate_running;
         }
 
         try {
             const payload = await api.post('/security/simulate', {});
             applySecurityStreamPayload(payload);
+            // Pull user-status widgets immediately so block/suspend logs are
+            // visible in the same interaction cycle during demos.
+            await refreshSecurityUserStatusPanel({ animateCounters: false });
 
             const generatedCount = Number(payload && payload.generated_count);
             const suffix = Number.isFinite(generatedCount) && generatedCount > 0
                 ? ` (${generatedCount})`
                 : '';
-            showNotification(`${i18n[state.lang].security_simulate_success}${suffix}`, 'success');
+            const escalationBlocked = Boolean(
+                payload
+                && payload.escalation_applied
+                && String(payload.escalation_result || '').toLowerCase() === 'blocked'
+            );
+
+            if (escalationBlocked) {
+                const targetUserId = Number(payload && payload.target_user_id);
+                const targetSuffix = Number.isFinite(targetUserId) && targetUserId > 0
+                    ? ` (user_id=${targetUserId})`
+                    : '';
+                showNotification(`${t.security_simulate_escalation_blocked}${targetSuffix}`, 'warning');
+            }
+
+            showNotification(`${t.security_simulate_success}${suffix}`, 'success');
         } catch (error) {
             console.error('Security simulation trigger failed:', error);
         } finally {
@@ -1029,7 +2894,7 @@ function setupSecuritySimulationAction() {
                 icon.className = defaultIconClass;
             }
             if (label) {
-                label.textContent = i18n[state.lang].security_simulate_btn;
+                label.textContent = t.security_simulate_btn;
             }
         }
     };
@@ -1037,6 +2902,66 @@ function setupSecuritySimulationAction() {
 
 function isSecurityCenterView(viewName = state.currentView) {
     return viewName === 'securityCenter' || viewName === 'security-center';
+}
+
+function cleanupIncidentBackToEventsFloatingButton() {
+    if (state.incidentBackToEventsScrollHandler && elements.viewContainer) {
+        elements.viewContainer.removeEventListener('scroll', state.incidentBackToEventsScrollHandler);
+    }
+
+    state.incidentBackToEventsScrollHandler = null;
+
+    const button = document.getElementById('incident-back-to-events-btn');
+    if (button) {
+        button.classList.remove('is-visible');
+        button.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function updateIncidentBackToEventsFloatingButtonVisibility() {
+    const button = document.getElementById('incident-back-to-events-btn');
+    if (!button) return;
+
+    const detailsPanel = document.getElementById('incident-details-panel');
+    const detailsVisible = Boolean(
+        detailsPanel
+        && state.selectedIncident
+        && detailsPanel.classList.contains('is-open')
+        && !detailsPanel.classList.contains('hidden')
+    );
+    const containerRect = elements.viewContainer ? elements.viewContainer.getBoundingClientRect() : null;
+    const detailsRect = detailsPanel && typeof detailsPanel.getBoundingClientRect === 'function'
+        ? detailsPanel.getBoundingClientRect()
+        : null;
+    const shouldShow = isSecurityCenterView()
+        && state.securityActiveTab === 'incidents'
+        && detailsVisible
+        && containerRect
+        && detailsRect
+        && detailsRect.bottom > containerRect.top
+        && detailsRect.top < containerRect.bottom;
+
+    button.classList.toggle('is-visible', shouldShow);
+    button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+}
+
+function setupIncidentBackToEventsFloatingButton() {
+    cleanupIncidentBackToEventsFloatingButton();
+
+    const button = document.getElementById('incident-back-to-events-btn');
+    if (!button || !elements.viewContainer) return;
+
+    const handler = () => {
+        updateIncidentBackToEventsFloatingButtonVisibility();
+    };
+
+    state.incidentBackToEventsScrollHandler = handler;
+    elements.viewContainer.addEventListener('scroll', handler, { passive: true });
+    button.onclick = () => {
+        setSecurityActiveTab('events', { scrollIntoView: true });
+    };
+
+    updateIncidentBackToEventsFloatingButtonVisibility();
 }
 
 // --- View Rendering ---
@@ -1084,12 +3009,13 @@ const views = {
     async securityCenter() {
         renderTemplate('security-center-template');
         showLoader();
+        const tSecurity = getSecurityCenterTranslations();
 
         try {
             const securityData = await fetchSecurityDashboardData(20).catch((error) => {
                 console.error('Security Center Data Error:', error);
                 if (error.message !== 'Unauthorized') {
-                    showNotification(i18n[state.lang].security_load_error, 'warning');
+                    showNotification(tSecurity.security_load_error, 'warning');
                 }
                 return {
                     stats: normalizeSecurityStats({}),
@@ -1100,8 +3026,38 @@ const views = {
             renderSecurityCounters(securityData.stats, true);
             renderSecurityEventsTable(securityData.events);
             renderSecurityLiveFeed(securityData.events);
+            markSecurityEventsFeedUpdated();
+            await refreshSecurityUserStatusPanel({ animateCounters: true }).catch((error) => {
+                console.error('Security user status load error:', error);
+                if (error.message !== 'Unauthorized') {
+                    showNotification(tSecurity.security_load_error, 'warning');
+                }
+            });
+            setupSecurityCenterTabs();
+            setupIncidentFilters();
+            setupIncidentTableInteraction();
+            setupIncidentDetailsDismissActions();
+            setupIncidentActionHandlers();
+            state.selectedIncident = null;
+            clearIncidentDetailsPanel({ rerenderIncidents: false });
+            await loadSecurityIncidents({
+                keepSelected: false,
+                refreshOverview: true,
+                animateIncidentCounters: true,
+                announceNew: false,
+            }).catch((error) => {
+                console.error('Incident list load error:', error);
+                if (error.message !== 'Unauthorized') {
+                    showNotification(tSecurity.incident_load_error, 'warning');
+                }
+            });
+            setSecurityActiveTab(state.securityActiveTab);
+            startIncidentOverviewMonitor();
             startSecurityRealtimeStream();
             setupSecuritySimulationAction();
+            setupSecurityExportAction();
+            setupSecurityEventsRefreshAction();
+            startSecurityEventsRefreshSystem();
             applyTranslations();
         } catch (error) {
             console.error('Security Center Load Error:', error);
@@ -1181,14 +3137,22 @@ const views = {
 
         // Enable/disable send button based on input
         chatInput.oninput = () => {
-            sendBtn.disabled = !chatInput.value.trim();
+            setChatRequestUiState(state.chatRequestInProgress);
             autoResizeTextarea(chatInput);
         };
 
-        sendBtn.onclick = handleChatSubmit;
+        sendBtn.onclick = () => {
+            if (state.chatRequestInProgress) {
+                cancelCurrentChatRequest();
+                return;
+            }
+
+            handleChatSubmit();
+        };
         chatInput.onkeydown = (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                if (state.chatRequestInProgress) return;
                 if (chatInput.value.trim()) handleChatSubmit();
             }
         };
@@ -1212,11 +3176,15 @@ const views = {
         // Suggestion chips handler
         document.querySelectorAll('.suggestion-chip').forEach(chip => {
             chip.onclick = () => {
+                if (state.chatRequestInProgress) return;
                 chatInput.value = chip.textContent;
                 chatInput.oninput();
                 chatInput.focus();
             };
         });
+
+        setChatRequestUiState(state.chatRequestInProgress);
+        autoResizeTextarea(chatInput);
 
         applyTranslations();
     },
@@ -1566,11 +3534,21 @@ const views = {
 
 // --- Helpers ---
 
+function resetViewContainerScroll() {
+    if (!elements.viewContainer) return;
+    elements.viewContainer.scrollTop = 0;
+
+    if (typeof elements.viewContainer.scrollTo === 'function') {
+        elements.viewContainer.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+}
+
 function renderTemplate(templateId) {
     const template = document.getElementById(templateId);
     const clone = template.content.cloneNode(true);
     elements.viewContainer.innerHTML = '';
     elements.viewContainer.appendChild(clone);
+    resetViewContainerScroll();
 }
 
 function showLoader() {
@@ -1714,6 +3692,59 @@ function startDocPolling(projectId, docs) {
     }, 3000);
 }
 
+function clearIncidentOverviewRefreshTimer() {
+    if (state.incidentOverviewRefreshTimer) {
+        clearTimeout(state.incidentOverviewRefreshTimer);
+        state.incidentOverviewRefreshTimer = null;
+    }
+}
+
+function stopIncidentOverviewMonitor() {
+    clearIncidentOverviewRefreshTimer();
+
+    if (state.incidentOverviewTimer) {
+        clearInterval(state.incidentOverviewTimer);
+        state.incidentOverviewTimer = null;
+    }
+}
+
+function scheduleIncidentOverviewRefresh() {
+    if (!isSecurityCenterView()) return;
+    if (state.incidentOverviewRefreshTimer) return;
+
+    state.incidentOverviewRefreshTimer = setTimeout(async () => {
+        state.incidentOverviewRefreshTimer = null;
+        try {
+            await refreshIncidentOverview({
+                announceNew: true,
+                animateCounters: false,
+            });
+        } catch (error) {
+            if (error && error.message !== 'Unauthorized') {
+                console.error('Incident overview stream sync failed:', error);
+            }
+        }
+    }, INCIDENT_OVERVIEW_STREAM_SYNC_DELAY_MS);
+}
+
+function startIncidentOverviewMonitor() {
+    stopIncidentOverviewMonitor();
+    if (!isSecurityCenterView()) return;
+
+    state.incidentOverviewTimer = setInterval(async () => {
+        try {
+            await refreshIncidentOverview({
+                announceNew: true,
+                animateCounters: false,
+            });
+        } catch (error) {
+            if (error && error.message !== 'Unauthorized') {
+                console.error('Incident overview poll failed:', error);
+            }
+        }
+    }, INCIDENT_OVERVIEW_POLL_MS);
+}
+
 function clearSecurityStreamReconnectTimer() {
     if (state.securityStreamReconnectTimer) {
         clearTimeout(state.securityStreamReconnectTimer);
@@ -1721,8 +3752,16 @@ function clearSecurityStreamReconnectTimer() {
     }
 }
 
+function clearSecurityUsersRefreshTimer() {
+    if (state.securityUsersRefreshTimer) {
+        clearTimeout(state.securityUsersRefreshTimer);
+        state.securityUsersRefreshTimer = null;
+    }
+}
+
 function stopSecurityRealtimeStream() {
     clearSecurityStreamReconnectTimer();
+    clearSecurityUsersRefreshTimer();
 
     if (state.securityStreamAbortController) {
         state.securityStreamAbortController.abort();
@@ -1740,13 +3779,32 @@ function scheduleSecurityStreamReconnect() {
     }, SECURITY_STREAM_RECONNECT_MS);
 }
 
+function scheduleSecurityUsersRefresh() {
+    if (!isSecurityCenterView()) return;
+    if (state.securityUsersRefreshTimer) return;
+
+    state.securityUsersRefreshTimer = setTimeout(async () => {
+        state.securityUsersRefreshTimer = null;
+        try {
+            await refreshSecurityUserStatusPanel({ animateCounters: false });
+        } catch (error) {
+            if (error && error.message !== 'Unauthorized') {
+                console.error('Security user status refresh failed:', error);
+            }
+        }
+    }, SECURITY_USERS_REFRESH_DELAY_MS);
+}
+
 function applySecurityStreamPayload(payload) {
     if (!payload || typeof payload !== 'object') return;
 
     const events = Array.isArray(payload.events) ? payload.events : [];
     renderSecurityCounters(payload.stats || {}, false);
-    renderSecurityEventsTable(events);
+    renderSecurityEventsTable(events, { preserveScroll: true });
     renderSecurityLiveFeed(events);
+    scheduleIncidentOverviewRefresh();
+    scheduleSecurityUsersRefresh();
+    markSecurityEventsFeedUpdated();
 }
 
 async function startSecurityRealtimeStream() {
@@ -1864,10 +3922,20 @@ function showNotification(message, type = 'info') {
 
 function applyTranslations() {
     const t = i18n[state.lang];
+    const forceSecurityEnglish = isSecurityCenterView();
+    const tSecurity = i18n.en;
+
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         if (t[key]) el.textContent = t[key];
     });
+
+    if (forceSecurityEnglish) {
+        document.querySelectorAll('.security-center-view [data-i18n]').forEach(el => {
+            const key = el.dataset.i18n;
+            if (tSecurity[key]) el.textContent = tSecurity[key];
+        });
+    }
 
     // Update placeholders
     if (document.getElementById('new-project-name')) {
@@ -1879,8 +3947,8 @@ function applyTranslations() {
     elements.langToggle.querySelector('.lang-code').textContent = state.lang === 'ar' ? 'EN' : 'AR';
 
     // Update Dir
-    document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.lang = state.lang;
+    document.documentElement.dir = forceSecurityEnglish ? 'ltr' : (state.lang === 'ar' ? 'rtl' : 'ltr');
+    document.documentElement.lang = forceSecurityEnglish ? 'en' : state.lang;
 
     // Update search placeholder
     const searchInput = document.querySelector('.search-bar input');
@@ -1892,11 +3960,23 @@ function applyTranslations() {
         logoutBtn.setAttribute('aria-label', t.logout_btn);
     }
 
+    const incidentNotesInput = document.getElementById('incident-notes-input');
+    if (incidentNotesInput) {
+        const notesPlaceholderText = forceSecurityEnglish
+            ? (tSecurity.incident_notes_placeholder || 'Add investigation notes...')
+            : (t.incident_notes_placeholder || 'Add investigation notes...');
+        incidentNotesInput.placeholder = notesPlaceholderText;
+    }
+
     // Update back button icon direction
     const backBtn = document.getElementById('back-to-projects');
     if (backBtn) {
         const icon = backBtn.querySelector('i');
         if (icon) icon.className = state.lang === 'ar' ? 'fas fa-arrow-right' : 'fas fa-arrow-left';
+    }
+
+    if (state.currentView === 'chat') {
+        setChatRequestUiState(state.chatRequestInProgress);
     }
 }
 
@@ -1938,7 +4018,19 @@ async function switchView(viewName, params = null) {
         clearInterval(state.docPoller);
         state.docPoller = null;
     }
+
+    if (state.currentView === 'chat' && viewName !== 'chat') {
+        cancelCurrentChatRequest({ silent: true });
+    }
+
+    if (isSecurityCenterView(state.currentView) && !isSecurityCenterView(viewName)) {
+        cleanupIncidentBackToEventsFloatingButton();
+        cleanupIncidentDetailsDismissActions();
+        stopSecurityEventsRefreshSystem();
+    }
+
     stopSecurityRealtimeStream();
+    stopIncidentOverviewMonitor();
     state.currentView = viewName;
 
     // Update Nav
@@ -2017,11 +4109,87 @@ async function handleDeleteDoc(id) {
     }
 }
 
+function isAbortError(error) {
+    if (!error) return false;
+    if (error.name === 'AbortError') return true;
+    const message = String(error.message || '').toLowerCase();
+    return message.includes('aborted') || message.includes('aborterror');
+}
+
+function setChatRequestUiState(isInProgress) {
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const statusEl = document.getElementById('chat-request-status');
+    const clearBtn = document.getElementById('clear-chat-btn');
+    const sendIcon = sendBtn ? sendBtn.querySelector('i') : null;
+
+    if (input) {
+        input.disabled = Boolean(isInProgress);
+    }
+
+    if (sendBtn && input) {
+        sendBtn.disabled = isInProgress ? false : !input.value.trim();
+        sendBtn.classList.toggle('is-stop', Boolean(isInProgress));
+
+        if (sendIcon) {
+            sendIcon.className = isInProgress ? 'fas fa-stop' : 'fas fa-arrow-up';
+        }
+
+        const sendLabel = state.lang === 'ar' ? 'إرسال' : 'Send';
+        const actionLabel = isInProgress ? i18n[state.lang].chat_stop_response : sendLabel;
+        sendBtn.title = actionLabel;
+        sendBtn.setAttribute('aria-label', actionLabel);
+    }
+
+    if (statusEl) {
+        statusEl.textContent = isInProgress ? i18n[state.lang].chat_responding_status : '';
+        statusEl.classList.toggle('is-active', Boolean(isInProgress));
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = Boolean(isInProgress);
+    }
+}
+
+function cancelCurrentChatRequest(options = {}) {
+    const { silent = false } = options;
+
+    if (!state.chatAbortController) return;
+
+    state.chatAbortController.abort();
+    state.chatAbortController = null;
+    state.chatRequestInProgress = false;
+    setChatRequestUiState(false);
+
+    const thinkingId = state.chatThinkingMessageId;
+    if (thinkingId) {
+        const msgDiv = document.getElementById(`msg-${thinkingId}`);
+        if (msgDiv) {
+            const indicator = msgDiv.querySelector('.typing-indicator-pro');
+            if (indicator) indicator.remove();
+
+            const textEl = msgDiv.querySelector('.msg-text');
+            if (textEl && !String(textEl.textContent || '').trim()) {
+                const stoppedText = i18n[state.lang].chat_response_stopped;
+                textEl.textContent = stoppedText;
+                textEl.dir = detectTextDirection(stoppedText);
+            }
+        }
+        state.chatThinkingMessageId = null;
+    }
+
+    if (!silent) {
+        showNotification(i18n[state.lang].chat_response_stopped, 'info');
+    }
+}
+
 async function handleChatSubmit() {
     const input = document.getElementById('chat-input');
     const projectSelect = document.getElementById('chat-project-select');
     const langSelect = document.getElementById('chat-lang');
-    const sendBtn = document.getElementById('send-btn');
+    if (!input || !projectSelect || !langSelect) return;
+
+    if (state.chatRequestInProgress) return;
 
     const query = input.value.trim();
     const projectId = projectSelect.value;
@@ -2036,9 +4204,14 @@ async function handleChatSubmit() {
     addChatMessage('user', query);
     input.value = '';
     input.style.height = 'auto';
-    sendBtn.disabled = true;
+
+    const controller = new AbortController();
+    state.chatAbortController = controller;
+    state.chatRequestInProgress = true;
+    setChatRequestUiState(true);
 
     const thinkingId = addChatMessage('bot', '', true);
+    state.chatThinkingMessageId = thinkingId;
 
     try {
         const payload = { query, language };
@@ -2046,15 +4219,146 @@ async function handleChatSubmit() {
             payload.top_k = state.retrievalTopK;
         }
 
-        const result = await api.post(`/projects/${projectId}/query`, payload);
-        const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-        if (ind) ind.remove();
-        finalizeBotMessage(thinkingId, result.answer, result.sources);
+        // ── Stream via SSE (fetch + ReadableStream) ──
+        const response = await fetchWithApiRecovery(`/projects/${projectId}/query/stream`, {
+            method: 'POST',
+            headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
+
+        if (response.status === 401) {
+            clearAuthAndRedirect('expired');
+            throw new Error('Unauthorized');
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullAnswer = '';
+        let sources = null;
+
+        // Remove typing indicator as soon as first token arrives
+        let indicatorRemoved = false;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const dataStr = line.slice(6).trim();
+                if (dataStr === '[DONE]') continue;
+
+                try {
+                    const evt = JSON.parse(dataStr);
+
+                    if (evt.type === 'sources') {
+                        sources = evt.sources;
+                    } else if (evt.type === 'token') {
+                        if (!indicatorRemoved) {
+                            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+                            if (ind) ind.remove();
+                            indicatorRemoved = true;
+                        }
+                        fullAnswer += evt.token;
+                        // Live-render the accumulated text
+                        const textEl = document.querySelector(`#msg-${thinkingId} .msg-text`);
+                        if (textEl) {
+                            textEl.classList.add('streaming');
+                            textEl.innerHTML = formatAnswerHtml(fullAnswer) || escapeHtml(fullAnswer);
+                            textEl.dir = detectTextDirection(fullAnswer);
+                        }
+                        // Auto-scroll
+                        const container = document.getElementById('chat-messages');
+                        container.scrollTop = container.scrollHeight;
+                    } else if (evt.type === 'error') {
+                        fullAnswer = evt.message || i18n[state.lang].error_generic;
+                    }
+                } catch (_) { /* skip malformed JSON */ }
+            }
+        }
+
+        // Finalize: attach sources + copy button
+        finalizeBotMessage(thinkingId, fullAnswer, sources);
+        state.chatThinkingMessageId = null;
 
     } catch (error) {
-        const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-        if (ind) ind.remove();
-        finalizeBotMessage(thinkingId, i18n[state.lang].error_generic, null);
+        if (error && error.message === 'Unauthorized') {
+            return;
+        }
+
+        if (isAbortError(error) || controller.signal.aborted) {
+            return;
+        }
+
+        // Fallback: try non-streaming endpoint
+        console.warn('Stream failed, falling back to non-streaming:', error.message);
+        try {
+            const payload = { query, language };
+            if (Number.isInteger(state.retrievalTopK)) {
+                payload.top_k = state.retrievalTopK;
+            }
+
+            const response = await fetchWithApiRecovery(`/projects/${projectId}/query`, {
+                method: 'POST',
+                headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+
+            if (response.status === 401) {
+                clearAuthAndRedirect('expired');
+                throw new Error('Unauthorized');
+            }
+
+            if (!response.ok) {
+                let errorData = {};
+                try {
+                    errorData = await response.json();
+                } catch (_) {
+                    errorData = {};
+                }
+                throw new Error(errorData.detail || `HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            // Remove indicator
+            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+            if (ind) ind.remove();
+            finalizeBotMessage(thinkingId, result.answer, result.sources);
+            state.chatThinkingMessageId = null;
+        } catch (fallbackErr) {
+            if (fallbackErr && fallbackErr.message === 'Unauthorized') {
+                return;
+            }
+
+            if (isAbortError(fallbackErr) || controller.signal.aborted) {
+                return;
+            }
+
+            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+            if (ind) ind.remove();
+            finalizeBotMessage(thinkingId, i18n[state.lang].error_generic, null);
+            state.chatThinkingMessageId = null;
+        }
+    } finally {
+        if (state.chatAbortController === controller) {
+            state.chatAbortController = null;
+        }
+        state.chatRequestInProgress = false;
+        setChatRequestUiState(false);
+        if (state.chatThinkingMessageId === thinkingId) {
+            state.chatThinkingMessageId = null;
+        }
     }
 }
 

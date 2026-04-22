@@ -4,7 +4,7 @@ API endpoints for document management.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -30,6 +30,8 @@ from backend.utils.task_tracking import (
 
 
 logger = logging.getLogger(__name__)
+from backend.services.auth_service import AuthService
+from backend.services.incident_management_service import IncidentManagementService
 
 # SECURITY RULE: derive ownership from JWT only, never from request payload.
 router = APIRouter(tags=["Documents"], dependencies=[Depends(get_current_db_user)])
@@ -171,6 +173,21 @@ async def _ensure_owned_document(
     return document
 
 
+def _is_malicious_upload_error(error_message: str) -> bool:
+    normalized = str(error_message or "").strip().lower()
+    if not normalized:
+        return False
+
+    suspicious_patterns = (
+        "blocked file extension",
+        "invalid content type",
+        "does not match",
+        "invalid docx",
+        "binary content",
+    )
+    return any(pattern in normalized for pattern in suspicious_patterns)
+
+
 # Routes
 @router.post("/projects/{project_id}/documents", response_model=AssetResponse, status_code=201)
 async def upload_document(
@@ -181,6 +198,8 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     document_controller: DocumentController = Depends(DocumentController),
     project_controller: ProjectController = Depends(ProjectController),
+    auth_service: AuthService = Depends(AuthService),
+    incident_management_service: IncidentManagementService = Depends(IncidentManagementService),
 ):
     """
     Upload document to project.
@@ -247,6 +266,21 @@ async def upload_document(
     except ValueError as e:
         if str(e) == "Forbidden":
             raise HTTPException(status_code=403, detail="Forbidden")
+
+        if _is_malicious_upload_error(str(e)):
+            await incident_management_service.block_user(
+                current_user.id,
+                reason=f"malicious_upload_detected:{str(e)}",
+                actor="system",
+                db=db,
+                auth_service=auth_service,
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account blocked due to security violation",
+            )
+
         raise HTTPException(status_code=400, detail="Invalid document upload request")
     except Exception:
         logger.exception("Unexpected error while uploading document")

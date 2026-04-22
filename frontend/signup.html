@@ -15,7 +15,7 @@
     <main class="auth-shell">
         <section class="auth-brand">
             <a class="brand-logo" href="login.html">
-                <i class="fas fa-brain-circuit"></i>
+                <img src="favicon.svg" alt="RAGMind" class="brand-icon">
                 <span>RAGMind</span>
             </a>
             <h1>Create your secure workspace</h1>
@@ -104,7 +104,10 @@
             };
 
             function normalizeBaseUrl(url) {
-                return String(url || "").trim().replace(/\/+$/, "");
+                return String(url || "")
+                    .trim()
+                    .replace(/\^+$/, "")
+                    .replace(/\/+$/, "");
             }
 
             let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://52.188.226.80:8000";
@@ -366,7 +369,8 @@
 
                     setMessage("Account created successfully. Redirecting to login...", "success");
                     setTimeout(function () {
-                        window.location.href = "login.html";
+                        const cacheBust = Date.now().toString();
+                        window.location.href = `login.html?api=${encodeURIComponent(apiBaseUrl)}&cb=${cacheBust}`;
                     }, 1200);
                 } catch (error) {
                     setMessage(error.message || "Signup failed. Please try again.", "error");

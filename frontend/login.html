@@ -15,7 +15,7 @@
     <main class="auth-shell">
         <section class="auth-brand">
             <a class="brand-logo" href="login.html">
-                <i class="fas fa-brain-circuit"></i>
+                <img src="favicon.svg" alt="RAGMind" class="brand-icon">
                 <span>RAGMind</span>
             </a>
             <h1>Secure knowledge assistant for your team</h1>
@@ -70,7 +70,10 @@
             const apiHint = document.getElementById("api-hint");
 
             function normalizeBaseUrl(url) {
-                return String(url || "").trim().replace(/\/+$/, "");
+                return String(url || "")
+                    .trim()
+                    .replace(/\^+$/, "")
+                    .replace(/\/+$/, "");
             }
 
             let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://52.188.226.80:8000";
@@ -153,6 +156,133 @@
             function showError(message) {
                 errorMessage.textContent = message;
                 errorMessage.classList.add("visible");
+            }
+
+            function normalizeErrorText(value) {
+                if (typeof value === "string") {
+                    return value.trim();
+                }
+                if (value && typeof value === "object") {
+                    if (typeof value.message === "string") {
+                        return value.message.trim();
+                    }
+                    if (typeof value.detail === "string") {
+                        return value.detail.trim();
+                    }
+                }
+                return "";
+            }
+
+            function formatRetryDuration(totalSeconds) {
+                const safeSeconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
+                if (safeSeconds <= 0) {
+                    return "a short time";
+                }
+
+                const minutes = Math.floor(safeSeconds / 60);
+                const seconds = safeSeconds % 60;
+
+                if (minutes === 0) {
+                    return `${seconds} second${seconds === 1 ? "" : "s"}`;
+                }
+
+                if (seconds === 0) {
+                    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+                }
+
+                return `${minutes} minute${minutes === 1 ? "" : "s"} ${seconds} second${seconds === 1 ? "" : "s"}`;
+            }
+
+            function extractRetryAfterSeconds(payload, detailText) {
+                if (payload && typeof payload.retry_after_seconds === "number") {
+                    return payload.retry_after_seconds;
+                }
+
+                const secondsMatch = detailText.match(/(\d+)\s*seconds?/i);
+                if (secondsMatch) {
+                    return Number(secondsMatch[1]);
+                }
+
+                const minutesMatch = detailText.match(/(\d+)\s*minutes?/i);
+                if (minutesMatch) {
+                    return Number(minutesMatch[1]) * 60;
+                }
+
+                return 0;
+            }
+
+            function extractSuspendedUntil(payload, detailText) {
+                const payloadTimestamp = payload && typeof payload.suspended_until === "string"
+                    ? payload.suspended_until.trim()
+                    : "";
+                if (payloadTimestamp) {
+                    return payloadTimestamp;
+                }
+
+                const detailMatch = detailText.match(/suspended(?:\s+until)?\s+([0-9T:+\-.Z]+)/i);
+                if (!detailMatch) {
+                    return "";
+                }
+
+                return String(detailMatch[1] || "").replace(/[.,;]+$/, "").trim();
+            }
+
+            function formatTimestampForDisplay(rawTimestamp) {
+                const parsed = new Date(rawTimestamp);
+                if (Number.isNaN(parsed.getTime())) {
+                    return rawTimestamp;
+                }
+
+                return `${parsed.toLocaleString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false
+                })} (local time)`;
+            }
+
+            function formatLoginErrorMessage(statusCode, payload) {
+                const detailText = normalizeErrorText(payload && payload.detail ? payload.detail : payload);
+
+                if (statusCode === 429) {
+                    const retrySeconds = extractRetryAfterSeconds(payload || {}, detailText);
+                    return `Too many failed login attempts. Please try again in ${formatRetryDuration(retrySeconds)}.`;
+                }
+
+                if (statusCode === 403) {
+                    const lowered = detailText.toLowerCase();
+                    const suspendedUntil = extractSuspendedUntil(payload || {}, detailText);
+
+                    if (lowered.includes("suspend")) {
+                        if (suspendedUntil) {
+                            return `Your account is suspended until ${formatTimestampForDisplay(suspendedUntil)}. Please try again after this time.`;
+                        }
+                        const suspensionRetrySeconds = extractRetryAfterSeconds(payload || {}, detailText);
+                        if (suspensionRetrySeconds > 0) {
+                            return `Your account is temporarily suspended. Please try again in ${formatRetryDuration(suspensionRetrySeconds)}.`;
+                        }
+                        return "Your account is temporarily suspended. Please contact support if this was unexpected.";
+                    }
+
+                    if (lowered.includes("block")) {
+                        return "Your account is blocked. Please contact support to restore access.";
+                    }
+
+                    return detailText || "Your account access is restricted. Please contact support.";
+                }
+
+                if (statusCode === 401) {
+                    return "Invalid username or password.";
+                }
+
+                if (statusCode >= 500) {
+                    return "Login is temporarily unavailable. Please try again in a moment.";
+                }
+
+                return detailText || "Login failed. Please try again.";
             }
 
             function clearError() {
@@ -242,7 +372,7 @@
                     }
 
                     if (!response.ok) {
-                        const message = payload && payload.detail ? payload.detail : "Login failed. Please try again.";
+                        const message = formatLoginErrorMessage(response.status, payload || {});
                         throw new Error(message);
                     }
 
@@ -251,7 +381,8 @@
                     }
 
                     localStorage.setItem("access_token", payload.access_token);
-                    window.location.href = "index.html";
+                    const cacheBust = Date.now().toString();
+                    window.location.href = `index.html?api=${encodeURIComponent(apiBaseUrl)}&cb=${cacheBust}`;
                 } catch (error) {
                     showError(error.message || "Login failed. Please try again.");
                 } finally {

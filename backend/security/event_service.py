@@ -11,6 +11,7 @@ from backend.security.security_event import (
     SecurityEventType,
     SecuritySeverity,
 )
+from backend.services.incident_service import incident_service
 
 
 _MAX_EVENTS = 5000
@@ -88,6 +89,9 @@ def log_event(event_data: SecurityEventCreate | Dict[str, Any]) -> SecurityEvent
     with _EVENTS_LOCK:
         _EVENTS.append(event)
 
+    # Detection -> incident automation for actionable abuse events.
+    incident_service.trigger_auto_creation(event)
+
     return event
 
 
@@ -100,7 +104,7 @@ def list_events(
     """Return recent security events (most recent first)."""
     normalized_type = _normalize_event_type(event_type) if event_type else None
     normalized_severity = _normalize_severity(severity) if severity else None
-    safe_limit = max(1, min(int(limit or 200), 1000))
+    safe_limit = max(1, min(int(limit or 200), _MAX_EVENTS))
 
     with _EVENTS_LOCK:
         items: Iterable[SecurityEvent] = reversed(_EVENTS)

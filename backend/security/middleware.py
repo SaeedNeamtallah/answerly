@@ -1,11 +1,13 @@
 """Security middleware for API rate limiting."""
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 import logging
 import re
 from threading import Lock
 from typing import Optional, Pattern
+import time
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -34,6 +36,9 @@ class EndpointRateRule:
 
 class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
     """Apply configurable, endpoint-focused throttling for abuse-sensitive actions."""
+
+    _RATE_LIMIT_ABUSE_THRESHOLD = 3
+    _RATE_LIMIT_ABUSE_WINDOW_SECONDS = 300
 
     def __init__(self, app):
         super().__init__(app)
@@ -109,6 +114,8 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
         ]
         self._in_flight: dict[str, int] = {}
         self._in_flight_lock = Lock()
+        self._rate_limit_violation_events: dict[str, deque[float]] = {}
+        self._rate_limit_violation_lock = Lock()
 
     @staticmethod
     def _client_ip(request: Request) -> str:
@@ -135,6 +142,112 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
                     # Keep throttling functional even for invalid/malformed tokens.
                     logger.debug("Could not derive rate-limit identity from bearer token", exc_info=True)
         return f"ip:{fallback_ip}"
+
+    @staticmethod
+    def _bearer_token(request: Request) -> Optional[str]:
+        auth_header = str(request.headers.get("authorization") or "").strip()
+        if not auth_header.lower().startswith("bearer "):
+            return None
+
+        token = auth_header.split(" ", 1)[1].strip()
+        return token or None
+
+    @staticmethod
+    def _normalize_account_status(value: object) -> str:
+        normalized = str(value or "").strip().upper()
+        if normalized.startswith("USERACCOUNTSTATUS."):
+            normalized = normalized.split(".", 1)[1]
+        return normalized
+
+    def _register_rate_limit_violation(self, identity_key: str) -> tuple[int, bool]:
+        now = time.monotonic()
+        with self._rate_limit_violation_lock:
+            bucket = self._rate_limit_violation_events.setdefault(identity_key, deque())
+            cutoff = now - self._RATE_LIMIT_ABUSE_WINDOW_SECONDS
+
+            while bucket and bucket[0] < cutoff:
+                bucket.popleft()
+
+            previous_count = len(bucket)
+            bucket.append(now)
+            current_count = len(bucket)
+            threshold_crossed = (
+                previous_count < self._RATE_LIMIT_ABUSE_THRESHOLD <= current_count
+            )
+
+        return current_count, threshold_crossed
+
+    async def _apply_rate_limit_abuse_policy(
+        self,
+        *,
+        request: Request,
+        client_key: str,
+        rule_name: str,
+    ) -> None:
+        token = self._bearer_token(request)
+        username: Optional[str] = None
+
+        if token:
+            try:
+                from backend.security.jwt_utils import decode_jwt_access_token
+
+                payload = decode_jwt_access_token(token)
+                username = str(payload.get("sub") or "").strip().lower() or None
+            except Exception:
+                username = None
+
+        identity_key = f"user:{username}" if username else f"ip:{client_key}"
+        violation_count, threshold_crossed = self._register_rate_limit_violation(identity_key)
+        if not threshold_crossed:
+            return
+
+        if not username:
+            return
+
+        try:
+            from sqlalchemy import func, select
+
+            from backend.database.connection import async_session_maker
+            from backend.database.models import User, UserAccountStatus
+            from backend.services.auth_service import AuthService
+            from backend.services.incident_management_service import IncidentManagementService
+
+            async with async_session_maker() as session:
+                user_stmt = (
+                    select(User)
+                    .where(func.lower(User.username) == username)
+                    .order_by(User.id.asc())
+                    .limit(1)
+                )
+                user_result = await session.execute(user_stmt)
+                user = user_result.scalar_one_or_none()
+                if user is None:
+                    return
+
+                current_status = self._normalize_account_status(getattr(user, "status", None))
+                if current_status in {
+                    UserAccountStatus.BLOCKED.value,
+                    UserAccountStatus.SUSPENDED.value,
+                }:
+                    return
+
+                incident_management_service = IncidentManagementService()
+                auth_service = AuthService()
+                await incident_management_service.suspend_user(
+                    user.id,
+                    reason=(
+                        f"rate_limit_abuse_repeated_{violation_count}_violations_"
+                        f"rule_{rule_name}"
+                    ),
+                    duration_minutes=int(settings.security_user_suspension_default_minutes),
+                    actor="system",
+                    db=session,
+                    auth_service=auth_service,
+                )
+                await session.commit()
+        except Exception:
+            # Keep throttling best-effort even if suspension policy persistence fails.
+            return
 
     def _is_exempt(self, path: str) -> bool:
         return any(path.startswith(prefix) for prefix in self._exempt_paths)
@@ -180,16 +293,10 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _event_type_for_rule(rule_name: str) -> str:
-        if rule_name == "auth_login":
-            return SecurityEventType.BRUTE_FORCE
         return SecurityEventType.RATE_LIMITED
 
     @staticmethod
     def _severity_for_rule(rule_name: str) -> str:
-        if rule_name == "auth_login":
-            return SecuritySeverity.HIGH
-        if rule_name == "upload":
-            return SecuritySeverity.MEDIUM
         return SecuritySeverity.MEDIUM
 
     def _log_rate_limit_event(
@@ -245,6 +352,7 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_ip = self._client_ip(request)
+        client_key = client_ip
         identity_key = self._identity_key(request, client_ip)
         matched_rules = [rule for rule in self._rules if self._matches(rule, method, path)]
 
@@ -261,6 +369,11 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
                     detail=detail,
                     retry_after=global_result.reset_seconds,
                     event_type=SecurityEventType.RATE_LIMITED,
+                )
+                await self._apply_rate_limit_abuse_policy(
+                    request=request,
+                    client_key=client_key,
+                    rule_name="global",
                 )
                 return self._rate_limit_response(
                     detail=detail,
@@ -280,6 +393,11 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
                     rule_name=rule.name,
                     detail=detail,
                     retry_after=rule_result.reset_seconds,
+                )
+                await self._apply_rate_limit_abuse_policy(
+                    request=request,
+                    client_key=client_key,
+                    rule_name=rule.name,
                 )
                 return self._rate_limit_response(
                     detail=detail,
@@ -304,6 +422,11 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
                     rule_name=rule.name,
                     detail=detail,
                     retry_after=1,
+                )
+                await self._apply_rate_limit_abuse_policy(
+                    request=request,
+                    client_key=client_key,
+                    rule_name=rule.name,
                 )
                 return self._rate_limit_response(
                     detail=detail,

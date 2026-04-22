@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from backend.database import init_db, close_db
-from backend.routes import projects, documents, query, health, stats, bot_config, app_config, auth, security
+from backend.routes import projects, documents, query, health, stats, bot_config, app_config, auth, security, incidents, admin_users
 
 
 @asynccontextmanager
@@ -97,6 +97,8 @@ app.include_router(documents.router)
 app.include_router(query.router)
 app.include_router(stats.router)
 app.include_router(security.router)
+app.include_router(incidents.router)
+app.include_router(admin_users.router)
 app.include_router(bot_config.router)
 app.include_router(app_config.router)
 app.include_router(auth.router)

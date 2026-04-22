@@ -84,14 +84,15 @@ body.auth-page::before {
     text-decoration: none;
 }
 
-.brand-logo i {
+.brand-logo .brand-icon {
     width: 36px;
     height: 36px;
     border-radius: 11px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
     background: rgba(99, 102, 241, 0.16);
+    padding: 5px;
+    box-sizing: border-box;
+    object-fit: contain;
 }
 
 .auth-brand h1 {

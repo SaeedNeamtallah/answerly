@@ -7,13 +7,29 @@ import random
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import Request
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.database.models import User, UserAccountStatus
 from backend.security.event_service import get_security_stats, list_events, log_event
 from backend.security.security_event import SecurityEventType, SecuritySeverity
+from backend.services.incident_management_service import IncidentManagementService
 
 
 class SecurityDashboardService:
     """Central security dashboard business logic built on the shared event system."""
+
+    _USER_STATUS_EVENT_TYPES = {
+        SecurityEventType.USER_SUSPENDED,
+        SecurityEventType.USER_BLOCKED,
+        SecurityEventType.USER_RESTORED,
+    }
+    _MAX_EXPORT_EVENTS = 5000
+
+    def __init__(self) -> None:
+        # Reuse the existing status-control service to keep simulation behavior
+        # consistent with production account enforcement and audit logging.
+        self._incident_management_service = IncidentManagementService()
 
     @staticmethod
     def normalize_limit(limit: int) -> int:
@@ -26,12 +42,82 @@ class SecurityDashboardService:
         safe_limit = self.normalize_limit(limit)
         return [event.model_dump(mode="json") for event in list_events(limit=safe_limit)]
 
+    def get_events_for_export(self, *, limit: int = 1000) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 1000), self._MAX_EXPORT_EVENTS))
+        return [event.model_dump(mode="json") for event in list_events(limit=safe_limit)]
+
     def get_dashboard_payload(self, *, limit: int = 20) -> Dict[str, Any]:
         safe_limit = self.normalize_limit(limit)
         return {
             "stats": self.get_stats(),
             "events": self.get_events(limit=safe_limit),
         }
+
+    @staticmethod
+    def _normalize_account_status(value: Any) -> str:
+        if isinstance(value, UserAccountStatus):
+            return value.value
+
+        normalized = str(value or UserAccountStatus.ACTIVE.value).strip().upper()
+        if normalized.startswith("USERACCOUNTSTATUS."):
+            normalized = normalized.split(".", 1)[1]
+        if normalized not in {
+            UserAccountStatus.ACTIVE.value,
+            UserAccountStatus.SUSPENDED.value,
+            UserAccountStatus.BLOCKED.value,
+        }:
+            return UserAccountStatus.ACTIVE.value
+        return normalized
+
+    async def get_user_status_summary(self, *, db: AsyncSession) -> Dict[str, int]:
+        """Return aggregate counts for ACTIVE/SUSPENDED/BLOCKED users."""
+        summary = {
+            "total_active": 0,
+            "total_suspended": 0,
+            "total_blocked": 0,
+        }
+
+        stmt = select(User.status, func.count(User.id)).group_by(User.status)
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        for status_value, count in rows:
+            normalized_status = self._normalize_account_status(status_value)
+            count_value = int(count or 0)
+
+            if normalized_status == UserAccountStatus.ACTIVE.value:
+                summary["total_active"] = count_value
+            elif normalized_status == UserAccountStatus.SUSPENDED.value:
+                summary["total_suspended"] = count_value
+            elif normalized_status == UserAccountStatus.BLOCKED.value:
+                summary["total_blocked"] = count_value
+
+        return summary
+
+    def get_user_status_events(self, *, limit: int = 20) -> List[Dict[str, Any]]:
+        """Return recent account status change events for dashboard activity feed."""
+        safe_limit = max(1, min(int(limit or 20), 100))
+        candidate_limit = min(1000, max(200, safe_limit * 12))
+        candidate_events = list_events(limit=candidate_limit)
+
+        payload_events: List[Dict[str, Any]] = []
+        for event in candidate_events:
+            if event.event_type not in self._USER_STATUS_EVENT_TYPES:
+                continue
+
+            payload = event.model_dump(mode="json")
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            actor = str(metadata.get("actor") or payload.get("username") or "system").strip() or "system"
+            reason = str(metadata.get("reason") or "").strip()
+
+            payload["actor"] = actor
+            payload["reason"] = reason
+            payload_events.append(payload)
+
+            if len(payload_events) >= safe_limit:
+                break
+
+        return payload_events
 
     def simulate_attack(self, *, user_id: int, username: Optional[str], ip_address: Optional[str]) -> int:
         """Generate demo attack events exclusively through the central event logger."""
@@ -107,6 +193,69 @@ class SecurityDashboardService:
         generated_count += 1
 
         return generated_count
+
+    async def simulate_attack_with_user_control(
+        self,
+        *,
+        db: AsyncSession,
+        actor_username: str,
+        actor_user_id: int,
+        ip_address: Optional[str],
+        target_user_id: Optional[int] = None,
+        escalate_to_block: bool = True,
+        block_reason: str = "attack_simulation_escalation",
+    ) -> Dict[str, Any]:
+        """Run simulation events and optionally enforce a real user block.
+
+        This keeps demo mode realistic: telemetry and account control are produced
+        by the same services used in real incidents, so the dashboard reflects SOC
+        workflows instead of synthetic counters only.
+        """
+        generated_count = self.simulate_attack(
+            user_id=actor_user_id,
+            username=actor_username,
+            ip_address=ip_address,
+        )
+
+        resolved_target_user_id = int(target_user_id or actor_user_id)
+        escalation_applied = False
+        escalation_result = "none"
+
+        if escalate_to_block:
+            await self._incident_management_service.block_user(
+                user_id=resolved_target_user_id,
+                reason=str(block_reason or "attack_simulation_escalation"),
+                actor=actor_username,
+                db=db,
+            )
+            escalation_applied = True
+            escalation_result = "blocked"
+
+            # Emit an explicit simulation marker so demos can distinguish
+            # simulation-driven enforcement from organic incidents.
+            log_event(
+                {
+                    "event_type": SecurityEventType.ATTACK_SIMULATION,
+                    "severity": SecuritySeverity.HIGH,
+                    "user_id": resolved_target_user_id,
+                    "username": actor_username,
+                    "ip_address": ip_address,
+                    "message": "Attack simulation escalated to account block",
+                    "metadata": {
+                        "simulation": True,
+                        "escalation": escalation_result,
+                        "target_user_id": resolved_target_user_id,
+                        "reason": str(block_reason or "attack_simulation_escalation"),
+                    },
+                }
+            )
+
+        return {
+            "generated_count": int(generated_count),
+            "escalation_applied": escalation_applied,
+            "escalation_result": escalation_result,
+            "target_user_id": resolved_target_user_id,
+        }
 
     async def stream_dashboard_updates(
         self,

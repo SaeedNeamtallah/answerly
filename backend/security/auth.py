@@ -19,17 +19,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.database import get_db
-from backend.database.models import User
+from backend.database.models import User, UserAccountStatus
 from backend.security.event_service import log_event
 from backend.security.jwt_utils import create_jwt_access_token, decode_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 from backend.security.sanitization import sanitize_text
+from backend.services.auth_service import AuthService
 
 
 security_scheme = HTTPBearer(auto_error=False)
 
 ROLE_USER = "user"
 ROLE_ADMIN = "admin"
+ROLE_SECURITY_ENGINEER = "security_engineer"
 ROLE_CYBERSECURITY_ENGINEER = "cybersecurity_engineer"
 
 _ENV_FILE_PATH = Path(__file__).resolve().parents[2] / ".env"
@@ -74,19 +76,26 @@ def _load_engineer_usernames_from_env_file() -> Set[str]:
     if cache_is_fresh and mtime == _ENGINEER_USERNAMES_CACHE_MTIME:
         return set(_ENGINEER_USERNAMES_CACHE)
 
-    raw_value = ""
+    raw_values: List[str] = []
     try:
         with _ENV_FILE_PATH.open("r", encoding="utf-8") as handle:
             for line in handle:
                 stripped = line.strip()
                 if not stripped or stripped.startswith("#"):
                     continue
+                if stripped.upper().startswith("SECURITY_ENGINEER_USERNAMES="):
+                    value = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                    if value:
+                        raw_values.append(value)
                 if stripped.upper().startswith("SECURITY_CYBERSECURITY_ENGINEER_USERNAMES="):
-                    raw_value = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                    break
+                    value = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                    if value:
+                        raw_values.append(value)
     except Exception:
         # Keep previous cache if .env is temporarily unreadable.
         return set(_ENGINEER_USERNAMES_CACHE)
+
+    raw_value = ",".join(raw_values)
 
     refreshed: Set[str] = set()
     for chunk in raw_value.split(","):
@@ -101,8 +110,15 @@ def _load_engineer_usernames_from_env_file() -> Set[str]:
 
 
 def _configured_cybersecurity_engineer_usernames() -> Set[str]:
-    raw_value = os.getenv("SECURITY_CYBERSECURITY_ENGINEER_USERNAMES")
-    if raw_value is None:
+    configured_primary = os.getenv("SECURITY_ENGINEER_USERNAMES")
+    configured_legacy = os.getenv("SECURITY_CYBERSECURITY_ENGINEER_USERNAMES")
+    raw_value = ",".join(
+        value.strip()
+        for value in (configured_primary, configured_legacy)
+        if value and value.strip()
+    )
+
+    if not raw_value:
         # Fallback to live .env value so changing .env works without restart.
         env_file_usernames = _load_engineer_usernames_from_env_file()
         if env_file_usernames:
@@ -127,6 +143,7 @@ def resolve_roles_for_username(username: str) -> List[str]:
         resolved_roles.append(ROLE_ADMIN)
 
     if normalized_username and normalized_username in _configured_cybersecurity_engineer_usernames():
+        resolved_roles.append(ROLE_SECURITY_ENGINEER)
         resolved_roles.append(ROLE_CYBERSECURITY_ENGINEER)
 
     resolved_roles.append(ROLE_USER)
@@ -143,6 +160,10 @@ def resolve_roles_for_username(username: str) -> List[str]:
 def has_role(roles: List[str], required_role: str) -> bool:
     expected = _normalize_role(required_role)
     return any(_normalize_role(role) == expected for role in (roles or []))
+
+
+def has_security_engineer_role(roles: List[str]) -> bool:
+    return has_role(roles, ROLE_SECURITY_ENGINEER) or has_role(roles, ROLE_CYBERSECURITY_ENGINEER)
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -333,53 +354,13 @@ def _decode_access_token(token: str) -> AuthUser:
     return AuthUser(username=username, roles=resolved_roles)
 
 
-async def get_current_user(
+async def _get_user_for_token_subject(
+    *,
+    db: AsyncSession,
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
-) -> AuthUser:
-    """Require and decode bearer token."""
-    if credentials is None:
-        log_event(
-            {
-                "event_type": SecurityEventType.AUTH_REQUIRED,
-                "severity": SecuritySeverity.LOW,
-                "ip_address": _extract_client_ip(request),
-                "message": "Authentication required but bearer token is missing",
-                "metadata": {"path": request.url.path, "method": request.method},
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return _decode_access_token(credentials.credentials)
-
-
-async def get_current_db_user(
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
-    db: AsyncSession = Depends(get_db),
+    token_user: AuthUser,
 ) -> User:
-    """Require bearer token, validate JWT, and fetch current user from database."""
-    if credentials is None:
-        log_event(
-            {
-                "event_type": SecurityEventType.AUTH_REQUIRED,
-                "severity": SecuritySeverity.LOW,
-                "ip_address": _extract_client_ip(request),
-                "message": "Authentication required but bearer token is missing",
-                "metadata": {"path": request.url.path, "method": request.method},
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token_user = _decode_access_token(credentials.credentials)
+    """Resolve DB user from token subject using normalized, case-insensitive lookup."""
     normalized_username = _normalize_username(token_user.username)
     user_stmt = (
         select(User)
@@ -405,6 +386,164 @@ async def get_current_db_user(
             detail="Invalid authentication token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    return user
+
+
+async def _enforce_account_status_policy(
+    *,
+    db: AsyncSession,
+    request: Request,
+    auth_service: AuthService,
+    user: User,
+) -> None:
+    user_status, suspended_until, auto_restored = await auth_service.evaluate_user_status(
+        db,
+        user=user,
+        allow_auto_restore=True,
+    )
+
+    if auto_restored:
+        log_event(
+            {
+                "event_type": "ACCOUNT_AUTO_RESTORED",
+                "severity": SecuritySeverity.LOW,
+                "user_id": user.id,
+                "username": user.username,
+                "ip_address": _extract_client_ip(request),
+                "message": "Suspended account automatically restored after expiry",
+                "metadata": {
+                    "path": request.url.path,
+                    "method": request.method,
+                    "account_status": UserAccountStatus.ACTIVE.value,
+                    "auto_restore": True,
+                },
+            }
+        )
+
+    if user_status == UserAccountStatus.BLOCKED:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTHZ_DENIED,
+                "severity": SecuritySeverity.HIGH,
+                "user_id": user.id,
+                "username": user.username,
+                "ip_address": _extract_client_ip(request),
+                "message": "Access denied for blocked account",
+                "metadata": {
+                    "path": request.url.path,
+                    "method": request.method,
+                    "account_status": user_status.value,
+                    "suspended_until": (
+                        suspended_until.isoformat() if suspended_until else None
+                    ),
+                },
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account blocked due to security violation",
+        )
+
+    if user_status == UserAccountStatus.SUSPENDED:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTHZ_DENIED,
+                "severity": SecuritySeverity.HIGH,
+                "user_id": user.id,
+                "username": user.username,
+                "ip_address": _extract_client_ip(request),
+                "message": "Access denied for temporarily suspended account",
+                "metadata": {
+                    "path": request.url.path,
+                    "method": request.method,
+                    "account_status": user_status.value,
+                    "suspended_until": (
+                        suspended_until.isoformat() if suspended_until else None
+                    ),
+                },
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account temporarily suspended",
+        )
+
+
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(AuthService),
+) -> AuthUser:
+    """Require and decode bearer token."""
+    if credentials is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_REQUIRED,
+                "severity": SecuritySeverity.LOW,
+                "ip_address": _extract_client_ip(request),
+                "message": "Authentication required but bearer token is missing",
+                "metadata": {"path": request.url.path, "method": request.method},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_user = _decode_access_token(credentials.credentials)
+    user = await _get_user_for_token_subject(
+        db=db,
+        request=request,
+        token_user=token_user,
+    )
+    await _enforce_account_status_policy(
+        db=db,
+        request=request,
+        auth_service=auth_service,
+        user=user,
+    )
+
+    return token_user
+
+
+async def get_current_db_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(AuthService),
+) -> User:
+    """Require bearer token, validate JWT, and fetch current user from database."""
+    if credentials is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_REQUIRED,
+                "severity": SecuritySeverity.LOW,
+                "ip_address": _extract_client_ip(request),
+                "message": "Authentication required but bearer token is missing",
+                "metadata": {"path": request.url.path, "method": request.method},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_user = _decode_access_token(credentials.credentials)
+    user = await _get_user_for_token_subject(
+        db=db,
+        request=request,
+        token_user=token_user,
+    )
+    await _enforce_account_status_policy(
+        db=db,
+        request=request,
+        auth_service=auth_service,
+        user=user,
+    )
 
     return user
 
@@ -442,7 +581,7 @@ async def require_security_center_access(
 ) -> User:
     """Allow Security Center access only for Cybersecurity Engineer users."""
     roles = resolve_roles_for_username(current_user.username)
-    if has_role(roles, ROLE_CYBERSECURITY_ENGINEER) or has_role(roles, ROLE_ADMIN):
+    if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN):
         return current_user
 
     log_event(
@@ -456,12 +595,74 @@ async def require_security_center_access(
             "metadata": {
                 "path": request.url.path,
                 "method": request.method,
-                "required_role": ROLE_CYBERSECURITY_ENGINEER,
+                "required_roles": [ROLE_SECURITY_ENGINEER, ROLE_ADMIN],
                 "user_roles": roles,
             },
         }
     )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Security Center access is restricted to Cybersecurity Engineer role",
+        detail="Security Center access is restricted to security_engineer and admin roles",
+    )
+
+
+async def require_incident_access(
+    request: Request,
+    current_user: User = Depends(get_current_db_user),
+) -> User:
+    """Allow incidents access only for security_engineer and admin roles."""
+    roles = resolve_roles_for_username(current_user.username)
+    if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN):
+        return current_user
+
+    log_event(
+        {
+            "event_type": SecurityEventType.AUTHZ_DENIED,
+            "severity": SecuritySeverity.HIGH,
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "ip_address": _extract_client_ip(request),
+            "message": "Incidents access denied",
+            "metadata": {
+                "path": request.url.path,
+                "method": request.method,
+                "required_roles": [ROLE_SECURITY_ENGINEER, ROLE_ADMIN],
+                "user_roles": roles,
+            },
+        }
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Incidents access is restricted to security_engineer and admin roles",
+    )
+
+
+async def require_admin_access(
+    request: Request,
+    current_user: User = Depends(get_current_db_user),
+) -> User:
+    """Allow admin endpoints only for admin role users."""
+    roles = resolve_roles_for_username(current_user.username)
+    if has_role(roles, ROLE_ADMIN):
+        return current_user
+
+    log_event(
+        {
+            "event_type": SecurityEventType.AUTHZ_DENIED,
+            "severity": SecuritySeverity.HIGH,
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "ip_address": _extract_client_ip(request),
+            "message": "Admin access denied",
+            "metadata": {
+                "path": request.url.path,
+                "method": request.method,
+                "required_roles": [ROLE_ADMIN],
+                "user_roles": roles,
+            },
+        }
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin access is restricted to admin role",
     )

@@ -15,7 +15,7 @@
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260420-23">
 </head>
 
 <body class="dark-theme">
@@ -24,7 +24,7 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <i class="fas fa-brain-circuit"></i>
+                    <img src="favicon.svg" alt="RAGMind" class="logo-icon">
                     <span>RAGMind</span>
                 </div>
             </div>
@@ -169,77 +169,364 @@
 
     <template id="security-center-template">
         <div class="security-center-view" dir="ltr">
-            <h1 class="view-title" data-i18n="security_section_title">Security Center</h1>
-            <section class="security-section">
-                <div class="section-header">
-                    <h2 data-i18n="security_section_overview_title">Security Overview</h2>
-                    <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn" type="button">
-                        <i class="fas fa-radiation"></i>
-                        <span data-i18n="security_simulate_btn">Start Attack Simulation</span>
+            <div class="security-center">
+                <div class="security-header card">
+                    <div class="card-body security-header-body">
+                        <div class="security-header-left">
+                            <h1 class="view-title security-title" data-i18n="security_section_title">Security Center</h1>
+                        </div>
+                        <div class="security-header-actions">
+                            <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn" type="button">
+                                <i class="fas fa-radiation"></i>
+                                <span data-i18n="security_simulate_btn">Start Attack Simulation</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card security-overview-card">
+                    <div class="card-header">
+                        <h2 data-i18n="security_section_overview_title">Security Overview</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="security-stats-grid">
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-shield-halved"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_total_events">Total Events</span>
+                                    <span class="value" id="security-stat-total-events">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-user-lock"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_login_failures">Login Failures</span>
+                                    <span class="value" id="security-stat-login-failures">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-ban"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_blocked_attacks">Blocked Attacks</span>
+                                    <span class="value" id="security-stat-blocked-attacks">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-bolt"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_brute_force_alerts">Brute Force Alerts</span>
+                                    <span class="value" id="security-stat-brute-force">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-folder-open"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_open_incidents">Open Incidents</span>
+                                    <span class="value" id="security-stat-open-incidents">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_high_severity_incidents">High Severity Incidents</span>
+                                    <span class="value" id="security-stat-high-severity-incidents">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-user-check"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_active_users">Active Users</span>
+                                    <span class="value" id="security-stat-active-users">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-user-clock"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_suspended_users">Suspended Users</span>
+                                    <span class="value" id="security-stat-suspended-users">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-user-slash"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_blocked_users">Blocked Users</span>
+                                    <span class="value" id="security-stat-blocked-users">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="security-tabs security-center-tabs">
+                    <button id="security-tab-events" type="button" class="security-tab-btn is-active" data-tab="events">
+                        <i class="fas fa-wave-square"></i>
+                        <span data-i18n="security_tab_events">Events Feed</span>
+                    </button>
+                    <button id="security-tab-incidents" type="button" class="security-tab-btn" data-tab="incidents">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <span data-i18n="security_tab_incidents">Incidents</span>
+                        <span id="security-incidents-new-badge" class="security-tab-badge hidden">0</span>
                     </button>
                 </div>
 
-                <div class="security-stats-grid">
-                    <div class="stat-card security-stat-card">
-                        <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                        <div class="info">
-                            <span class="label" data-i18n="security_total_events">Total Events</span>
-                            <span class="value" id="security-stat-total-events">0</span>
-                        </div>
-                    </div>
-                    <div class="stat-card security-stat-card">
-                        <div class="icon"><i class="fas fa-user-lock"></i></div>
-                        <div class="info">
-                            <span class="label" data-i18n="security_login_failures">Login Failures</span>
-                            <span class="value" id="security-stat-login-failures">0</span>
-                        </div>
-                    </div>
-                    <div class="stat-card security-stat-card">
-                        <div class="icon"><i class="fas fa-ban"></i></div>
-                        <div class="info">
-                            <span class="label" data-i18n="security_blocked_attacks">Blocked Attacks</span>
-                            <span class="value" id="security-stat-blocked-attacks">0</span>
-                        </div>
-                    </div>
-                    <div class="stat-card security-stat-card">
-                        <div class="icon"><i class="fas fa-bolt"></i></div>
-                        <div class="info">
-                            <span class="label" data-i18n="security_brute_force_alerts">Brute Force Alerts</span>
-                            <span class="value" id="security-stat-brute-force">0</span>
-                        </div>
-                    </div>
-                </div>
+                <div class="security-content">
+                    <div id="security-events-panel" class="security-tab-panel">
+                        <div class="card security-events-card security-events-feed-card">
+                            <div class="card-header security-events-table-header">
+                                <h3 data-i18n="security_events_title">Security Events Feed</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="events-feed-layout">
+                                    <div class="events-feed-controls">
+                                        <button id="security-events-export-btn" class="btn security-header-btn" type="button">
+                                            <i class="fas fa-file-arrow-down"></i>
+                                            <span>Export Logs</span>
+                                        </button>
+                                        <button id="security-events-refresh-btn" class="btn security-header-btn security-events-refresh-btn" type="button" aria-label="Refresh events feed" title="Refresh">
+                                            <i class="fas fa-arrows-rotate"></i>
+                                        </button>
+                                        <span id="security-events-last-updated" class="security-refresh-meta">Last updated: just now</span>
+                                    </div>
 
-                <div class="security-events-card">
-                    <div class="section-header security-events-header">
-                        <h3 data-i18n="security_events_title">Security Events Feed</h3>
+                                    <div class="security-live-feed" id="security-live-feed">
+                                        <div class="security-live-feed-title" data-i18n="security_live_feed_title">Live Feed</div>
+                                        <ul id="security-live-feed-list">
+                                            <li class="security-live-feed-empty" data-i18n="security_live_feed_empty">No live events right now</li>
+                                        </ul>
+                                    </div>
+
+                                    <div class="security-events-table-wrap security-events-table-top">
+                                        <table class="security-events-table">
+                                            <thead>
+                                                <tr>
+                                                    <th data-i18n="security_col_timestamp">Timestamp</th>
+                                                    <th data-i18n="security_col_username">Actor</th>
+                                                    <th data-i18n="security_col_event_type">Event Type</th>
+                                                    <th data-i18n="security_col_severity">Severity</th>
+                                                    <th data-i18n="security_col_message">Message</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="security-events-body">
+                                                <tr>
+                                                    <td colspan="5" class="security-empty-row" data-i18n="security_events_empty">No security events yet</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="security-live-feed" id="security-live-feed">
-                        <div class="security-live-feed-title" data-i18n="security_live_feed_title">Live Feed</div>
-                        <ul id="security-live-feed-list">
-                            <li class="security-live-feed-empty" data-i18n="security_live_feed_empty">No live events right now</li>
-                        </ul>
-                    </div>
-                    <div class="security-events-table-wrap">
-                        <table class="security-events-table">
-                            <thead>
-                                <tr>
-                                    <th data-i18n="security_col_timestamp">Timestamp</th>
-                                    <th data-i18n="security_col_username">Actor</th>
-                                    <th data-i18n="security_col_event_type">Event Type</th>
-                                    <th data-i18n="security_col_severity">Severity</th>
-                                    <th data-i18n="security_col_message">Message</th>
-                                </tr>
-                            </thead>
-                            <tbody id="security-events-body">
-                                <tr>
-                                    <td colspan="5" class="security-empty-row" data-i18n="security_events_empty">No security events yet</td>
-                                </tr>
-                            </tbody>
-                        </table>
+
+                    <div id="security-incidents-panel" class="security-tab-panel hidden">
+                        <div class="card security-events-card security-incidents-card">
+                            <div class="card-header">
+                                <div class="section-header security-events-header">
+                                    <h3 data-i18n="security_incidents_title">Incidents</h3>
+                                    <div id="incidents-filter-panel" class="security-incidents-filters incidents-filter-panel">
+                                        <div class="filter-header-actions">
+                                            <button
+                                                id="incident-filter-toggle"
+                                                class="filter-toggle-header"
+                                                type="button"
+                                                aria-expanded="false"
+                                                aria-controls="incident-filter-content"
+                                            >
+                                                <span id="incident-filter-toggle-arrow" class="filter-toggle-arrow">&#9654;</span>
+                                                <span class="filter-toggle-label">Filters</span>
+                                            </button>
+                                            <button id="incident-filter-refresh" class="btn btn-primary security-filter-refresh" type="button">
+                                                <i class="fas fa-arrows-rotate"></i>
+                                                <span data-i18n="incident_refresh_btn">Refresh</span>
+                                            </button>
+                                        </div>
+                                        <div id="incident-filter-content" class="filter-content is-collapsed">
+                                            <div class="filter-row">
+                                                <label class="filter-row-label" for="incident-filter-status">Status:</label>
+                                                <select id="incident-filter-status" class="form-control security-filter-select">
+                                                    <option value="" data-i18n="incident_filter_all_status">All Status</option>
+                                                    <option value="OPEN" data-i18n="incident_status_open">OPEN</option>
+                                                    <option value="INVESTIGATING" data-i18n="incident_status_investigating">INVESTIGATING</option>
+                                                    <option value="RESOLVED" data-i18n="incident_status_resolved">RESOLVED</option>
+                                                    <option value="CLOSED" data-i18n="incident_status_closed">CLOSED</option>
+                                                </select>
+                                            </div>
+                                            <div class="filter-row">
+                                                <label class="filter-row-label" for="incident-filter-severity">Severity:</label>
+                                                <select id="incident-filter-severity" class="form-control security-filter-select">
+                                                    <option value="" data-i18n="incident_filter_all_severity">All Severity</option>
+                                                    <option value="LOW">LOW</option>
+                                                    <option value="MEDIUM">MEDIUM</option>
+                                                    <option value="HIGH">HIGH</option>
+                                                </select>
+                                            </div>
+                                            <div class="filter-row">
+                                                <label class="filter-row-label" for="incident-filter-false-positive">Other:</label>
+                                                <select id="incident-filter-false-positive" class="form-control security-filter-select">
+                                                    <option value="" data-i18n="incident_filter_fp_all">All</option>
+                                                    <option value="false" data-i18n="incident_filter_fp_false">False</option>
+                                                    <option value="true" data-i18n="incident_filter_fp_true">True</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="security-events-table-wrap">
+                                    <table class="security-events-table security-incidents-table">
+                                        <thead>
+                                            <tr>
+                                                <th data-i18n="incident_col_id">Incident ID</th>
+                                                <th data-i18n="incident_col_type">Type</th>
+                                                <th data-i18n="incident_col_severity">Severity</th>
+                                                <th data-i18n="incident_col_status">Status</th>
+                                                <th data-i18n="incident_col_false_positive">False Positive</th>
+                                                <th data-i18n="incident_col_created_at">Created At</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="security-incidents-body">
+                                            <tr>
+                                                <td colspan="6" class="security-empty-row" data-i18n="incident_empty">No incidents yet</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="incident-details-panel" class="incident-details-card hidden" aria-hidden="true">
+                            <div class="section-header security-events-header incident-details-header">
+                                <h3 data-i18n="incident_details_title">Incident Details</h3>
+                                <button
+                                    id="incident-details-close-btn"
+                                    class="incident-details-close-btn"
+                                    type="button"
+                                    aria-label="Close incident details"
+                                    title="Close"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                                <div class="incident-detail-grid">
+                                    <div class="incident-detail-item">
+                                        <span class="incident-detail-label" data-i18n="incident_label_id">Incident ID</span>
+                                        <strong id="incident-details-id">-</strong>
+                                    </div>
+                                    <div class="incident-detail-item">
+                                        <span class="incident-detail-label" data-i18n="incident_label_type">Type</span>
+                                        <strong id="incident-details-type">-</strong>
+                                    </div>
+                                    <div class="incident-detail-item">
+                                        <span class="incident-detail-label" data-i18n="incident_label_severity">Severity</span>
+                                        <strong id="incident-details-severity">-</strong>
+                                    </div>
+                                    <div class="incident-detail-item">
+                                        <span class="incident-detail-label" data-i18n="incident_label_status">Status</span>
+                                        <strong id="incident-details-status">-</strong>
+                                    </div>
+                                    <div class="incident-detail-item">
+                                        <span class="incident-detail-label" data-i18n="incident_label_false_positive">False Positive</span>
+                                        <strong id="incident-details-false-positive">-</strong>
+                                    </div>
+                                    <div class="incident-detail-item incident-detail-item-wide">
+                                        <span class="incident-detail-label" data-i18n="incident_label_created_at">Created At</span>
+                                        <strong id="incident-details-created-at">-</strong>
+                                    </div>
+                                </div>
+
+                                <div class="incident-actor-box">
+                                    <h4 data-i18n="incident_actor_title">Actor Info</h4>
+                                    <p id="incident-actor-info">-</p>
+                                </div>
+
+                                <div class="incident-notes-wrap">
+                                    <h4 data-i18n="incident_notes_title">Investigation Notes</h4>
+                                    <textarea id="incident-notes-input" class="incident-notes-input" placeholder="Add investigation details, evidence, and conclusions..."></textarea>
+                                    <div class="incident-notes-actions">
+                                        <button id="incident-save-notes-btn" type="button" class="btn btn-primary incident-action-btn">
+                                            <i class="fas fa-note-sticky"></i>
+                                            <span data-i18n="incident_notes_save_btn">Save Notes</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="incident-actions-wrap">
+                                    <h4 data-i18n="incident_actions_title">Actions</h4>
+                                    <div class="incident-action-controls">
+                                        <div class="form-group">
+                                            <label for="incident-action-reason-input" data-i18n="incident_action_reason_label">Action Reason</label>
+                                            <input id="incident-action-reason-input" type="text" maxlength="255" class="form-control" placeholder="Describe why this action is applied">
+                                        </div>
+                                        <div class="form-group incident-action-duration-group">
+                                            <label for="incident-suspend-minutes-input" data-i18n="incident_action_suspend_minutes_label">Suspend Duration (minutes)</label>
+                                            <input id="incident-suspend-minutes-input" type="number" min="1" max="10080" step="1" value="30" class="form-control">
+                                        </div>
+                                    </div>
+                                    <div class="incident-actions-grid">
+                                        <button id="incident-assign-btn" type="button" class="btn btn-primary incident-action-btn">
+                                            <i class="fas fa-user-check"></i>
+                                            <span data-i18n="incident_assign_btn">Assign to me</span>
+                                        </button>
+                                        <button id="incident-mark-investigating-btn" type="button" class="btn btn-primary incident-action-btn">
+                                            <i class="fas fa-magnifying-glass"></i>
+                                            <span data-i18n="incident_mark_investigating_btn">Mark as Investigating</span>
+                                        </button>
+                                        <button id="incident-resolve-btn" type="button" class="btn btn-primary incident-action-btn">
+                                            <i class="fas fa-square-check"></i>
+                                            <span data-i18n="incident_resolve_btn">Resolve</span>
+                                        </button>
+                                        <button id="incident-close-btn" type="button" class="btn btn-primary incident-action-btn">
+                                            <i class="fas fa-lock"></i>
+                                            <span data-i18n="incident_close_btn">Close</span>
+                                        </button>
+                                        <button id="incident-mark-false-positive-btn" type="button" class="btn btn-primary incident-action-btn incident-action-warning">
+                                            <i class="fas fa-flag"></i>
+                                            <span data-i18n="incident_mark_false_positive_btn">Mark False Positive</span>
+                                        </button>
+                                        <button id="incident-clear-false-positive-btn" type="button" class="btn btn-primary incident-action-btn incident-action-muted">
+                                            <i class="fas fa-flag-checkered"></i>
+                                            <span data-i18n="incident_clear_false_positive_btn">Clear False Positive</span>
+                                        </button>
+                                        <button id="incident-block-user-btn" type="button" class="btn btn-primary incident-action-btn incident-action-danger">
+                                            <i class="fas fa-user-slash"></i>
+                                            <span data-i18n="incident_block_user_btn">Block User</span>
+                                        </button>
+                                        <button id="incident-suspend-user-btn" type="button" class="btn btn-primary incident-action-btn incident-action-danger">
+                                            <i class="fas fa-user-lock"></i>
+                                            <span data-i18n="incident_suspend_user_btn">Suspend User</span>
+                                        </button>
+                                        <button id="incident-reactivate-user-btn" type="button" class="btn btn-primary incident-action-btn incident-action-success">
+                                            <i class="fas fa-user-check"></i>
+                                            <span data-i18n="incident_reactivate_user_btn">Restore User</span>
+                                        </button>
+                                        <button id="incident-ignore-btn" type="button" class="btn btn-primary incident-action-btn incident-action-muted">
+                                            <i class="fas fa-ban"></i>
+                                            <span data-i18n="incident_ignore_btn">Ignore (false positive)</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="incident-timeline-wrap">
+                                    <h4 data-i18n="incident_timeline_title">Timeline</h4>
+                                    <ul id="incident-timeline-list">
+                                        <li class="incident-timeline-empty" data-i18n="incident_timeline_empty">No logs yet</li>
+                                    </ul>
+                                </div>
+                        </div>
+                        <button
+                            id="incident-back-to-events-btn"
+                            class="btn security-filter-back security-back-to-events-floating"
+                            type="button"
+                            aria-hidden="true"
+                        >
+                            <i class="fas fa-arrow-left"></i>
+                            <span data-i18n="incident_back_to_events_btn">Back to Events Feed</span>
+                        </button>
                     </div>
                 </div>
-            </section>
+            </div>
         </div>
     </template>
 
@@ -297,6 +584,9 @@
                     <button id="send-btn" class="send-btn-pro" disabled>
                         <i class="fas fa-arrow-up"></i>
                     </button>
+                </div>
+                <div class="chat-request-meta">
+                    <p id="chat-request-status" class="chat-request-status" aria-live="polite"></p>
                 </div>
                 <p class="chat-disclaimer">RAGMind يجيب من مستنداتك فقط. تحقق دائماً من المعلومات المهمة.</p>
             </div>

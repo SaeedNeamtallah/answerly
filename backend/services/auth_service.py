@@ -1,6 +1,7 @@
 """Authentication service for user signup and credential operations."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import re
 
 import bcrypt
@@ -8,14 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database.models import User
-from backend.security.auth import (
-    get_reserved_service_account_usernames,
-    get_service_account_credentials,
-    verify_service_account_password,
-)
+from backend.config import settings
+from backend.database.models import User, UserAccountStatus
 from backend.security.sanitization import sanitize_text
-
 
 _USERNAME_RE = re.compile(r"^[a-z0-9_.-]{3,50}$")
 _PASSWORD_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -27,6 +23,28 @@ class SignupValidationError(ValueError):
 
 class DuplicateUsernameError(ValueError):
     """Raised when username already exists."""
+
+
+class AccountStatusError(ValueError):
+    """Raised when account is blocked or suspended."""
+
+    def __init__(
+        self,
+        account_status: UserAccountStatus,
+        *,
+        suspended_until: datetime | None = None,
+    ):
+        self.account_status = account_status
+        self.suspended_until = suspended_until
+
+        if account_status == UserAccountStatus.SUSPENDED and suspended_until is not None:
+            detail = f"Account is suspended until {suspended_until.isoformat()}"
+        elif account_status == UserAccountStatus.BLOCKED:
+            detail = "Account is blocked"
+        else:
+            detail = f"Account is {account_status.value.lower()}"
+
+        super().__init__(detail)
 
 
 class AuthService:
@@ -96,6 +114,24 @@ class AuthService:
         except Exception:
             return False
 
+    @staticmethod
+    def _get_reserved_service_account_usernames() -> set[str]:
+        from backend.security.auth import get_reserved_service_account_usernames
+
+        return get_reserved_service_account_usernames()
+
+    @staticmethod
+    def _get_service_account_credentials(username: str):
+        from backend.security.auth import get_service_account_credentials
+
+        return get_service_account_credentials(username)
+
+    @staticmethod
+    def _verify_service_account_password(service_account, password: str) -> bool:
+        from backend.security.auth import verify_service_account_password
+
+        return verify_service_account_password(service_account, password)
+
     async def _get_user_by_normalized_username(
         self,
         db: AsyncSession,
@@ -161,6 +197,91 @@ class AuthService:
             await db.rollback()
             raise
 
+    @staticmethod
+    def _normalize_account_status(value: UserAccountStatus | str | None) -> UserAccountStatus:
+        if isinstance(value, UserAccountStatus):
+            return value
+
+        raw = str(value or UserAccountStatus.ACTIVE.value).strip().upper()
+        try:
+            return UserAccountStatus(raw)
+        except ValueError:
+            return UserAccountStatus.ACTIVE
+
+    @staticmethod
+    def _now_utc() -> datetime:
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _normalize_datetime_utc(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _normalize_status_reason(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = sanitize_text(
+            value,
+            max_length=255,
+            strip_html=True,
+            allow_newlines=False,
+        ).strip()
+        return cleaned or None
+
+    @staticmethod
+    def _normalize_status_changed_by(value: int | str | None) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return str(value)
+
+        cleaned = sanitize_text(
+            str(value),
+            max_length=64,
+            strip_html=True,
+            allow_newlines=False,
+        ).strip()
+        return cleaned or None
+
+    async def evaluate_user_status(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        allow_auto_restore: bool = True,
+    ) -> tuple[UserAccountStatus, datetime | None, bool]:
+        """Return effective status and optionally auto-restore expired suspensions."""
+        account_status = self._normalize_account_status(getattr(user, "status", None))
+        suspended_until = self._normalize_datetime_utc(getattr(user, "suspended_until", None))
+
+        if account_status == UserAccountStatus.SUSPENDED:
+            is_expired = (
+                suspended_until is not None
+                and self._now_utc() > suspended_until
+            )
+            if allow_auto_restore and is_expired:
+                user.status = UserAccountStatus.ACTIVE
+                user.suspended_until = None
+                user.status_reason = "suspension_expired_auto_restore"
+                user.status_updated_at = self._now_utc()
+                user.status_changed_by = "system"
+                db.add(user)
+                await db.flush()
+                return UserAccountStatus.ACTIVE, None, True
+            return account_status, suspended_until, False
+
+        # Ensure non-suspended users do not keep stale suspension timestamps.
+        if suspended_until is not None:
+            user.suspended_until = None
+            db.add(user)
+            await db.flush()
+
+        return account_status, None, False
+
     async def authenticate_user(
         self,
         db: AsyncSession,
@@ -176,15 +297,58 @@ class AuthService:
             db,
             normalized_username=normalized_username,
         )
-        if user is not None and self._verify_password(sanitized_password, user.hashed_password):
-            return user
 
-        service_account = get_service_account_credentials(normalized_username)
+        suspension_expired = False
+        if user is not None:
+            account_status, suspended_until, _ = await self.evaluate_user_status(
+                db,
+                user=user,
+                allow_auto_restore=False,
+            )
+
+            suspension_expired = (
+                account_status == UserAccountStatus.SUSPENDED
+                and suspended_until is not None
+                and self._now_utc() > suspended_until
+            )
+
+            if account_status == UserAccountStatus.BLOCKED:
+                raise AccountStatusError(account_status)
+
+            if account_status == UserAccountStatus.SUSPENDED and not suspension_expired:
+                raise AccountStatusError(
+                    account_status,
+                    suspended_until=suspended_until,
+                )
+
+            if self._verify_password(sanitized_password, user.hashed_password):
+                # Apply automatic suspension lift only after successful credential validation.
+                if suspension_expired:
+                    user.status = UserAccountStatus.ACTIVE
+                    user.suspended_until = None
+                    user.status_reason = "suspension_expired_after_successful_login"
+                    user.status_updated_at = self._now_utc()
+                    user.status_changed_by = "system"
+                    db.add(user)
+                    await db.flush()
+
+                return user
+
+        service_account = self._get_service_account_credentials(normalized_username)
         if service_account is None:
             return None
 
-        if not verify_service_account_password(service_account, sanitized_password):
+        if not self._verify_service_account_password(service_account, sanitized_password):
             return None
+
+        if user is not None and suspension_expired:
+            user.status = UserAccountStatus.ACTIVE
+            user.suspended_until = None
+            user.status_reason = "suspension_expired_after_successful_login"
+            user.status_updated_at = self._now_utc()
+            user.status_changed_by = "system"
+            db.add(user)
+            await db.flush()
 
         return await self._sync_service_account_user(
             db,
@@ -205,7 +369,7 @@ class AuthService:
         sanitized_password = self._sanitize_password_input(password)
         self._validate_password(sanitized_password)
 
-        if normalized_username in get_reserved_service_account_usernames():
+        if normalized_username in self._get_reserved_service_account_usernames():
             raise SignupValidationError(
                 "Username is reserved for a configured service account"
             )
@@ -223,6 +387,7 @@ class AuthService:
         user = User(
             username=normalized_username,
             hashed_password=self._hash_password(sanitized_password),
+            status=UserAccountStatus.ACTIVE,
         )
         db.add(user)
 
@@ -237,6 +402,65 @@ class AuthService:
             await db.rollback()
             raise
 
+    async def set_user_status(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        status: UserAccountStatus,
+        suspension_minutes: int | None = None,
+        suspended_until: datetime | None = None,
+        status_reason: str | None = None,
+        status_changed_by: int | str | None = None,
+    ) -> User:
+        """Update user account status without committing the transaction."""
+        user_stmt = select(User).where(User.id == int(user_id)).limit(1)
+        user_result = await db.execute(user_stmt)
+        user = user_result.scalar_one_or_none()
+
+        if user is None:
+            raise ValueError("User not found")
+
+        normalized_status = self._normalize_account_status(status)
+        user.status = normalized_status
+        user.status_updated_at = self._now_utc()
+        user.status_changed_by = self._normalize_status_changed_by(status_changed_by) or "system"
+
+        if normalized_status == UserAccountStatus.SUSPENDED:
+            resolved_expiry = self._normalize_datetime_utc(suspended_until)
+            if resolved_expiry is None:
+                resolved_minutes = (
+                    int(suspension_minutes)
+                    if suspension_minutes is not None
+                    else int(settings.security_user_suspension_default_minutes)
+                )
+                if resolved_minutes <= 0:
+                    raise ValueError("Suspension duration must be a positive number of minutes")
+                resolved_expiry = self._now_utc() + timedelta(minutes=resolved_minutes)
+
+            if resolved_expiry <= self._now_utc():
+                raise ValueError("Suspension expiry must be in the future")
+
+            user.suspended_until = resolved_expiry
+            user.status_reason = (
+                self._normalize_status_reason(status_reason)
+                or "temporary_security_suspension"
+            )
+        else:
+            # ACTIVE and BLOCKED do not carry temporary suspension windows.
+            user.suspended_until = None
+            if normalized_status == UserAccountStatus.BLOCKED:
+                user.status_reason = (
+                    self._normalize_status_reason(status_reason)
+                    or "confirmed_malicious_activity"
+                )
+            else:
+                user.status_reason = self._normalize_status_reason(status_reason)
+
+        db.add(user)
+        await db.flush()
+        return user
+
     async def change_password(
         self,
         db: AsyncSession,
@@ -250,7 +474,7 @@ class AuthService:
         sanitized_new_password = self._sanitize_password_input(new_password)
         self._validate_password(sanitized_new_password)
 
-        if self._normalize_username(user.username) in get_reserved_service_account_usernames():
+        if self._normalize_username(user.username) in self._get_reserved_service_account_usernames():
             raise SignupValidationError(
                 "Password for this account is managed by service-account configuration"
             )

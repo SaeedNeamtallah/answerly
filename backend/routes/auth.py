@@ -1,17 +1,26 @@
 """Authentication routes for JWT issuance and identity inspection."""
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.database import get_db
-from backend.database.models import User
-from backend.services.auth_service import AuthService, DuplicateUsernameError, SignupValidationError
+from backend.database.models import User, UserAccountStatus
+from backend.services.auth_service import (
+    AccountStatusError,
+    AuthService,
+    DuplicateUsernameError,
+    SignupValidationError,
+)
+from backend.services.incident_management_service import IncidentManagementService
 from backend.services.login_security_service import (
     FailureRegistration,
     login_security_service,
@@ -24,6 +33,72 @@ from backend.security.security_event import SecurityEventType, SecuritySeverity
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
+
+# Keep thresholds configurable from env so SOC demos can tune visibility
+# without changing route logic.
+_BRUTE_FORCE_LOCK_THRESHOLD = max(1, int(settings.security_login_bruteforce_threshold))
+_BRUTE_FORCE_SUSPEND_THRESHOLD = _BRUTE_FORCE_LOCK_THRESHOLD + 1
+_BRUTE_FORCE_BLOCK_THRESHOLD = max(
+    _BRUTE_FORCE_SUSPEND_THRESHOLD + 1,
+    _BRUTE_FORCE_SUSPEND_THRESHOLD * 2,
+)
+_BRUTE_FORCE_SUSPEND_MINUTES = 5
+_PROGRESSIVE_FAILURE_DELAYS_SECONDS = {
+    1: 0,
+    2: 1,
+    3: 3,
+}
+
+
+def _format_utc_timestamp(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value
+    if normalized.tzinfo is None:
+        normalized = normalized.replace(tzinfo=timezone.utc)
+    else:
+        normalized = normalized.astimezone(timezone.utc)
+
+    return normalized.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _raise_bruteforce_policy_error(action: Optional[str]) -> None:
+    """Map brute-force policy outcomes to explicit HTTP responses.
+
+    Keeping this centralized preserves a single, readable decision point for
+    account-state enforcement without scattering security messages in login flow.
+    """
+    if action == "blocked":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account is blocked due to repeated failed login attempts. "
+                "Please contact support."
+            ),
+        )
+
+    if action == "suspended":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account is temporarily suspended for "
+                f"{_BRUTE_FORCE_SUSPEND_MINUTES} minutes due to repeated failed login attempts."
+            ),
+        )
+
+
+def _resolve_progressive_login_delay_seconds(failure_state: FailureRegistration) -> int:
+    attempts = int(max(0, failure_state.username_failures))
+    if attempts >= _BRUTE_FORCE_LOCK_THRESHOLD:
+        return 0
+    return int(_PROGRESSIVE_FAILURE_DELAYS_SECONDS.get(attempts, 0))
+
+
+async def _apply_progressive_login_delay(failure_state: FailureRegistration) -> None:
+    delay_seconds = _resolve_progressive_login_delay_seconds(failure_state)
+    if delay_seconds > 0:
+        await asyncio.sleep(delay_seconds)
 
 
 class LoginRequest(BaseModel):
@@ -108,6 +183,68 @@ def _clear_login_failures(*, username: str, ip_address: str | None) -> None:
     login_security_service.clear_success(username=username, ip_address=ip_address)
 
 
+def _normalize_account_status_label(value: object) -> str:
+    normalized = str(value or UserAccountStatus.ACTIVE.value).strip().upper()
+    if normalized.startswith("USERACCOUNTSTATUS."):
+        normalized = normalized.split(".", 1)[1]
+    return normalized
+
+
+async def _apply_bruteforce_account_policy(
+    *,
+    db: AsyncSession,
+    auth_service: AuthService,
+    incident_management_service: IncidentManagementService,
+    tracking_username: str,
+    failure_state: FailureRegistration,
+) -> Optional[str]:
+    # This policy upgrades repeated credential abuse to account-level controls:
+    # first temporary suspension, then permanent block at a higher threshold.
+    username_failures = int(max(0, failure_state.username_failures))
+    if username_failures < _BRUTE_FORCE_SUSPEND_THRESHOLD:
+        return None
+
+    user_stmt = (
+        select(User)
+        .where(func.lower(User.username) == str(tracking_username).strip().lower())
+        .order_by(User.id.asc())
+        .limit(1)
+    )
+    user_result = await db.execute(user_stmt)
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    current_status = _normalize_account_status_label(getattr(user, "status", None))
+    if username_failures >= _BRUTE_FORCE_BLOCK_THRESHOLD:
+        if current_status == UserAccountStatus.BLOCKED.value:
+            return "blocked"
+
+        await incident_management_service.block_user(
+            user.id,
+            reason=f"bruteforce_failed_logins_{username_failures}_within_window",
+            actor="system",
+            db=db,
+            auth_service=auth_service,
+        )
+        await db.commit()
+        return "blocked"
+
+    if current_status in {UserAccountStatus.BLOCKED.value, UserAccountStatus.SUSPENDED.value}:
+        return None
+
+    await incident_management_service.suspend_user(
+        user.id,
+        reason=f"bruteforce_failed_logins_{username_failures}_within_window",
+        duration_minutes=_BRUTE_FORCE_SUSPEND_MINUTES,
+        actor="system",
+        db=db,
+        auth_service=auth_service,
+    )
+    await db.commit()
+    return "suspended"
+
+
 @router.post("/signup", response_model=SignupResponse, status_code=201)
 async def signup(
     payload: SignupRequest,
@@ -185,6 +322,7 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
+    incident_management_service: IncidentManagementService = Depends(IncidentManagementService),
 ):
     """Authenticate user credentials and return JWT access token."""
     client_ip = _extract_client_ip(request)
@@ -202,6 +340,7 @@ async def login(
                 ip_address=tracking_ip,
                 retry_after_seconds=block_status.retry_after_seconds,
             )
+
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
@@ -222,6 +361,17 @@ async def login(
                 reason="invalid_credentials",
                 message="Login failed: invalid credentials",
             )
+            await _apply_progressive_login_delay(failure_state)
+
+            brute_force_action = await _apply_bruteforce_account_policy(
+                db=db,
+                auth_service=auth_service,
+                incident_management_service=incident_management_service,
+                tracking_username=tracking_username,
+                failure_state=failure_state,
+            )
+            _raise_bruteforce_policy_error(brute_force_action)
+
             if failure_state.threshold_exceeded and failure_state.retry_after_seconds > 0:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -264,6 +414,17 @@ async def login(
             reason="payload_validation",
             message="Login failed: payload validation error",
         )
+        await _apply_progressive_login_delay(failure_state)
+
+        brute_force_action = await _apply_bruteforce_account_policy(
+            db=db,
+            auth_service=auth_service,
+            incident_management_service=incident_management_service,
+            tracking_username=tracking_username,
+            failure_state=failure_state,
+        )
+        _raise_bruteforce_policy_error(brute_force_action)
+
         if failure_state.threshold_exceeded and failure_state.retry_after_seconds > 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -275,6 +436,36 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
+        ) from exc
+    except AccountStatusError as exc:
+        status_label = exc.account_status.value.lower()
+        suspended_until = _format_utc_timestamp(getattr(exc, "suspended_until", None))
+        detail_message = "Your account is blocked. Please contact support."
+        if exc.account_status.value == "SUSPENDED":
+            detail_message = (
+                f"Your account is suspended until {suspended_until}. Please try again after this time."
+                if suspended_until
+                else "Your account is temporarily suspended. Please contact support if this was unexpected."
+            )
+
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTHZ_DENIED,
+                "severity": SecuritySeverity.HIGH,
+                "username": tracking_username,
+                "ip_address": tracking_ip,
+                "message": f"Login denied: account is {status_label}",
+                "metadata": {
+                    "username": tracking_username,
+                    "reason": "account_status",
+                    "account_status": exc.account_status.value,
+                    "suspended_until": suspended_until,
+                },
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail_message,
         ) from exc
     except HTTPException:
         raise
