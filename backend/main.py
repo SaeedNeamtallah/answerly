@@ -74,9 +74,11 @@ if _default_response:
 app = FastAPI(**_app_kwargs)
 
 # Configure CORS
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["http://52.188.226.80"],  # تأكد إنها "*" للتجربة أو حط الـ IP بتاعك
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
