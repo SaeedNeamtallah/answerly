@@ -4,7 +4,7 @@
  */
 
 // Configuration
-let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || 'http://localhost:8000').replace(/\/+$/, '');
+let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || 'http://52.188.226.80:8000').replace(/\/+$/, '');
 
 // Translations
 const i18n = {
@@ -374,7 +374,7 @@ function isDocumentActive(status) {
 function getApiBaseCandidates() {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = normalizeBaseUrl(params.get('api'));
-    const host = window.location.hostname || 'localhost';
+    const host = window.location.hostname || '52.188.226.80';
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 
     const candidates = [

@@ -107,7 +107,7 @@
                 return String(url || "").trim().replace(/\/+$/, "");
             }
 
-            let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://localhost:8000";
+            let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://52.188.226.80:8000";
 
             function updateApiHint() {
                 apiHint.textContent = "API: " + apiBaseUrl;
@@ -116,7 +116,7 @@
             function getApiBaseCandidates() {
                 const queryParams = new URLSearchParams(window.location.search);
                 const fromQuery = normalizeBaseUrl(queryParams.get("api"));
-                const host = window.location.hostname || "localhost";
+                const host = window.location.hostname || "52.188.226.80";
                 const protocol = window.location.protocol === "https:" ? "https:" : "http:";
 
                 const candidates = [

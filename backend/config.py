@@ -239,7 +239,7 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8080"],
+        default=["http://52.188.226.80", "http://localhost:3000", "http://localhost:8080"],
         alias="CORS_ORIGINS"
     )
     
