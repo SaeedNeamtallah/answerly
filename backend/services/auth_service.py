@@ -9,6 +9,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.models import User
+from backend.security.auth import (
+    get_reserved_service_account_usernames,
+    get_service_account_credentials,
+    verify_service_account_password,
+)
 from backend.security.sanitization import sanitize_text
 
 
@@ -91,6 +96,71 @@ class AuthService:
         except Exception:
             return False
 
+    async def _get_user_by_normalized_username(
+        self,
+        db: AsyncSession,
+        *,
+        normalized_username: str,
+    ) -> User | None:
+        user_stmt = (
+            select(User)
+            .where(func.lower(User.username) == normalized_username)
+            .order_by(User.id.asc())
+            .limit(1)
+        )
+        user_result = await db.execute(user_stmt)
+        return user_result.scalar_one_or_none()
+
+    async def _sync_service_account_user(
+        self,
+        db: AsyncSession,
+        *,
+        normalized_username: str,
+        password: str,
+        existing_user: User | None,
+    ) -> User:
+        managed_password_hash = self._hash_password(password)
+        user = existing_user
+
+        if user is None:
+            user = User(
+                username=normalized_username,
+                hashed_password=managed_password_hash,
+            )
+        else:
+            user.username = normalized_username
+            user.hashed_password = managed_password_hash
+
+        db.add(user)
+
+        try:
+            await db.commit()
+            await db.refresh(user)
+            return user
+        except IntegrityError:
+            await db.rollback()
+            user = await self._get_user_by_normalized_username(
+                db,
+                normalized_username=normalized_username,
+            )
+            if user is None:
+                raise
+
+            if not self._verify_password(password, user.hashed_password):
+                user.hashed_password = self._hash_password(password)
+                db.add(user)
+                try:
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    raise
+
+            await db.refresh(user)
+            return user
+        except Exception:
+            await db.rollback()
+            raise
+
     async def authenticate_user(
         self,
         db: AsyncSession,
@@ -102,21 +172,26 @@ class AuthService:
         normalized_username = self._normalize_username(username)
         sanitized_password = self._sanitize_password_input(password)
 
-        user_stmt = (
-            select(User)
-            .where(func.lower(User.username) == normalized_username)
-            .order_by(User.id.asc())
-            .limit(1)
+        user = await self._get_user_by_normalized_username(
+            db,
+            normalized_username=normalized_username,
         )
-        user_result = await db.execute(user_stmt)
-        user = user_result.scalar_one_or_none()
-        if user is None:
+        if user is not None and self._verify_password(sanitized_password, user.hashed_password):
+            return user
+
+        service_account = get_service_account_credentials(normalized_username)
+        if service_account is None:
             return None
 
-        if not self._verify_password(sanitized_password, user.hashed_password):
+        if not verify_service_account_password(service_account, sanitized_password):
             return None
 
-        return user
+        return await self._sync_service_account_user(
+            db,
+            normalized_username=normalized_username,
+            password=sanitized_password,
+            existing_user=user,
+        )
 
     async def signup_user(
         self,
@@ -129,6 +204,11 @@ class AuthService:
         normalized_username = self._normalize_username(username)
         sanitized_password = self._sanitize_password_input(password)
         self._validate_password(sanitized_password)
+
+        if normalized_username in get_reserved_service_account_usernames():
+            raise SignupValidationError(
+                "Username is reserved for a configured service account"
+            )
 
         existing_stmt = (
             select(User.id)
@@ -169,6 +249,11 @@ class AuthService:
         sanitized_current_password = self._sanitize_password_input(current_password)
         sanitized_new_password = self._sanitize_password_input(new_password)
         self._validate_password(sanitized_new_password)
+
+        if self._normalize_username(user.username) in get_reserved_service_account_usernames():
+            raise SignupValidationError(
+                "Password for this account is managed by service-account configuration"
+            )
 
         if not self._verify_password(sanitized_current_password, user.hashed_password):
             raise SignupValidationError("Current password is incorrect")

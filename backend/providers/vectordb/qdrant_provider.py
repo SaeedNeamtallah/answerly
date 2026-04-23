@@ -280,6 +280,39 @@ class QdrantProvider(VectorDBInterface):
         except Exception as e:
             logger.error(f"Error deleting collection: {str(e)}")
             raise
+
+    async def delete_vectors(
+        self,
+        collection_name: str,
+        *,
+        filter_dict: Dict[str, Any],
+        **kwargs
+    ) -> bool:
+        """
+        Delete Qdrant points matching the provided payload filter.
+        """
+        try:
+            if not filter_dict:
+                raise ValueError("filter_dict is required when deleting vectors")
+
+            from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+            conditions = []
+            for key, value in filter_dict.items():
+                conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
+
+            await asyncio.to_thread(
+                self.client.delete,
+                collection_name=collection_name,
+                points_selector=Filter(must=conditions),
+                wait=True,
+            )
+            logger.info("Deleted Qdrant vectors from '%s' using filter %s", collection_name, filter_dict)
+            return True
+
+        except Exception as e:
+            logger.error(f"Error deleting vectors: {str(e)}")
+            raise
     
     async def collection_exists(
         self,

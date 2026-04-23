@@ -84,13 +84,20 @@ if errorlevel 1 (
     goto :fail
 )
 
-call :log "[INFO] Waiting for backend health check..."
+call :log "[INFO] Waiting for full backend readiness check..."
 for /l %%A in (1,1,180) do (
-    curl.exe -fsS "%BACKEND_HEALTH_URL%" >nul 2>&1
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $response = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 2; if ($response.status -eq 'healthy') { exit 0 } } catch { }; exit 1" >nul 2>&1
     if not errorlevel 1 goto :backend_ready
     timeout /t 1 /nobreak >nul
 )
-call :log "[ERROR] Backend did not become healthy in time."
+call :log "[WARNING] Host health probe failed. Trying backend health from inside container..."
+docker exec ragmind-backend python -c "import json,sys,urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)); sys.exit(0 if data.get('status')=='healthy' else 1)" >nul 2>&1
+if not errorlevel 1 (
+    call :log "[WARNING] Backend is healthy inside container, but host access to %BACKEND_HEALTH_URL% failed."
+    call :log "[WARNING] Continuing startup. Check local networking/proxy rules if host API access remains unavailable."
+    goto :backend_ready
+)
+call :log "[ERROR] Backend did not reach full healthy state in time."
 >> "%RUN_LOG%" echo [COMMAND] docker compose -f docker/docker-compose.yml logs --tail=200 --no-color
 docker compose -f docker/docker-compose.yml logs --tail=200 --no-color >> "%RUN_LOG%" 2>&1
 call :log "Inspect logs in %RUN_LOG%"

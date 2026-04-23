@@ -122,13 +122,13 @@ task_routes = {
         "queue": "file_processing"
     },
     "backend.tasks.data_indexing.index_project_task": {
-        "queue": "data_indexing"
+        "queue": "default"
     },
     "backend.tasks.process_workflow.process_and_index_workflow": {
         "queue": "file_processing"
     },
     "backend.tasks.process_workflow.push_after_process_task": {
-        "queue": "data_indexing"
+        "queue": "default"
     },
     "backend.tasks.maintenance.clean_celery_executions_table": {
         "queue": "default"

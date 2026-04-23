@@ -11,7 +11,7 @@ It does not include FastAPI's built-in documentation routes such as `/docs`, `/r
 | Method | Path | Description | Source |
 | --- | --- | --- | --- |
 | GET | `/` | Root endpoint that returns API name, version, and helpful links. | `backend/routes/health.py::root` |
-| GET | `/health` | Health check with database and provider status. | `backend/routes/health.py::health_check` |
+| GET | `/health` | Full readiness check for database, queues, worker, shared config, and vector store. | `backend/routes/health.py::health_check` |
 
 ## Authentication
 

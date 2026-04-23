@@ -4,6 +4,7 @@ x-app-environment: &app-environment
   CELERY_BROKER_URL: amqp://minirag_user:minirag_rabbitmq_2222@rabbitmq:5672/minirag_vhost
   CELERY_RESULT_BACKEND: redis://:minirag_redis_2222@redis:6379/0
   CORS_ORIGINS: '["http://52.188.226.80","http://localhost:8080","http://localhost:3000"]'
+  RAGMIND_SHARED_CONFIG_DIR: /app/uploads/config
 
 x-app-depends-on: &app-depends-on
   postgres:
@@ -105,19 +106,39 @@ services:
       - ../uploads:/app/uploads
     restart: always
 
+  scheduler:
+    image: ragmind-app:local
+    container_name: ragmind-scheduler
+    command: celery -A backend.celery_app beat --loglevel=info
+    env_file: ../.env
+    environment: *app-environment
+    depends_on: *app-depends-on
+    volumes:
+      - ../uploads:/app/uploads
+    restart: always
+
   # 7. بوت التليجرام (اختياري)
   telegram_bot:
     image: ragmind-app:local
     container_name: ragmind-bot
-    command: python -m telegram_bot.bot
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$${TELEGRAM_BOT_TOKEN}" ]; then
+          exec python -m telegram_bot.bot
+        fi
+        echo "TELEGRAM_BOT_TOKEN is empty; bot service is idle."
+        exec sleep infinity
     env_file: ../.env
     environment:
       <<: *app-environment
       API_BASE_URL: http://backend:8000
-      BOT_ACTIVE_PROJECT_ID: 5  # <--- غير الرقم ده خليه 5
     depends_on:
       backend:
         condition: service_started
+    volumes:
+      - ../uploads:/app/uploads
     restart: always
 
     #8 بالطبع الفرونت إند (React) - إضافة مهمة

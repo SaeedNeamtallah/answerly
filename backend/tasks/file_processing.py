@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.celery_app import celery_app, get_setup_utils
@@ -14,6 +14,7 @@ from backend.config import settings
 from backend.database.models import Asset, Chunk, Project
 from backend.runtime_config import get_runtime_value
 from backend.utils.idempotency_manager import IdempotencyManager
+from backend.utils.task_tracking import reconcile_process_and_index_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,52 @@ def process_document_task(self, asset_id: int):
     return asyncio.run(_process_document(self, asset_id))
 
 
+async def _cleanup_stale_asset_vectors(
+    db,
+    *,
+    asset: Asset,
+    vector_db,
+    session_maker,
+) -> None:
+    filter_dict = {
+        "asset_id": asset.id,
+        "project_id": asset.project_id,
+    }
+    try:
+        await vector_db.delete_vectors(
+            collection_name=f"project_{asset.project_id}",
+            filter_dict=filter_dict,
+            session_maker=session_maker,
+        )
+    except Exception as cleanup_error:
+        logger.warning(
+            "Failed to delete stale vectors for asset %s: %s",
+            asset.id,
+            cleanup_error,
+        )
+
+    await db.execute(delete(Chunk).where(Chunk.asset_id == asset.id))
+    await db.commit()
+
+
+async def _reconcile_parent_workflow_if_needed(db, *, task_record) -> None:
+    if task_record is None or not isinstance(task_record.task_args, dict):
+        return
+
+    workflow_task_id = task_record.task_args.get("workflow_task_id")
+    if not workflow_task_id:
+        return
+
+    await reconcile_process_and_index_workflow(
+        db,
+        workflow_task_id=str(workflow_task_id),
+    )
+
+
 async def _process_document(task_instance, asset_id: int):
     db_engine = None
+    session_maker = None
+    task_record = None
 
     try:
         (
@@ -53,9 +98,34 @@ async def _process_document(task_instance, asset_id: int):
                 task_name=task_name,
                 task_args=task_args,
                 task_time_limit=settings.celery_task_time_limit,
+                celery_task_id=task_instance.request.id,
+            )
+
+            current_task = await idempotency_manager.get_task_by_celery_id(
+                db=db,
+                celery_task_id=task_instance.request.id,
             )
 
             if not should_execute:
+                if current_task is None:
+                    current_task = await idempotency_manager.create_task_record(
+                        db=db,
+                        task_name=task_name,
+                        task_args=task_args,
+                        celery_task_id=task_instance.request.id,
+                    )
+                await idempotency_manager.update_task_status(
+                    db=db,
+                    execution_id=current_task.execution_id,
+                    status="SUCCESS",
+                    result={
+                        "status": "skipped",
+                        "message": f"Task already exists with status: {existing_task.status}",
+                        "existing_execution_id": existing_task.execution_id,
+                        "existing_result": existing_task.result,
+                    },
+                )
+                await _reconcile_parent_workflow_if_needed(db, task_record=current_task)
                 return {
                     "status": "skipped",
                     "message": f"Task already exists with status: {existing_task.status}",
@@ -63,13 +133,8 @@ async def _process_document(task_instance, asset_id: int):
                     "existing_result": existing_task.result,
                 }
 
-            if existing_task:
-                await idempotency_manager.update_task_status(
-                    db=db,
-                    execution_id=existing_task.execution_id,
-                    status="PENDING",
-                )
-                task_record = existing_task
+            if current_task is not None:
+                task_record = current_task
             else:
                 task_record = await idempotency_manager.create_task_record(
                     db=db,
@@ -97,6 +162,7 @@ async def _process_document(task_instance, asset_id: int):
                     status="FAILURE",
                     result=error_result,
                 )
+                await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
                 task_instance.update_state(state="FAILURE", meta=error_result)
                 raise ValueError(f"Asset not found: {asset_id}")
 
@@ -106,6 +172,17 @@ async def _process_document(task_instance, asset_id: int):
             owner_id = owner_result.scalar_one_or_none()
             if owner_id is None:
                 raise ValueError(f"Project owner not found for project {asset.project_id}")
+
+            task_record = await idempotency_manager.upsert_task_record(
+                db=db,
+                task_name=task_name,
+                task_args={
+                    **task_args,
+                    "owner_id": owner_id,
+                },
+                celery_task_id=task_instance.request.id,
+                status=None,
+            )
 
             if asset.status == "completed":
                 final_result = {
@@ -120,9 +197,15 @@ async def _process_document(task_instance, asset_id: int):
                     status="SUCCESS",
                     result=final_result,
                 )
+                await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
                 return final_result
 
-
+            await _cleanup_stale_asset_vectors(
+                db,
+                asset=asset,
+                vector_db=vector_db,
+                session_maker=session_maker,
+            )
 
             # Mark as processing
 
@@ -238,11 +321,18 @@ async def _process_document(task_instance, asset_id: int):
                     status="SUCCESS",
                     result=final_result,
                 )
+                await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
 
                 logger.info(f"Completed processing document {asset.id}: {total_chunks} chunks created")
                 return final_result
 
             except Exception as e:
+                await _cleanup_stale_asset_vectors(
+                    db,
+                    asset=asset,
+                    vector_db=vector_db,
+                    session_maker=session_maker,
+                )
                 asset.status = "failed"
                 asset.error_message = str(e)
                 await db.commit()
@@ -253,6 +343,7 @@ async def _process_document(task_instance, asset_id: int):
                     status="FAILURE",
                     result={"error": str(e)},
                 )
+                await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
                 raise
 
     except Exception as e:
