@@ -85,6 +85,7 @@ Main persistence model:
   - handler wiring
 - `frontend/app.js`
   - browser-side API integration and dashboard behavior
+  - Security Center simulation reset is now a view-only feed clear action: it removes simulated events from the transient feed UI and logs an audit message without clearing incidents or overview metrics
 - `scripts/dev/*.bat`
   - local developer entrypoints
   - `setup.bat` prepares the local environment with Windows-friendly fallbacks (`uv` or `py/python` venv creation, `uv pip` or `pip` install, `docker compose` or `docker-compose` detection) and writes setup output to `uploads/logs/setup.log`
@@ -462,6 +463,8 @@ Recently fixed:
   Targeted stale-vector cleanup is now available across vector providers: `delete_vectors(...)` deletes by metadata filter, and document-processing retries/failures now clear old vectors for the current asset before rebuilding chunks/embeddings.
 26. `backend/routes/health.py` and `scripts/dev/start.bat`
   Startup readiness now reflects the actual stack: `/health` returns `healthy` only when database, broker, result backend, Celery worker, shared config, and vector store are reachable, and `start.bat` waits for that JSON-ready state instead of any HTTP 200.
+27. `frontend/app.js`
+  Security Center simulation reset is intentionally scoped to transient event streams only (feed clear), while incidents and security overview metrics remain intact for investigation continuity.
 
 ## Known Drift Between Docs and Code
 

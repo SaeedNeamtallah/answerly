@@ -176,10 +176,16 @@
                             <h1 class="view-title security-title" data-i18n="security_section_title">Security Center</h1>
                         </div>
                         <div class="security-header-actions">
-                            <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn" type="button">
-                                <i class="fas fa-radiation"></i>
-                                <span data-i18n="security_simulate_btn">Start Attack Simulation</span>
-                            </button>
+                            <div class="security-simulation-controls" role="group" aria-label="Simulation Controls">
+                                <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn" type="button">
+                                    <i class="fas fa-radiation"></i>
+                                    <span data-i18n="security_simulate_btn">Start Attack Simulation</span>
+                                </button>
+                                <button id="security-reset-sim-btn" class="btn security-header-btn security-reset-sim-btn" type="button">
+                                    <i class="fas fa-rotate-left"></i>
+                                    <span data-i18n="security_simulation_reset_btn">Reset Simulation View</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

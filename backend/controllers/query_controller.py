@@ -3,8 +3,11 @@ Query Controller.
 Business logic for query processing and answer generation.
 """
 from typing import Dict, Any, Optional
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
+
+from backend.database.models import Asset, Project
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,32 @@ class QueryController:
         if language == "ar":
             return "تعذر توليد إجابة واضحة الآن. حاول إعادة صياغة السؤال بشكل أدق."
         return "Could not generate a clear answer right now. Please try rephrasing your question."
+
+    @staticmethod
+    def _no_context_answer(
+        language: str,
+        *,
+        total_docs: int,
+        completed_docs: int,
+        active_docs: int,
+        failed_docs: int,
+    ) -> str:
+        if language == "ar":
+            if total_docs <= 0:
+                return "لا توجد مستندات في هذا المشروع بعد. ارفع مستندًا أولًا ثم أعد المحاولة."
+            if completed_docs <= 0 and active_docs > 0:
+                return "المستندات ما زالت قيد المعالجة. انتظر حتى تكتمل المعالجة ثم جرّب مرة أخرى."
+            if completed_docs <= 0 and failed_docs > 0:
+                return "فشلت معالجة المستندات الحالية. ارفع ملفًا صالحًا (PDF/TXT/DOCX) ثم أعد المحاولة."
+            return "لم أتمكن من العثور على معلومات ذات صلة في المستندات."
+
+        if total_docs <= 0:
+            return "No documents were uploaded to this project yet. Upload a document first, then try again."
+        if completed_docs <= 0 and active_docs > 0:
+            return "Documents are still processing. Please wait for processing to complete, then try again."
+        if completed_docs <= 0 and failed_docs > 0:
+            return "Current documents failed to process. Upload a valid PDF/TXT/DOCX file, then try again."
+        return "Could not find relevant information in the documents."
     
     def __init__(self):
         """Initialize query controller."""
@@ -67,9 +96,52 @@ class QueryController:
             )
             
             if not similar_chunks:
+                total_docs = 0
+                completed_docs = 0
+                active_docs = 0
+                failed_docs = 0
+                try:
+                    base_scope = (
+                        select(Asset.id)
+                        .join(Project, Project.id == Asset.project_id)
+                        .where(
+                            Asset.project_id == project_id,
+                            Project.owner_id == owner_id,
+                        )
+                    )
+
+                    total_docs = int((await db.execute(
+                        select(func.count()).select_from(base_scope.subquery())
+                    )).scalar_one() or 0)
+
+                    completed_docs = int((await db.execute(
+                        select(func.count()).select_from(
+                            base_scope.where(Asset.status == "completed").subquery()
+                        )
+                    )).scalar_one() or 0)
+
+                    active_docs = int((await db.execute(
+                        select(func.count()).select_from(
+                            base_scope.where(Asset.status.in_(("uploaded", "queued", "pending", "processing"))).subquery()
+                        )
+                    )).scalar_one() or 0)
+
+                    failed_docs = int((await db.execute(
+                        select(func.count()).select_from(
+                            base_scope.where(Asset.status == "failed").subquery()
+                        )
+                    )).scalar_one() or 0)
+                except Exception:
+                    logger.debug("Could not derive document readiness stats for query fallback", exc_info=True)
+
                 return {
-                    'answer': 'لم أتمكن من العثور على معلومات ذات صلة في المستندات.' if language == 'ar' 
-                             else 'Could not find relevant information in the documents.',
+                    'answer': self._no_context_answer(
+                        language,
+                        total_docs=total_docs,
+                        completed_docs=completed_docs,
+                        active_docs=active_docs,
+                        failed_docs=failed_docs,
+                    ),
                     'sources': [],
                     'context_used': 0
                 }

@@ -2379,6 +2379,13 @@ body.light-theme .main-content::before {
     flex-wrap: wrap;
 }
 
+.security-simulation-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 2px;
+}
+
 .security-header-btn {
     display: inline-flex;
     align-items: center;
@@ -2420,6 +2427,27 @@ body.light-theme .main-content::before {
     gap: 8px;
     padding: 10px 14px;
     border-radius: 12px;
+}
+
+.security-reset-sim-btn {
+    /* Keep reset neutral/non-danger to avoid confusion with real threat actions. */
+    padding: 10px 14px;
+    border-color: rgba(148, 163, 184, 0.45);
+    background: rgba(30, 41, 59, 0.54);
+    color: #dbeafe;
+}
+
+.security-reset-sim-btn:hover {
+    border-color: rgba(148, 163, 184, 0.62);
+    background: rgba(51, 65, 85, 0.62);
+    color: #f8fafc;
+}
+
+.security-reset-sim-btn.is-loading,
+.security-reset-sim-btn:disabled {
+    opacity: 0.82;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .security-simulate-btn.is-loading,
@@ -3527,6 +3555,19 @@ body.light-theme .incident-status-closed {
 
     .security-simulate-btn {
         width: 100%;
+        justify-content: center;
+    }
+
+    .security-simulation-controls {
+        width: 100%;
+        display: flex;
+    }
+
+    .security-simulation-controls .security-simulate-btn,
+    .security-simulation-controls .security-reset-sim-btn {
+        width: auto;
+        flex: 1;
+        min-width: 0;
         justify-content: center;
     }
 

@@ -106,7 +106,7 @@
             function normalizeBaseUrl(url) {
                 return String(url || "")
                     .trim()
-                    .replace(/\^+$/, "")
+                    // Fixed stale regex so discovery removes trailing slashes instead of literal carets.
                     .replace(/\/+$/, "");
             }
 

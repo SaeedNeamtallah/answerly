@@ -57,6 +57,10 @@ const i18n = {
         security_simulate_running: "Running simulation...",
         security_simulate_success: "Simulation events generated",
         security_simulate_escalation_blocked: "Simulation escalated: user blocked",
+        security_simulation_reset_btn: "Reset Simulation View",
+        security_simulation_reset_running: "Clearing simulation feed...",
+        security_simulation_reset_success: "Simulation feed cleared",
+        security_simulation_reset_confirm: "This will clear simulated events from the feed.\nIncidents and system metrics will NOT be affected.\nContinue?",
         security_access_denied: "غير مسموح: Security Center متاح فقط لـ Cybersecurity Engineer",
         security_tab_events: "سجل الأحداث",
         security_tab_incidents: "Incidents",
@@ -285,6 +289,10 @@ const i18n = {
         security_simulate_running: "Running simulation...",
         security_simulate_success: "Simulation events generated",
         security_simulate_escalation_blocked: "Simulation escalated: user blocked",
+        security_simulation_reset_btn: "Reset Simulation View",
+        security_simulation_reset_running: "Clearing simulation feed...",
+        security_simulation_reset_success: "Simulation feed cleared",
+        security_simulation_reset_confirm: "This will clear simulated events from the feed.\nIncidents and system metrics will NOT be affected.\nContinue?",
         security_access_denied: "Access denied: Security Center is only for Cybersecurity Engineer",
         security_tab_events: "Events Feed",
         security_tab_incidents: "Incidents",
@@ -471,6 +479,7 @@ const state = {
     currentView: 'dashboard',
     projects: [],
     stats: null,
+    securitySimulationReset: null,
     currentUser: null,
     selectedProject: null,
     chatMessages: [],
@@ -488,6 +497,7 @@ const state = {
     securityEventsLabelTimer: null,
     securityEventsLastUpdatedAt: 0,
     securityEventsLastInteractionAt: 0,
+    securityEvents: [],
     incidentOverviewTimer: null,
     incidentOverviewRefreshTimer: null,
     securityUsersRefreshTimer: null,
@@ -531,6 +541,7 @@ const SECURITY_USERS_REFRESH_DELAY_MS = 1200;
 const SECURITY_EVENTS_AUTO_REFRESH_MS = 8000;
 const SECURITY_EVENTS_INTERACTION_GRACE_MS = 2500;
 const INCIDENT_PANEL_CLOSE_ANIMATION_MS = 180;
+const SIMULATION_RESET_STATE_KEY = 'ragmind_security_simulation_reset_state';
 const ROLE_USER = 'user';
 const ROLE_ADMIN = 'admin';
 const ROLE_SECURITY_ENGINEER = 'security_engineer';
@@ -557,6 +568,59 @@ function isTokenExpired(token) {
     const payload = parseJwtPayload(token);
     if (!payload || typeof payload.exp !== 'number') return true;
     return Date.now() >= payload.exp * 1000;
+}
+
+function getSimulationResetState() {
+    // Design decision: "Reset Simulation View" no longer applies a global tombstone.
+    // Keep this helper as a safe no-op reader to avoid rebase regressions in shared paths.
+    if (state && state.securitySimulationReset && typeof state.securitySimulationReset === 'object') {
+        return state.securitySimulationReset;
+    }
+
+    try {
+        const raw = localStorage.getItem(SIMULATION_RESET_STATE_KEY);
+        if (!raw) {
+            return { active: false, reset_at: null, removed_event_ids: [], removed_incident_ids: [], stats_delta: {}, incident_delta: {} };
+        }
+
+        const parsed = JSON.parse(raw);
+        return {
+            active: false,
+            reset_at: typeof parsed.reset_at === 'string' ? parsed.reset_at : null,
+            removed_event_ids: [],
+            removed_incident_ids: [],
+            stats_delta: {},
+            incident_delta: {},
+        };
+    } catch (_) {
+        return { active: false, reset_at: null, removed_event_ids: [], removed_incident_ids: [], stats_delta: {}, incident_delta: {} };
+    }
+}
+
+function setSimulationResetState(nextState) {
+    const normalizedState = nextState && nextState.active
+        ? {
+            active: true,
+            reset_at: typeof nextState.reset_at === 'string' ? nextState.reset_at : new Date().toISOString(),
+            removed_event_ids: Array.isArray(nextState.removed_event_ids) ? nextState.removed_event_ids : [],
+            removed_incident_ids: Array.isArray(nextState.removed_incident_ids) ? nextState.removed_incident_ids : [],
+            stats_delta: nextState.stats_delta && typeof nextState.stats_delta === 'object' && !Array.isArray(nextState.stats_delta) ? nextState.stats_delta : {},
+            incident_delta: nextState.incident_delta && typeof nextState.incident_delta === 'object' && !Array.isArray(nextState.incident_delta) ? nextState.incident_delta : {},
+        }
+        : { active: false, reset_at: null, removed_event_ids: [], removed_incident_ids: [], stats_delta: {}, incident_delta: {} };
+
+    state.securitySimulationReset = normalizedState;
+
+    if (!normalizedState.active) {
+        localStorage.removeItem(SIMULATION_RESET_STATE_KEY);
+        return;
+    }
+
+    localStorage.setItem(SIMULATION_RESET_STATE_KEY, JSON.stringify(normalizedState));
+}
+
+function isSimulationResetActive() {
+    return Boolean(getSimulationResetState().active);
 }
 
 function redirectToLogin(reason = '') {
@@ -648,10 +712,15 @@ async function resolveApiBaseUrl(maxAttempts = 8) {
     return false;
 }
 
+function isAuthEndpoint(endpoint) {
+    return /^\/auth\/(login|me|change-password)(?:\/|$)/i.test(String(endpoint || '').trim());
+}
+
 async function fetchWithApiRecovery(endpoint, options = {}, retries = 1) {
     let lastError = null;
+    const effectiveRetries = isAuthEndpoint(endpoint) ? 0 : retries;
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
+    for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
         try {
             return await fetch(`${API_BASE_URL}${endpoint}`, options);
         } catch (error) {
@@ -659,7 +728,7 @@ async function fetchWithApiRecovery(endpoint, options = {}, retries = 1) {
             const message = String(error && error.message ? error.message : '').toLowerCase();
             const isNetworkFailure = message.includes('failed to fetch');
 
-            if (!isNetworkFailure || attempt >= retries) {
+            if (!isNetworkFailure || attempt >= effectiveRetries) {
                 break;
             }
 
@@ -1209,9 +1278,13 @@ async function fetchSecurityDashboardData(limit = 20, options = {}) {
         fetchSecurityJson(`/security/events?limit=${safeLimit}`, options)
     ]);
 
+    // The dashboard fetch is the broadest API hydration path, so it must
+    // apply the reset filter before any view renders from the returned events.
+    const filtered = filterSimulationPayload(eventsPayload, []);
+
     return {
         stats: normalizeSecurityStats(statsPayload),
-        events: Array.isArray(eventsPayload) ? eventsPayload : []
+        events: Array.isArray(filtered.events) ? filtered.events : []
     };
 }
 
@@ -1439,6 +1512,205 @@ function renderSecurityEventsTable(events, options = {}) {
     }
 }
 
+function hasSimulationMarkerInMetadata(metadata) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+        return false;
+    }
+
+    const marker = metadata.simulation;
+    if (marker === true) {
+        return true;
+    }
+
+    return String(marker || '').trim().toLowerCase() === 'true';
+}
+
+function isSimulatedSecurityEvent(event) {
+    if (!event || typeof event !== 'object') return false;
+
+    const eventType = String(event.event_type || '').trim().toUpperCase();
+    const message = String(event.message || '').trim().toLowerCase();
+
+    return (
+        hasSimulationMarkerInMetadata(event.metadata)
+        || eventType === 'ATTACK_SIMULATION'
+        || message.includes('(simulation)')
+    );
+}
+
+function isSimulatedIncident(incident) {
+    if (!incident || typeof incident !== 'object') return false;
+
+    const description = String(incident.description || '').trim().toLowerCase();
+    if (description.includes('(simulation)')) {
+        return true;
+    }
+
+    const logs = Array.isArray(incident.logs) ? incident.logs : [];
+    return logs.some((entry) => {
+        const metadata = entry && entry.extra_metadata;
+        return hasSimulationMarkerInMetadata(metadata);
+    });
+}
+
+function getSecurityEntryTimestampMs(entry) {
+    const candidate = entry && (entry.timestamp || entry.created_at || entry.createdAt || entry.created);
+    const parsed = Date.parse(candidate);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function summarizeSimulationEventDelta(events) {
+    const summary = {
+        total_events: 0,
+        login_failures: 0,
+        brute_force_attempts: 0,
+        blocked_uploads: 0
+    };
+
+    for (const event of Array.isArray(events) ? events : []) {
+        if (!isSimulatedSecurityEvent(event)) {
+            continue;
+        }
+
+        summary.total_events += 1;
+
+        const eventType = String(event && event.event_type ? event.event_type : '').trim().toUpperCase();
+        if (eventType === 'LOGIN_FAIL') {
+            summary.login_failures += 1;
+        }
+        if (eventType === 'BRUTE_FORCE') {
+            summary.brute_force_attempts += 1;
+        }
+        if (eventType === 'FILE_UPLOAD_BLOCKED') {
+            summary.blocked_uploads += 1;
+        }
+    }
+
+    return summary;
+}
+
+function summarizeSimulationIncidentDelta(incidents) {
+    return calculateIncidentMetrics((Array.isArray(incidents) ? incidents : []).filter(isSimulatedIncident));
+}
+
+function filterSimulationPayload(events, incidents) {
+    const resetState = getSimulationResetState();
+    const removedEventIds = new Set((resetState.removed_event_ids || []).map((value) => String(value)));
+    const removedIncidentIds = new Set((resetState.removed_incident_ids || []).map((value) => String(value)));
+    const resetCutoffMs = resetState.reset_at ? Date.parse(resetState.reset_at) : null;
+
+    const safeEvents = Array.isArray(events) ? events : [];
+    const safeIncidents = Array.isArray(incidents) ? incidents : [];
+
+    if (!resetState.active) {
+        return { events: safeEvents, incidents: safeIncidents };
+    }
+
+    // API and stream payloads must be filtered here so stale simulation rows
+    // cannot rehydrate the UI after reset, tab switch, or refresh.
+    return {
+        events: safeEvents.filter((event) => {
+            const eventId = String(event && event.id ? event.id : '');
+            if (eventId && removedEventIds.has(eventId)) {
+                return false;
+            }
+
+            const eventTime = getSecurityEntryTimestampMs(event);
+            if (Number.isFinite(resetCutoffMs) && Number.isFinite(eventTime) && eventTime <= resetCutoffMs && isSimulatedSecurityEvent(event)) {
+                return false;
+            }
+
+            return true;
+        }),
+        incidents: safeIncidents.filter((incident) => {
+            const incidentId = String(incident && incident.id ? incident.id : '');
+            if (incidentId && removedIncidentIds.has(incidentId)) {
+                return false;
+            }
+
+            const incidentTime = getSecurityEntryTimestampMs(incident);
+            if (Number.isFinite(resetCutoffMs) && Number.isFinite(incidentTime) && incidentTime <= resetCutoffMs && isSimulatedIncident(incident)) {
+                return false;
+            }
+
+            return true;
+        })
+    };
+}
+
+function applySimulationResetToStats(stats) {
+    const resetState = getSimulationResetState();
+    const baseStats = normalizeSecurityStats(stats || {});
+    if (!resetState.active) {
+        return baseStats;
+    }
+
+    const delta = resetState.stats_delta || {};
+    const subtract = (value, removed) => Math.max(0, Number(value || 0) - Number(removed || 0));
+
+    return {
+        total_events: subtract(baseStats.total_events, delta.total_events),
+        login_failures: subtract(baseStats.login_failures, delta.login_failures),
+        brute_force_attempts: subtract(baseStats.brute_force_attempts, delta.brute_force_attempts),
+        blocked_uploads: subtract(baseStats.blocked_uploads, delta.blocked_uploads)
+    };
+}
+
+function syncSecurityOverviewFromCurrentState() {
+    // Recompute overview metrics from the currently filtered in-memory dataset
+    // instead of reusing cached totals, otherwise reset can resurrect old counts.
+    const fallbackStats = {
+        total_events: Array.isArray(state.securityEvents) ? state.securityEvents.length : 0,
+        login_failures: Array.isArray(state.securityEvents)
+            ? state.securityEvents.filter((event) => String(event && event.event_type || '').toUpperCase() === 'LOGIN_FAIL').length
+            : 0,
+        brute_force_attempts: Array.isArray(state.securityEvents)
+            ? state.securityEvents.filter((event) => String(event && event.event_type || '').toUpperCase() === 'BRUTE_FORCE').length
+            : 0,
+        blocked_uploads: Array.isArray(state.securityEvents)
+            ? state.securityEvents.filter((event) => String(event && event.event_type || '').toUpperCase() === 'FILE_UPLOAD_BLOCKED').length
+            : 0,
+    };
+
+    renderSecurityCounters(applySimulationResetToStats(state.stats || fallbackStats), false);
+    renderIncidentCounters(calculateIncidentMetrics(state.securityIncidents), false);
+}
+
+function appendSimulationResetAuditEvent() {
+    const actor = String(state.currentUser && state.currentUser.username ? state.currentUser.username : 'system').trim() || 'system';
+    const auditEvent = {
+        id: `ui-sim-reset-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        event_type: 'SIMULATION_RESET',
+        severity: 'LOW',
+        user_id: Number(state.currentUser && state.currentUser.id) || null,
+        username: actor,
+        ip_address: null,
+        message: 'Simulation feed cleared by user',
+        metadata: {
+            source: 'ui_simulation_control',
+            audit_only: true,
+        }
+    };
+
+    state.securityEvents = [auditEvent, ...state.securityEvents].slice(0, 5000);
+    console.info('Simulation feed cleared by user');
+}
+
+function clearSimulationFeedLocally() {
+    const currentEvents = Array.isArray(state.securityEvents) ? state.securityEvents : [];
+    // Simulation reset is intentionally scoped to transient event streams.
+    // Incidents represent tracked security cases and must persist for investigation.
+    // Security Overview reflects aggregated/historical metrics and is not cleared by simulation reset.
+    state.securityEvents = currentEvents.filter((event) => !isSimulatedSecurityEvent(event));
+    renderSecurityEventViews(state.securityEvents, { preserveScroll: true });
+    markSecurityEventsFeedUpdated();
+
+    // Clear any legacy tombstone from earlier full-reset behavior to prevent
+    // accidental cross-layer filtering after moving to feed-only reset.
+    setSimulationResetState(null);
+}
+
 async function refreshSecurityUserStatusPanel(options = {}) {
     const animateCounters = Boolean(options.animateCounters);
     const payload = await fetchSecurityUserStatusData();
@@ -1486,9 +1758,12 @@ async function refreshSecurityEventsFeed(options = {}) {
             return null;
         }
 
-        renderSecurityCounters(payload.stats, false);
-        renderSecurityEventsTable(payload.events, { preserveScroll: true });
-        renderSecurityLiveFeed(payload.events);
+        const filtered = filterSimulationPayload(payload.events, state.securityIncidents);
+        state.securityEvents = filtered.events;
+        state.stats = payload && payload.stats ? normalizeSecurityStats(payload.stats) : state.stats || normalizeSecurityStats({});
+
+        renderSecurityEventViews(state.securityEvents, { preserveScroll: true });
+        syncSecurityOverviewFromCurrentState();
         restoreElementScrollState(eventsTableWrap, eventsTableScrollTop);
         restoreElementScrollState(liveFeedList, liveFeedScrollTop);
         markSecurityEventsFeedUpdated();
@@ -1733,9 +2008,10 @@ async function refreshIncidentOverview(options = {}) {
     const animateCounters = Boolean(options.animateCounters);
     const incidentsPayload = await fetchSecurityJson('/incidents');
     const allIncidents = Array.isArray(incidentsPayload) ? incidentsPayload : [];
+    const filtered = filterSimulationPayload([], allIncidents);
 
-    renderIncidentCounters(calculateIncidentMetrics(allIncidents), animateCounters);
-    detectAndHandleNewIncidents(allIncidents, { announceNew });
+    renderIncidentCounters(calculateIncidentMetrics(filtered.incidents), animateCounters);
+    detectAndHandleNewIncidents(filtered.incidents, { announceNew });
 }
 
 function normalizeIncidentStatus(status) {
@@ -1921,6 +2197,13 @@ function renderSecurityIncidentsTable(incidents) {
     }).join('');
 
     scrollSecurityTableToTop(tableBody);
+}
+
+function renderSecurityEventViews(events, options = {}) {
+    // Keep table and live-feed rendering in one place so rebase-era fixes do not
+    // drift between the initial load, SSE updates, and simulation reset paths.
+    renderSecurityEventsTable(events, options);
+    renderSecurityLiveFeed(events);
 }
 
 function getSelectedIncidentId() {
@@ -2274,8 +2557,9 @@ async function loadSecurityIncidents(options = {}) {
     const queryString = query.toString();
     const endpoint = queryString ? `/incidents?${queryString}` : '/incidents';
     const incidents = await api.get(endpoint);
+    const filtered = filterSimulationPayload([], incidents);
 
-    state.securityIncidents = Array.isArray(incidents) ? incidents : [];
+    state.securityIncidents = Array.isArray(filtered.incidents) ? filtered.incidents : [];
     renderSecurityIncidentsTable(state.securityIncidents);
 
     if (!keepSelected) {
@@ -2840,6 +3124,7 @@ function setupSecurityExportAction() {
 
 function setupSecuritySimulationAction() {
     const button = document.getElementById('security-simulate-btn');
+    const resetButton = document.getElementById('security-reset-sim-btn');
     if (!button) return;
 
     const label = button.querySelector('span');
@@ -2895,6 +3180,51 @@ function setupSecuritySimulationAction() {
             }
             if (label) {
                 label.textContent = t.security_simulate_btn;
+            }
+        }
+    };
+
+    if (!resetButton) return;
+
+    const resetLabel = resetButton.querySelector('span');
+    const resetIcon = resetButton.querySelector('i');
+    const defaultResetIconClass = resetIcon ? resetIcon.className : '';
+
+    resetButton.onclick = async () => {
+        const t = getSecurityCenterTranslations();
+        if (resetButton.disabled) return;
+
+        const shouldReset = window.confirm(t.security_simulation_reset_confirm || 'This will clear simulated events from the feed.\nIncidents and system metrics will NOT be affected.\nContinue?');
+        if (!shouldReset) {
+            return;
+        }
+
+        resetButton.disabled = true;
+        resetButton.classList.add('is-loading');
+        if (resetIcon) {
+            resetIcon.className = 'fas fa-spinner fa-spin';
+        }
+        if (resetLabel) {
+            resetLabel.textContent = t.security_simulation_reset_running || 'Clearing simulation feed...';
+        }
+
+        try {
+            // Rebase follow-up: this action is now view-only and clears the
+            // simulation feed layer without touching incidents or overview data.
+            clearSimulationFeedLocally();
+            appendSimulationResetAuditEvent();
+            showNotification(t.security_simulation_reset_success || 'Simulation feed cleared', 'success');
+        } catch (error) {
+            console.error('Simulation reset failed:', error);
+            showNotification(error.message || 'Failed to clear simulation feed', 'error');
+        } finally {
+            resetButton.disabled = false;
+            resetButton.classList.remove('is-loading');
+            if (resetIcon) {
+                resetIcon.className = defaultResetIconClass;
+            }
+            if (resetLabel) {
+                resetLabel.textContent = t.security_simulation_reset_btn || 'Reset Simulation View';
             }
         }
     };
@@ -3023,9 +3353,11 @@ const views = {
                 };
             });
 
-            renderSecurityCounters(securityData.stats, true);
-            renderSecurityEventsTable(securityData.events);
-            renderSecurityLiveFeed(securityData.events);
+            state.stats = normalizeSecurityStats(securityData.stats);
+            const filtered = filterSimulationPayload(securityData.events, []);
+            state.securityEvents = filtered.events;
+            renderSecurityEventViews(state.securityEvents);
+            syncSecurityOverviewFromCurrentState();
             markSecurityEventsFeedUpdated();
             await refreshSecurityUserStatusPanel({ animateCounters: true }).catch((error) => {
                 console.error('Security user status load error:', error);
@@ -3799,9 +4131,11 @@ function applySecurityStreamPayload(payload) {
     if (!payload || typeof payload !== 'object') return;
 
     const events = Array.isArray(payload.events) ? payload.events : [];
-    renderSecurityCounters(payload.stats || {}, false);
-    renderSecurityEventsTable(events, { preserveScroll: true });
-    renderSecurityLiveFeed(events);
+    const filtered = filterSimulationPayload(events, state.securityIncidents);
+    state.securityEvents = filtered.events;
+    state.stats = normalizeSecurityStats(payload.stats || state.stats || {});
+    renderSecurityEventViews(state.securityEvents, { preserveScroll: true });
+    syncSecurityOverviewFromCurrentState();
     scheduleIncidentOverviewRefresh();
     scheduleSecurityUsersRefresh();
     markSecurityEventsFeedUpdated();
@@ -4687,6 +5021,20 @@ function setupUploadZone(projectId) {
 }
 
 async function handleFiles(files, projectId) {
+    try {
+        const health = await api.get('/health');
+        if (health && health.celery_worker !== 'connected') {
+            showNotification(
+                state.lang === 'ar'
+                    ? 'تنبيه: خدمة المعالجة قد تكون غير متصلة حاليًا. سيتم رفع الملف، لكن قد تتأخر المعالجة.'
+                    : 'Warning: processing service may be offline. File upload will continue, but processing may be delayed.',
+                'warning'
+            );
+        }
+    } catch (_) {
+        // If health check fails, proceed and let upload endpoint report specific errors.
+    }
+
     for (const file of files) {
         const lowerName = file.name.toLowerCase();
         if (!lowerName.endsWith('.pdf') && !lowerName.endsWith('.txt') && !lowerName.endsWith('.docx')) {
@@ -4786,21 +5134,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initial View
     applyTranslations();
-    const apiReady = await resolveApiBaseUrl();
-    if (!apiReady) {
-        showNotification(state.lang === 'ar' ? 'تعذر الوصول إلى السيرفر. تأكد أن الباك-إند يعمل.' : 'Cannot reach backend server. Make sure it is running.', 'error');
-        const recovered = await resolveApiBaseUrl(30);
-        if (!recovered) {
-            return;
-        }
-    }
-
-    try {
-        await getCurrentUser();
-    } catch (error) {
-        console.error('Current user load error:', error);
-        return;
-    }
-
+    // Render immediately; API discovery and user hydration continue in the background.
     switchView('dashboard');
+
+    void (async () => {
+        const apiReady = await resolveApiBaseUrl(1);
+        if (!apiReady) {
+            showNotification(state.lang === 'ar' ? 'يجري الاتصال بالخادم في الخلفية...' : 'Connecting to backend in the background...', 'info');
+            const recovered = await resolveApiBaseUrl(1);
+            if (!recovered) {
+                return;
+            }
+        }
+
+        try {
+            await getCurrentUser();
+        } catch (error) {
+            console.error('Current user load error:', error);
+        }
+    })();
 });

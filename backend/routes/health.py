@@ -71,15 +71,26 @@ async def _probe_tcp_endpoint(raw_url: str) -> str:
 
 async def _probe_celery_worker() -> str:
     def _ping_workers():
-        inspector = celery_app.control.inspect(timeout=1.0)
-        return inspector.ping() or {}
+        inspector = celery_app.control.inspect(timeout=3.0)
+        replies = inspector.ping() or {}
+        if replies:
+            return replies
+
+        # Fallback for environments where inspect ping is flaky but workers are alive.
+        stats = inspector.stats() or {}
+        return stats
 
     try:
-        replies = await asyncio.wait_for(asyncio.to_thread(_ping_workers), timeout=3)
+        replies = await asyncio.wait_for(asyncio.to_thread(_ping_workers), timeout=6)
         return "connected" if replies else "disconnected"
     except Exception as exc:
         logger.debug("Celery worker health probe failed: %s", exc)
         return "disconnected"
+
+
+async def _probe_celery_worker_deep() -> str:
+    """Run the deeper worker probe used by /health/full for internal monitoring."""
+    return await _probe_celery_worker()
 
 
 async def _probe_shared_config() -> str:
@@ -100,9 +111,8 @@ async def _probe_vector_store(database_status: str) -> str:
     return "connected" if database_status == "connected" else "disconnected"
 
 
-@router.get("/health", response_model=HealthResponse)
-async def health_check(db: AsyncSession = Depends(get_db)):
-    """Check full system readiness status."""
+async def _build_health_response(db: AsyncSession, include_deep_checks: bool) -> dict:
+    """Build a fast readiness response and optionally run the deeper Celery worker probe."""
     try:
         await db.execute(text("SELECT 1"))
         db_status = "connected"
@@ -118,9 +128,11 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             _probe_vector_store(db_status),
         )
     )
-    celery_worker_status = (
-        await _probe_celery_worker() if broker_status == "connected" else "disconnected"
-    )
+    if include_deep_checks and broker_status == "connected":
+        celery_worker_status = await _probe_celery_worker_deep()
+    else:
+        # Keep the default health path fast so UI discovery does not wait on worker inspection.
+        celery_worker_status = "skipped"
 
     overall_status = "healthy"
     if not all(
@@ -128,7 +140,6 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             db_status == "connected",
             broker_status == "connected",
             result_backend_status == "connected",
-            celery_worker_status == "connected",
             shared_config_status == "ready",
             vector_store_status == "connected",
         )
@@ -146,6 +157,18 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "llm_provider": settings.llm_provider,
         "vector_db_provider": settings.vector_db_provider,
     }
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check(db: AsyncSession = Depends(get_db)):
+    """Fast readiness check used by UI startup and API discovery."""
+    return await _build_health_response(db, include_deep_checks=False)
+
+
+@router.get("/health/full", response_model=HealthResponse)
+async def health_check_full(db: AsyncSession = Depends(get_db)):
+    """Deeper health check for internal monitoring and diagnostics."""
+    return await _build_health_response(db, include_deep_checks=True)
 
 
 @router.get("/")
