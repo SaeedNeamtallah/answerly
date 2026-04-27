@@ -1,0 +1,891 @@
+openapi: 3.1.0
+info:
+  title: RAGMind B2B SaaS Telegram Support API
+  version: 0.1.0
+  description: Planned API contract for database-backed Telegram bot integrations, conversations, and platform admin views.
+servers:
+  - url: http://localhost:8000
+security:
+  - bearerAuth: []
+paths:
+  /admin/overview:
+    get:
+      tags: [Admin]
+      summary: Get platform-wide overview stats
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+  /admin/companies:
+    get:
+      tags: [Admin]
+      summary: List all company accounts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Company list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminCompany"
+        "403":
+          description: Platform owner access required
+  /admin/companies/{company_id}:
+    get:
+      tags: [Admin]
+      summary: Get one company account
+      parameters:
+        - $ref: "#/components/parameters/CompanyId"
+      responses:
+        "200":
+          description: Company detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCompany"
+        "403":
+          description: Platform owner access required
+        "404":
+          description: Company not found
+  /admin/companies/{company_id}/projects:
+    get:
+      tags: [Admin]
+      summary: List projects for a company
+      parameters:
+        - $ref: "#/components/parameters/CompanyId"
+      responses:
+        "200":
+          description: Project list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectSummary"
+  /admin/companies/{company_id}/bot-integrations:
+    get:
+      tags: [Admin]
+      summary: List bot integrations for a company
+      parameters:
+        - $ref: "#/components/parameters/CompanyId"
+      responses:
+        "200":
+          description: Bot integration list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotIntegration"
+  /admin/companies/{company_id}/conversations:
+    get:
+      tags: [Admin]
+      summary: List conversations for a company
+      parameters:
+        - $ref: "#/components/parameters/CompanyId"
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+  /admin/conversations/{conversation_id}:
+    get:
+      tags: [Admin]
+      summary: Get any conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /admin/conversations/{conversation_id}/messages:
+    get:
+      tags: [Admin]
+      summary: Get messages for any conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationMessage"
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Get platform-wide stats
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+  /admin/bot-integrations:
+    get:
+      tags: [Admin]
+      summary: List all bot integrations across companies
+      responses:
+        "200":
+          description: Bot integration list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotIntegration"
+  /admin/conversations:
+    get:
+      tags: [Admin]
+      summary: List all conversations across companies
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+  /admin/companies/{company_id}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspend a company account
+      parameters:
+        - $ref: "#/components/parameters/CompanyId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusReasonRequest"
+      responses:
+        "200":
+          description: Company suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCompany"
+  /admin/companies/{company_id}/activate:
+    post:
+      tags: [Admin]
+      summary: Activate a company account
+      parameters:
+        - $ref: "#/components/parameters/CompanyId"
+      responses:
+        "200":
+          description: Company activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCompany"
+
+  /bot-integrations:
+    get:
+      tags: [Bot Integrations]
+      summary: List current company bot integrations
+      responses:
+        "200":
+          description: Bot integration list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotIntegration"
+    post:
+      tags: [Bot Integrations]
+      summary: Create a Telegram bot integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotIntegrationCreate"
+      responses:
+        "201":
+          description: Bot integration created without returning token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+        "403":
+          description: Project does not belong to current company
+  /bot-integrations/{integration_id}:
+    get:
+      tags: [Bot Integrations]
+      summary: Get one current company bot integration
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      responses:
+        "200":
+          description: Bot integration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+    put:
+      tags: [Bot Integrations]
+      summary: Update bot integration settings except saved token
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotIntegrationUpdate"
+      responses:
+        "200":
+          description: Bot integration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+    patch:
+      tags: [Bot Integrations]
+      summary: Partially update bot integration settings except saved token
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotIntegrationUpdate"
+      responses:
+        "200":
+          description: Bot integration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+    delete:
+      tags: [Bot Integrations]
+      summary: Delete a bot integration
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      responses:
+        "204":
+          description: Deleted
+  /bot-integrations/{integration_id}/test:
+    post:
+      tags: [Bot Integrations]
+      summary: Test bot integration token/webhook readiness
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      responses:
+        "200":
+          description: Readiness result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotReadiness"
+  /bot-integrations/{integration_id}/enable:
+    post:
+      tags: [Bot Integrations]
+      summary: Enable a bot integration
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      responses:
+        "200":
+          description: Enabled integration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+  /bot-integrations/{integration_id}/disable:
+    post:
+      tags: [Bot Integrations]
+      summary: Disable a bot integration
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      responses:
+        "200":
+          description: Disabled integration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+  /bot-integrations/{integration_id}/rotate-token:
+    post:
+      tags: [Bot Integrations]
+      summary: Rotate Telegram bot token
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RotateTokenRequest"
+      responses:
+        "200":
+          description: Integration with rotated token metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotIntegration"
+  /bot-integrations/{integration_id}/readiness:
+    get:
+      tags: [Bot Integrations]
+      summary: Get readiness status
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+      responses:
+        "200":
+          description: Readiness result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotReadiness"
+
+  /telegram/webhook/{integration_id}/{webhook_secret}:
+    post:
+      tags: [Telegram Webhook]
+      summary: Receive Telegram update for one bot integration
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IntegrationId"
+        - name: webhook_secret
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Update accepted or safely ignored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookResult"
+        "404":
+          description: Integration or webhook secret not found
+
+  /conversations:
+    get:
+      tags: [Conversations]
+      summary: List current company conversations
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: bot_integration_id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: unread_only
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}:
+    get:
+      tags: [Conversations]
+      summary: Get one current company conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}/messages:
+    get:
+      tags: [Conversations]
+      summary: Get messages for one current company conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationMessage"
+  /conversations/{conversation_id}/reply:
+    post:
+      tags: [Conversations]
+      summary: Send manual agent reply through linked Telegram bot
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualReplyRequest"
+      responses:
+        "201":
+          description: Agent message stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationMessage"
+  /conversations/{conversation_id}/resolve:
+    post:
+      tags: [Conversations]
+      summary: Resolve a conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Resolved conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}/escalate:
+    post:
+      tags: [Conversations]
+      summary: Escalate a conversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Escalated conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}/assign:
+    post:
+      tags: [Conversations]
+      summary: Assign a conversation to a dashboard user
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignConversationRequest"
+      responses:
+        "200":
+          description: Assigned conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}/assign-self:
+    post:
+      tags: [Conversations]
+      summary: Assign a conversation to the current dashboard user
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Assigned conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}/block:
+    post:
+      tags: [Conversations]
+      summary: Block the conversation customer
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Blocked conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /conversations/{conversation_id}/block-customer:
+    post:
+      tags: [Conversations]
+      summary: Block the conversation customer
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Blocked conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CompanyId:
+      name: company_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    IntegrationId:
+      name: integration_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    ConversationId:
+      name: conversation_id
+      in: path
+      required: true
+      schema:
+        type: integer
+  schemas:
+    AdminCompany:
+      type: object
+      required: [id, username, role, status]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+          enum: [platform_owner, company_admin]
+        company_name:
+          type: string
+          nullable: true
+        company_website:
+          type: string
+          nullable: true
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+    ProjectSummary:
+      type: object
+      required: [id, owner_id, name]
+      properties:
+        id:
+          type: integer
+        owner_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    BotIntegration:
+      type: object
+      required: [id, owner_id, project_id, platform, status, webhook_configured, show_sources_to_customer, human_handoff_enabled]
+      properties:
+        id:
+          type: integer
+        owner_id:
+          type: integer
+        project_id:
+          type: integer
+        platform:
+          type: string
+          default: telegram
+        name:
+          type: string
+          nullable: true
+        telegram_bot_id:
+          type: integer
+          nullable: true
+        telegram_bot_username:
+          type: string
+          nullable: true
+        telegram_bot_display_name:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, disabled, error]
+        webhook_configured:
+          type: boolean
+          description: True when the server has a stored webhook URL; webhook secrets and full webhook URLs are never returned.
+        last_error:
+          type: string
+          nullable: true
+        welcome_message:
+          type: string
+          nullable: true
+        fallback_message:
+          type: string
+          nullable: true
+        handoff_message:
+          type: string
+          nullable: true
+        language:
+          type: string
+          enum: [ar, en]
+        tone:
+          type: string
+        show_sources_to_customer:
+          type: boolean
+        human_handoff_enabled:
+          type: boolean
+        collect_contact_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    BotIntegrationCreate:
+      type: object
+      required: [project_id, bot_token]
+      properties:
+        project_id:
+          type: integer
+        bot_token:
+          type: string
+          writeOnly: true
+        name:
+          type: string
+        language:
+          type: string
+          enum: [ar, en]
+          default: ar
+        tone:
+          type: string
+          default: professional
+        welcome_message:
+          type: string
+        fallback_message:
+          type: string
+        handoff_message:
+          type: string
+        show_sources_to_customer:
+          type: boolean
+          default: false
+        human_handoff_enabled:
+          type: boolean
+          default: true
+        collect_contact_enabled:
+          type: boolean
+          default: false
+    BotIntegrationUpdate:
+      type: object
+      properties:
+        project_id:
+          type: integer
+        name:
+          type: string
+        language:
+          type: string
+          enum: [ar, en]
+        tone:
+          type: string
+        welcome_message:
+          type: string
+        fallback_message:
+          type: string
+        handoff_message:
+          type: string
+        show_sources_to_customer:
+          type: boolean
+        human_handoff_enabled:
+          type: boolean
+        collect_contact_enabled:
+          type: boolean
+    RotateTokenRequest:
+      type: object
+      required: [bot_token]
+      properties:
+        bot_token:
+          type: string
+          writeOnly: true
+    BotReadiness:
+      type: object
+      required: [ready, checks]
+      properties:
+        ready:
+          type: boolean
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              ok:
+                type: boolean
+              message:
+                type: string
+        last_error:
+          type: string
+          nullable: true
+    Conversation:
+      type: object
+      required: [id, owner_id, bot_integration_id, project_id, customer_id, status]
+      properties:
+        id:
+          type: integer
+        owner_id:
+          type: integer
+        bot_integration_id:
+          type: integer
+        project_id:
+          type: integer
+        customer_id:
+          type: integer
+        platform:
+          type: string
+          default: telegram
+        status:
+          type: string
+          enum: [open, escalated, resolved, blocked]
+        assigned_to_user_id:
+          type: integer
+          nullable: true
+        last_message_text:
+          type: string
+          nullable: true
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+        unread_count:
+          type: integer
+        needs_human:
+          type: boolean
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+    ConversationMessage:
+      type: object
+      required: [id, owner_id, conversation_id, sender_type, content, status]
+      properties:
+        id:
+          type: integer
+        owner_id:
+          type: integer
+        conversation_id:
+          type: integer
+        sender_type:
+          type: string
+          enum: [customer, bot, agent, system, error]
+        sender_user_id:
+          type: integer
+          nullable: true
+        telegram_message_id:
+          type: integer
+          nullable: true
+        content:
+          type: string
+        answer_sources_json:
+          type: object
+          nullable: true
+          additionalProperties: true
+        context_used:
+          type: integer
+          nullable: true
+        confidence_score:
+          type: number
+          nullable: true
+        raw_payload_json:
+          type: object
+          nullable: true
+          additionalProperties: true
+        status:
+          type: string
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+    ManualReplyRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+    AssignConversationRequest:
+      type: object
+      required: [assigned_to_user_id]
+      properties:
+        assigned_to_user_id:
+          type: integer
+    StatusReasonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    AdminStats:
+      type: object
+      properties:
+        companies:
+          type: integer
+        projects:
+          type: integer
+        bot_integrations:
+          type: integer
+        conversations:
+          type: integer
+        messages:
+          type: integer
+        errors:
+          type: integer
+    WebhookResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        ignored:
+          type: boolean
+        reason:
+          type: string
+          nullable: true

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | RAGMind</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="auth.css">
+</head>
+<body class="auth-page">
+    <main class="auth-shell">
+        <section class="auth-brand">
+            <a class="brand-logo" href="login.html">
+                <img src="favicon.svg" alt="RAGMind" class="brand-icon">
+                <span>RAGMind</span>
+            </a>
+            <h1>Secure knowledge assistant for your team</h1>
+            <p>
+                Access your private documents, retrieval pipelines, and AI chat from one protected workspace.
+            </p>
+            <ul class="brand-points">
+                <li><i class="fas fa-shield-halved"></i><span>JWT-protected access and user isolation</span></li>
+                <li><i class="fas fa-database"></i><span>Project-scoped document storage and retrieval</span></li>
+                <li><i class="fas fa-gauge-high"></i><span>Rate-limited and hardened backend endpoints</span></li>
+            </ul>
+        </section>
+
+        <section class="auth-panel">
+            <div class="auth-card login-card">
+                <h2>Welcome back</h2>
+                <p class="subtitle">Login to continue to your dashboard.</p>
+
+                <form id="login-form" novalidate>
+                    <div class="field">
+                        <label for="username">Username</label>
+                        <input id="username" name="username" type="text" autocomplete="username" required>
+                    </div>
+
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <div class="password-input-wrap">
+                            <input id="password" class="password-input" name="password" type="password" autocomplete="current-password" required>
+                            <button id="password-toggle" class="password-toggle-btn" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+                        </div>
+                    </div>
+
+                    <button id="login-btn" type="submit">Login</button>
+                    <a href="signup.html" class="secondary-action">Create New Account</a>
+                    <p id="error-message" class="error" role="alert"></p>
+                    <div class="helper-row">
+                        <span id="api-hint" class="api-hint"></span>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        (async function () {
+            const form = document.getElementById("login-form");
+            const usernameInput = document.getElementById("username");
+            const passwordInput = document.getElementById("password");
+            const passwordToggleButton = document.getElementById("password-toggle");
+            const loginButton = document.getElementById("login-btn");
+            const errorMessage = document.getElementById("error-message");
+            const apiHint = document.getElementById("api-hint");
+
+            function normalizeBaseUrl(url) {
+                return String(url || "")
+                    .trim()
+                    // Fixed stale regex so discovery removes trailing slashes instead of literal carets.
+                    .replace(/\/+$/, "");
+            }
+
+            let apiBaseUrl = normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")) || "http://52.188.226.80:8000";
+
+            function updateApiHint() {
+                apiHint.textContent = "API: " + apiBaseUrl;
+            }
+
+            function getApiBaseCandidates() {
+                const queryParams = new URLSearchParams(window.location.search);
+                const fromQuery = normalizeBaseUrl(queryParams.get("api"));
+                const host = window.location.hostname || "52.188.226.80";
+                const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+
+                const candidates = [
+                    fromQuery,
+                    normalizeBaseUrl(localStorage.getItem("ragmind_api_base_url")),
+                    normalizeBaseUrl(apiBaseUrl),
+                    `${protocol}//${host}:8000`,
+                    `${protocol}//${host}:8101`,
+                    `${protocol}//${host}:8001`
+                ].filter(Boolean);
+
+                return [...new Set(candidates)];
+            }
+
+            async function canReachApi(baseUrl) {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 2000);
+
+                try {
+                    const response = await fetch(baseUrl + "/health", { signal: controller.signal });
+                    return response.ok;
+                } catch (_) {
+                    return false;
+                } finally {
+                    clearTimeout(timeout);
+                }
+            }
+
+            async function resolveApiBaseUrl(maxAttempts = 1) {
+                const candidates = getApiBaseCandidates();
+
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    for (const candidate of candidates) {
+                        if (await canReachApi(candidate)) {
+                            apiBaseUrl = candidate;
+                            localStorage.setItem("ragmind_api_base_url", apiBaseUrl);
+                            updateApiHint();
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
+            updateApiHint();
+            // Keep login interactive immediately; resolve the backend base URL in the background.
+            void resolveApiBaseUrl(1);
+
+            function parseJwtPayload(token) {
+                try {
+                    const parts = String(token || "").split(".");
+                    if (parts.length !== 3) return null;
+                    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+                    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+                    const json = atob(padded);
+                    return JSON.parse(json);
+                } catch (_) {
+                    return null;
+                }
+            }
+
+            function isTokenExpired(token) {
+                const payload = parseJwtPayload(token);
+                if (!payload || typeof payload.exp !== "number") return true;
+                return Date.now() >= payload.exp * 1000;
+            }
+
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.classList.add("visible");
+            }
+
+            function normalizeErrorText(value) {
+                if (typeof value === "string") {
+                    return value.trim();
+                }
+                if (value && typeof value === "object") {
+                    if (typeof value.message === "string") {
+                        return value.message.trim();
+                    }
+                    if (typeof value.detail === "string") {
+                        return value.detail.trim();
+                    }
+                }
+                return "";
+            }
+
+            function formatRetryDuration(totalSeconds) {
+                const safeSeconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
+                if (safeSeconds <= 0) {
+                    return "a short time";
+                }
+
+                const minutes = Math.floor(safeSeconds / 60);
+                const seconds = safeSeconds % 60;
+
+                if (minutes === 0) {
+                    return `${seconds} second${seconds === 1 ? "" : "s"}`;
+                }
+
+                if (seconds === 0) {
+                    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+                }
+
+                return `${minutes} minute${minutes === 1 ? "" : "s"} ${seconds} second${seconds === 1 ? "" : "s"}`;
+            }
+
+            function extractRetryAfterSeconds(payload, detailText) {
+                if (payload && typeof payload.retry_after_seconds === "number") {
+                    return payload.retry_after_seconds;
+                }
+
+                const secondsMatch = detailText.match(/(\d+)\s*seconds?/i);
+                if (secondsMatch) {
+                    return Number(secondsMatch[1]);
+                }
+
+                const minutesMatch = detailText.match(/(\d+)\s*minutes?/i);
+                if (minutesMatch) {
+                    return Number(minutesMatch[1]) * 60;
+                }
+
+                return 0;
+            }
+
+            function extractSuspendedUntil(payload, detailText) {
+                const payloadTimestamp = payload && typeof payload.suspended_until === "string"
+                    ? payload.suspended_until.trim()
+                    : "";
+                if (payloadTimestamp) {
+                    return payloadTimestamp;
+                }
+
+                const detailMatch = detailText.match(/suspended(?:\s+until)?\s+([0-9T:+\-.Z]+)/i);
+                if (!detailMatch) {
+                    return "";
+                }
+
+                return String(detailMatch[1] || "").replace(/[.,;]+$/, "").trim();
+            }
+
+            function formatTimestampForDisplay(rawTimestamp) {
+                const parsed = new Date(rawTimestamp);
+                if (Number.isNaN(parsed.getTime())) {
+                    return rawTimestamp;
+                }
+
+                return `${parsed.toLocaleString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false
+                })} (local time)`;
+            }
+
+            function formatLoginErrorMessage(statusCode, payload) {
+                const detailText = normalizeErrorText(payload && payload.detail ? payload.detail : payload);
+
+                if (statusCode === 429) {
+                    const retrySeconds = extractRetryAfterSeconds(payload || {}, detailText);
+                    return `Too many failed login attempts. Please try again in ${formatRetryDuration(retrySeconds)}.`;
+                }
+
+                if (statusCode === 403) {
+                    const lowered = detailText.toLowerCase();
+                    const suspendedUntil = extractSuspendedUntil(payload || {}, detailText);
+
+                    if (lowered.includes("suspend")) {
+                        if (suspendedUntil) {
+                            return `Your account is suspended until ${formatTimestampForDisplay(suspendedUntil)}. Please try again after this time.`;
+                        }
+                        const suspensionRetrySeconds = extractRetryAfterSeconds(payload || {}, detailText);
+                        if (suspensionRetrySeconds > 0) {
+                            return `Your account is temporarily suspended. Please try again in ${formatRetryDuration(suspensionRetrySeconds)}.`;
+                        }
+                        return "Your account is temporarily suspended. Please contact support if this was unexpected.";
+                    }
+
+                    if (lowered.includes("block")) {
+                        return "Your account is blocked. Please contact support to restore access.";
+                    }
+
+                    return detailText || "Your account access is restricted. Please contact support.";
+                }
+
+                if (statusCode === 401) {
+                    return "Invalid username or password.";
+                }
+
+                if (statusCode >= 500) {
+                    return "Login is temporarily unavailable. Please try again in a moment.";
+                }
+
+                return detailText || "Login failed. Please try again.";
+            }
+
+            function clearError() {
+                errorMessage.textContent = "";
+                errorMessage.classList.remove("visible");
+            }
+
+            usernameInput.addEventListener("input", clearError);
+            passwordInput.addEventListener("input", clearError);
+
+            if (passwordToggleButton) {
+                passwordToggleButton.addEventListener("click", function () {
+                    const showingPassword = passwordInput.type === "text";
+                    if (showingPassword) {
+                        passwordInput.type = "password";
+                        passwordToggleButton.textContent = "Show";
+                        passwordToggleButton.setAttribute("aria-label", "Show password");
+                        passwordToggleButton.setAttribute("aria-pressed", "false");
+                    } else {
+                        passwordInput.type = "text";
+                        passwordToggleButton.textContent = "Hide";
+                        passwordToggleButton.setAttribute("aria-label", "Hide password");
+                        passwordToggleButton.setAttribute("aria-pressed", "true");
+                    }
+                    passwordInput.focus();
+                });
+            }
+
+            const queryParams = new URLSearchParams(window.location.search);
+            const reason = queryParams.get("reason");
+            if (reason === "expired") {
+                showError("Your session expired. Please login again.");
+            }
+
+            const existingToken = (localStorage.getItem("access_token") || "").trim();
+            if (existingToken) {
+                if (isTokenExpired(existingToken)) {
+                    localStorage.removeItem("access_token");
+                } else {
+                    showError("You are already signed in. Login again to switch account.");
+                }
+            }
+
+            form.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                clearError();
+
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value;
+
+                if (!username || !password) {
+                    showError("Username and password are required.");
+                    return;
+                }
+
+                loginButton.disabled = true;
+                const originalButtonText = loginButton.textContent;
+                loginButton.textContent = "Logging in...";
+
+                try {
+                    const submitLoginRequest = async () => fetch(apiBaseUrl + "/auth/login", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ username: username, password: password })
+                    });
+
+                    let response;
+                    try {
+                        response = await submitLoginRequest();
+                    } catch (networkError) {
+                        // Retry once after a short background discovery pass so login does not spin on slow health checks.
+                        const recovered = await resolveApiBaseUrl(1);
+                        if (!recovered) {
+                            throw networkError;
+                        }
+                        response = await submitLoginRequest();
+                    }
+
+                    let payload = null;
+                    try {
+                        payload = await response.json();
+                    } catch (_) {
+                        payload = null;
+                    }
+
+                    if (!response.ok) {
+                        const message = formatLoginErrorMessage(response.status, payload || {});
+                        throw new Error(message);
+                    }
+
+                    if (!payload || !payload.access_token) {
+                        throw new Error("Server did not return access_token.");
+                    }
+
+                    localStorage.setItem("access_token", payload.access_token);
+                    const cacheBust = Date.now().toString();
+                    window.location.href = `index.html?api=${encodeURIComponent(apiBaseUrl)}&cb=${cacheBust}`;
+                } catch (error) {
+                    showError(error.message || "Login failed. Please try again.");
+                } finally {
+                    loginButton.disabled = false;
+                    loginButton.textContent = originalButtonText;
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

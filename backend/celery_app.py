@@ -3,10 +3,11 @@ Celery application configuration.
 Standalone entry point for Celery workers.
 """
 from celery import Celery
+from typing import Optional, Tuple
+
 from backend.config import settings
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from backend.providers.llm.factory import LLMProviderFactory
 from backend.providers.vectordb.factory import VectorDBProviderFactory
 from backend.services.embedding_service import EmbeddingService
 from backend.services.chunking_service import ChunkingService
@@ -57,6 +58,9 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
     include=[
         "backend.tasks.file_processing",
+        "backend.tasks.data_indexing",
+        "backend.tasks.process_workflow",
+        "backend.tasks.maintenance",
     ],
 )
 

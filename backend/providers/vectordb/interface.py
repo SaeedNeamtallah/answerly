@@ -94,6 +94,27 @@ class VectorDBInterface(ABC):
             True if successful
         """
         pass
+
+    @abstractmethod
+    async def delete_vectors(
+        self,
+        collection_name: str,
+        *,
+        filter_dict: Dict[str, Any],
+        **kwargs
+    ) -> bool:
+        """
+        Delete vectors matching the provided metadata filter.
+
+        Args:
+            collection_name: Collection name
+            filter_dict: Metadata filter used to select vectors
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            True if successful
+        """
+        pass
     
     @abstractmethod
     async def collection_exists(

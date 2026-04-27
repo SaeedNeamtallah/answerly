@@ -1,19 +1,37 @@
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql+asyncpg://ragmind:ragmind123@postgres:5432/ragmind
+  QDRANT_URL: http://qdrant:6333
+  CELERY_BROKER_URL: amqp://minirag_user:minirag_rabbitmq_2222@rabbitmq:5672/minirag_vhost
+  CELERY_RESULT_BACKEND: redis://:minirag_redis_2222@redis:6379/0
+  CORS_ORIGINS: '["http://52.188.226.80","http://localhost:8080","http://localhost:3000"]'
+  RAGMIND_SHARED_CONFIG_DIR: /app/uploads/config
+
+x-app-depends-on: &app-depends-on
+  postgres:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+  redis:
+    condition: service_started
+  qdrant:
+    condition: service_started
+
 services:
+  # 1. قاعدة البيانات (PostgreSQL + pgvector)
   postgres:
     image: pgvector/pgvector:pg16
     container_name: ragmind-postgres
     environment:
       POSTGRES_USER: ragmind
-      POSTGRES_PASSWORD: ragmind123
+      POSTGRES_PASSWORD: ragmind123 # نفس اللي في الـ .env
       POSTGRES_DB: ragmind
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ../backend/alembic/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ragmind -d ragmind"]
+      test: [ "CMD-SHELL", "pg_isready -U ragmind -d ragmind" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,7 +54,6 @@ services:
     container_name: ragmind-qdrant
     ports:
       - "6381:6333"
-      - "6382:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
@@ -44,35 +61,31 @@ services:
   rabbitmq:
     image: rabbitmq:4.1.2-management-alpine
     container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: minirag_user
+      RABBITMQ_DEFAULT_PASS: minirag_rabbitmq_2222
+      RABBITMQ_DEFAULT_VHOST: minirag_vhost
     ports:
       - "5729:5672"
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-    env_file:
-      - ./env/.env.rabbitmq
     restart: always
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
       timeout: 10s
       retries: 5
 
+  # 4. Caching & Task Backend (Redis)
   redis:
-    image: redis:8.0.3-alpine
+    image: redis:7-alpine # نسخة مستقرة للإنتاج
     container_name: redis
     ports:
       - "6383:6379"
     volumes:
       - redis_data:/data
-    env_file:
-      - ./env/.env.redis
     restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      timeout: 10s
-      retries: 5
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-minirag_redis_2222}"]
+    command: [ "redis-server", "--appendonly", "yes", "--requirepass", "minirag_redis_2222" ]
 
   prometheus:
     image: prom/prometheus:latest

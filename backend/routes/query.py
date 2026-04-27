@@ -5,7 +5,6 @@ API endpoints for querying documents with RAG Metrics.
 
 import time
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from typing import Optional, List
@@ -13,7 +12,14 @@ from typing import Optional, List
 from backend.config import settings
 from backend.runtime_config import get_runtime_value
 from backend.database import get_db
-from backend.controllers.query_controller import QueryController
+from backend.database.models import User
+from backend.controllers.project_controller import ProjectController
+from backend.controllers.document_controller import DocumentController
+from backend.controllers.query_controller import QueryController, QueryInfrastructureError
+from backend.security.auth import get_current_db_user
+from backend.security.event_service import log_event
+from backend.security.security_event import SecurityEventType, SecuritySeverity
+from backend.security.sanitization import sanitize_text
 
 # استيراد ميتريكس الـ AI من ملف الـ main
 # ملاحظة: تأكد أن المسار صحيح حسب هيكلة مشروعك
@@ -27,6 +33,8 @@ router = APIRouter(tags=["Query"])
 # ------------------------
 
 class QueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str = Field(..., min_length=1)
     top_k: Optional[int] = Field(default=None, ge=1, le=20)
     language: str = Field(default="ar", pattern="^(ar|en)$")

@@ -187,8 +187,16 @@ app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(query.router)
 app.include_router(stats.router)
+app.include_router(security.router)
+app.include_router(incidents.router)
+app.include_router(admin_users.router)
+app.include_router(admin_console.router)
+app.include_router(bot_integrations.router)
+app.include_router(conversations.router)
+app.include_router(telegram_webhook.router)
 app.include_router(bot_config.router)
 app.include_router(app_config.router)
+app.include_router(auth.router)
 
 if __name__ == "__main__":
     import uvicorn

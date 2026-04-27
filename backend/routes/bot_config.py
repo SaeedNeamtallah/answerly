@@ -2,51 +2,122 @@
 Bot Configuration Routes.
 API endpoints for configuring the Telegram bot.
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from pydantic import BaseModel
-from typing import Optional
+from __future__ import annotations
+
 import json
+import logging
 import os
+from pathlib import Path
+from typing import Any, Optional
+
 import httpx
+from fastapi import APIRouter, Depends, Form, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.config import settings
+from backend.database.connection import get_db
+from backend.database.models import Project, User
+from backend.security.auth import get_current_db_user
+from backend.security.sanitization import sanitize_text
+from backend.shared_config_paths import get_bot_config_path
 from telegram_bot.config import bot_settings
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bot", tags=["Bot Config"])
 
-CONFIG_FILE = "bot_config.json"
 
 class BotConfig(BaseModel):
     active_project_id: Optional[int] = None
 
-def load_config():
-    if os.path.exists(CONFIG_FILE):
+
+def _load_config(config_path: Path) -> dict[str, Any]:
+    if config_path.exists():
         try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-        except:
+            with config_path.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            return data if isinstance(data, dict) else {}
+        except Exception:
             return {}
     return {}
 
-def save_config(config):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f)
+
+def _save_config(config_path: Path, config: dict[str, Any]) -> None:
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as handle:
+        json.dump(config, handle, indent=2)
+
+
+_LEGACY_BOT_CONFIG_WARNING = (
+    "Deprecated legacy demo configuration. Production Telegram support uses "
+    "database-backed /bot-integrations and /telegram/webhook routes."
+)
+
 
 @router.get("/config")
 async def get_bot_config():
-    """Get current bot configuration."""
-    return load_config()
+    """Get deprecated legacy bot configuration."""
+    config = _load_config(get_bot_config_path())
+    config["legacy"] = True
+    config["warning"] = _LEGACY_BOT_CONFIG_WARNING
+    return config
+
 
 @router.post("/config")
-async def update_bot_config(config: BotConfig):
-    """Update bot configuration (active project)."""
-    current_config = load_config()
-    if config.active_project_id is not None:
-        current_config["active_project_id"] = config.active_project_id
-    save_config(current_config)
+async def update_bot_config(
+    config: BotConfig,
+    current_user: User = Depends(get_current_db_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update deprecated legacy bot configuration (active project)."""
+    if config.active_project_id is None:
+        raise HTTPException(status_code=400, detail="active_project_id is required")
+
+    if config.active_project_id <= 0:
+        raise HTTPException(status_code=400, detail="active_project_id must be a positive integer")
+
+    configured_bot_username = (
+        (os.getenv("BOT_API_USERNAME") or "").strip()
+        or str(settings.auth_admin_username or "").strip()
+    ).lower()
+    config_owner_id = current_user.id
+
+    if configured_bot_username:
+        bot_user_stmt = (
+            select(User.id)
+            .where(func.lower(User.username) == configured_bot_username)
+            .order_by(User.id.asc())
+            .limit(1)
+        )
+        bot_user_result = await db.execute(bot_user_stmt)
+        bot_user_id = bot_user_result.scalar_one_or_none()
+        if bot_user_id is not None:
+            config_owner_id = int(bot_user_id)
+
+    stmt = select(Project.id).where(
+        Project.id == config.active_project_id,
+        Project.owner_id == config_owner_id,
+    )
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    config_path = get_bot_config_path()
+    current_config = _load_config(config_path)
+    current_config["active_project_id"] = config.active_project_id
+    current_config["legacy"] = True
+    current_config["warning"] = _LEGACY_BOT_CONFIG_WARNING
+    _save_config(config_path, current_config)
     return current_config
+
 
 @router.post("/profile")
 async def update_bot_profile(
     name: str = Form(...),
+    current_user: User = Depends(get_current_db_user),
     # image: UploadFile = File(None) # Image upload to be implemented if needed
 ):
     """
@@ -54,13 +125,19 @@ async def update_bot_profile(
     Requires 'setMyName' permission.
     """
     try:
+        _ = current_user
+        clean_name = sanitize_text(name, max_length=64, strip_html=True, allow_newlines=False)
+        if not clean_name:
+            raise HTTPException(status_code=400, detail="Bot name cannot be empty")
+
         async with httpx.AsyncClient() as client:
-            # Update Name
             url = f"https://api.telegram.org/bot{bot_settings.telegram_bot_token}/setMyName"
-            response = await client.post(url, json={"name": name})
+            response = await client.post(url, json={"name": clean_name})
             response.raise_for_status()
-            
             return {"status": "success", "message": "Bot profile updated"}
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unexpected error while updating bot profile")
+        raise HTTPException(status_code=500, detail="Internal server error")
