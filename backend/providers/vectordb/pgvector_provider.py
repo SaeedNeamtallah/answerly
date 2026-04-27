@@ -422,17 +422,39 @@ class PGVectorProvider(VectorDBInterface):
         means deleting the matching `chunks` rows.
         """
         try:
+            if not isinstance(filter_dict, dict) or not filter_dict:
+                raise ValueError("filter_dict is required when deleting vectors")
+
+            allowed_keys = {"asset_id", "project_id", "owner_id"}
+            unknown_keys = set(filter_dict).difference(allowed_keys)
+            if unknown_keys:
+                raise ValueError(
+                    f"Unsupported filter keys for pgvector delete: {sorted(unknown_keys)}"
+                )
+
+            asset_id = filter_dict.get("asset_id")
+            project_id = filter_dict.get("project_id")
+            owner_id = filter_dict.get("owner_id")
+
+            if asset_id is None and project_id is None and owner_id is None:
+                raise ValueError(
+                    "At least one non-null filter key is required for pgvector delete"
+                )
+
             session_maker = self._get_session_maker(kwargs.get("session_maker"))
             async with session_maker() as session:
                 stmt = delete(Chunk)
-
-                asset_id = filter_dict.get("asset_id")
-                project_id = filter_dict.get("project_id")
 
                 if asset_id is not None:
                     stmt = stmt.where(Chunk.asset_id == asset_id)
                 if project_id is not None:
                     stmt = stmt.where(Chunk.project_id == project_id)
+                if owner_id is not None:
+                    stmt = stmt.where(
+                        Chunk.project_id.in_(
+                            select(Project.id).where(Project.owner_id == owner_id)
+                        )
+                    )
 
                 await session.execute(stmt)
                 await session.commit()

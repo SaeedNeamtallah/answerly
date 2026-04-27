@@ -4,13 +4,14 @@ Exposes provider availability and runtime selections.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Dict, Optional
+from typing import Dict
 
 from backend.config import settings
-from backend.runtime_config import get_runtime_value, update_runtime_config
+from backend.database.models import User
+from backend.runtime_config import get_runtime_value, load_runtime_config, update_runtime_config
 from backend.providers.llm.factory import LLMProviderFactory
 from backend.providers.vectordb.factory import VectorDBProviderFactory
-from backend.security.auth import AuthUser, require_mutation_auth_if_enabled
+from backend.security.auth import get_current_db_user
 from backend.security.sanitization import sanitize_text
 
 router = APIRouter(prefix="/config", tags=["App Config"])
@@ -33,12 +34,69 @@ class ProviderUpdate(BaseModel):
     retrieval_rerank_top_k: int | None = Field(default=None, ge=1)
     query_rewrite_enabled: bool | None = None
     retrieval_hnsw_ef_search: int | None = Field(default=None, ge=1)
-    voyage_output_dimension: int | None = Field(default=None, ge=128)
+
+
+def _normalize_provider_choice(raw_value: object, *, available: list[str], fallback_value: str) -> str:
+    normalized_available = [str(item).strip().lower() for item in available if str(item).strip()]
+    if not normalized_available:
+        return str(fallback_value or "").strip().lower()
+
+    candidate = str(raw_value or "").strip().lower()
+    if candidate in normalized_available:
+        return candidate
+
+    fallback = str(fallback_value or "").strip().lower()
+    if fallback in normalized_available:
+        return fallback
+
+    return normalized_available[0]
+
+
+def normalize_provider_runtime_config() -> Dict[str, object]:
+    """Migrate unsupported runtime provider selections to valid defaults."""
+    llm_available = LLMProviderFactory.get_available_providers()
+    embedding_available = LLMProviderFactory.get_available_embedding_providers()
+    vector_available = VectorDBProviderFactory.get_available_providers()
+
+    config = load_runtime_config()
+    normalized = {
+        "llm_provider": _normalize_provider_choice(
+            config.get("llm_provider", settings.llm_provider),
+            available=llm_available,
+            fallback_value=settings.llm_provider,
+        ),
+        "embedding_provider": _normalize_provider_choice(
+            config.get("embedding_provider", settings.embedding_provider),
+            available=embedding_available,
+            fallback_value=settings.embedding_provider,
+        ),
+        "vector_db_provider": _normalize_provider_choice(
+            config.get("vector_db_provider", settings.vector_db_provider),
+            available=vector_available,
+            fallback_value=settings.vector_db_provider,
+        ),
+    }
+
+    updates: Dict[str, str] = {}
+    for key, value in normalized.items():
+        current_value = str(config.get(key, "")).strip().lower()
+        if current_value != value:
+            updates[key] = value
+
+    if updates:
+        update_runtime_config(updates)
+
+    return {
+        **normalized,
+        "migrated": bool(updates),
+        "updated_fields": sorted(updates.keys()),
+    }
 
 
 @router.get("/providers")
 async def get_providers() -> Dict[str, object]:
     """Return available providers and current selections."""
+    provider_state = normalize_provider_runtime_config()
     llm_available = LLMProviderFactory.get_available_providers()
     embedding_available = LLMProviderFactory.get_available_embedding_providers()
     vector_available = VectorDBProviderFactory.get_available_providers()
@@ -49,11 +107,12 @@ async def get_providers() -> Dict[str, object]:
             "embedding": embedding_available,
             "vector_db": vector_available,
         },
-        "llm_provider": get_runtime_value("llm_provider", settings.llm_provider),
-        "embedding_provider": get_runtime_value("embedding_provider", settings.embedding_provider),
-        "vector_db_provider": get_runtime_value("vector_db_provider", settings.vector_db_provider),
+        "llm_provider": provider_state["llm_provider"],
+        "embedding_provider": provider_state["embedding_provider"],
+        "vector_db_provider": provider_state["vector_db_provider"],
+        "provider_selection_migrated": provider_state["migrated"],
+        "provider_selection_updated_fields": provider_state["updated_fields"],
         "retrieval_top_k": get_runtime_value("retrieval_top_k", settings.retrieval_top_k),
-        "voyage_output_dimension": get_runtime_value("voyage_output_dimension", settings.voyage_output_dimension),
         "chunk_strategy": get_runtime_value("chunk_strategy", settings.chunk_strategy),
         "chunk_size": get_runtime_value("chunk_size", settings.chunk_size),
         "chunk_overlap": get_runtime_value("chunk_overlap", settings.chunk_overlap),
@@ -72,7 +131,7 @@ async def get_providers() -> Dict[str, object]:
 @router.post("/providers")
 async def update_providers(
     payload: ProviderUpdate,
-    _auth: Optional[AuthUser] = Depends(require_mutation_auth_if_enabled),
+    _current_user: User = Depends(get_current_db_user),
 ) -> Dict[str, object]:
     """Update runtime provider selections."""
     llm_provider = sanitize_text(payload.llm_provider, max_length=64, strip_html=True, allow_newlines=False).lower()
@@ -137,9 +196,6 @@ async def update_providers(
         updates["query_rewrite_enabled"] = payload.query_rewrite_enabled
     if payload.retrieval_hnsw_ef_search is not None:
         updates["retrieval_hnsw_ef_search"] = payload.retrieval_hnsw_ef_search
-    if payload.voyage_output_dimension is not None:
-        updates["voyage_output_dimension"] = payload.voyage_output_dimension
-
     config = update_runtime_config(updates)
 
     return {
@@ -147,7 +203,6 @@ async def update_providers(
         "embedding_provider": config.get("embedding_provider", settings.embedding_provider),
         "vector_db_provider": config.get("vector_db_provider", settings.vector_db_provider),
         "retrieval_top_k": config.get("retrieval_top_k", settings.retrieval_top_k),
-        "voyage_output_dimension": config.get("voyage_output_dimension", settings.voyage_output_dimension),
         "chunk_strategy": config.get("chunk_strategy", settings.chunk_strategy),
         "chunk_size": config.get("chunk_size", settings.chunk_size),
         "chunk_overlap": config.get("chunk_overlap", settings.chunk_overlap),

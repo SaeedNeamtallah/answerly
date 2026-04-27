@@ -1,7 +1,10 @@
+import asyncio
 import os
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import requests
@@ -20,6 +23,11 @@ PROCESSING_TIMEOUT_SECONDS = int(os.getenv("RAGMIND_PROCESSING_TIMEOUT", "180"))
 STRICT_QUERY = env_flag("RAGMIND_STRICT_QUERY", default=False)
 TEST_LLM_PROVIDER = (os.getenv("RAGMIND_TEST_LLM_PROVIDER") or "").strip().lower()
 TEST_EMBEDDING_PROVIDER = (os.getenv("RAGMIND_TEST_EMBEDDING_PROVIDER") or "").strip().lower()
+TEST_TELEGRAM_BOT_TOKEN = (os.getenv("RAGMIND_TEST_TELEGRAM_BOT_TOKEN") or "").strip()
+PLATFORM_OWNER_TOKEN = (os.getenv("RAGMIND_PLATFORM_OWNER_TOKEN") or "").strip()
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def fail(message: str) -> None:
@@ -69,6 +77,201 @@ def request_no_content(
         )
 
 
+class _MockTelegramAPI:
+    def __init__(self) -> None:
+        self.sent_messages: list[dict[str, Any]] = []
+
+    async def validate_token(self, token: str) -> dict[str, Any]:
+        if not str(token or "").strip():
+            raise ValueError("token required")
+        return {
+            "telegram_bot_id": f"mock-{abs(hash(token)) % 100000}",
+            "telegram_username": "codex_mock_support_bot",
+        }
+
+    async def set_webhook(self, token: str, webhook_url: str) -> None:
+        if str(token or "") in webhook_url:
+            raise AssertionError("Webhook URL must not include the bot token")
+
+    async def delete_webhook(self, token: str) -> None:
+        return None
+
+    async def send_message(self, token: str, chat_id: str, text: str) -> dict[str, Any]:
+        self.sent_messages.append({"token": token, "chat_id": chat_id, "text": text})
+        return {"message_id": 7001}
+
+
+class _MockCustomerQueryService:
+    async def answer(self, db, *, integration, query: str, language: str = "ar") -> dict[str, Any]:
+        return {
+            "customer_answer": f"Mock support answer for: {query}",
+            "internal_sources": [
+                {
+                    "document_name": "internal-smoke-doc.txt",
+                    "asset_id": 1,
+                    "chunk_index": 0,
+                    "similarity": 0.99,
+                }
+            ],
+            "context_used": 1,
+        }
+
+
+def assert_product_telegram_flow_excludes_legacy() -> None:
+    legacy_terms = ("active_project_id", "bot_config", "BOT_API_USERNAME", "AUTH_ADMIN_USERNAME")
+    product_files = [
+        REPO_ROOT / "backend" / "services" / "customer_bot_query_service.py",
+        REPO_ROOT / "backend" / "services" / "telegram_webhook_service.py",
+        REPO_ROOT / "backend" / "routes" / "telegram_webhook.py",
+    ]
+    for path in product_files:
+        text = path.read_text(encoding="utf-8")
+        for term in legacy_terms:
+            if term in text:
+                fail(f"Production Telegram flow references legacy term '{term}' in {path}")
+
+
+async def run_mocked_bot_webhook_smoke(
+    *,
+    owner_id: int,
+    project_id: int,
+    authed: requests.Session,
+    suffix: str,
+) -> None:
+    from sqlalchemy import select
+
+    from backend.database.connection import async_session_maker
+    from backend.database.models import Conversation, ConversationMessage, TelegramCustomer
+    from backend.services.bot_integration_service import BotIntegrationService
+    from backend.services.conversation_service import ConversationService
+    from backend.services.telegram_webhook_service import TelegramWebhookService
+    from backend.services.token_crypto_service import TokenCryptoService
+
+    mock_token = f"999999:{suffix}-mock-token"
+    mock_telegram = _MockTelegramAPI()
+    crypto = TokenCryptoService(key=TokenCryptoService.generate_key())
+    integration_id: int | None = None
+
+    async with async_session_maker() as db:
+        bot_service = BotIntegrationService(crypto_service=crypto, telegram_api=mock_telegram)
+        integration = await bot_service.create_integration(
+            db,
+            owner_id=owner_id,
+            project_id=project_id,
+            name=f"Codex Mock Bot {suffix}",
+            bot_token=mock_token,
+            show_sources_to_customer=False,
+            human_handoff_enabled=True,
+            fallback_message="A human support teammate will follow up.",
+            created_by_user_id=owner_id,
+        )
+        integration_id = int(integration.id)
+
+        response = request_json(authed, "GET", f"/bot-integrations/{integration_id}", expected_status=200)[1]
+        for forbidden_key in ("bot_token", "token_encrypted", "token_hash", "webhook_secret", "webhook_url"):
+            if forbidden_key in response:
+                fail(f"Mocked bot integration response exposed secret field '{forbidden_key}': {response}")
+        if mock_token in str(response):
+            fail(f"Mocked bot integration response exposed raw token: {response}")
+
+        webhook_service = TelegramWebhookService(
+            integration_service=bot_service,
+            conversation_service=ConversationService(crypto_service=crypto, telegram_api=mock_telegram),
+            query_service=_MockCustomerQueryService(),
+            crypto_service=crypto,
+            telegram_api=mock_telegram,
+        )
+        update = {
+            "update_id": int(time.time()),
+            "message": {
+                "message_id": 501,
+                "text": "What are your support hours?",
+                "chat": {"id": 88001, "type": "private"},
+                "from": {
+                    "id": 88001,
+                    "is_bot": False,
+                    "first_name": "Codex",
+                    "last_name": "Customer",
+                    "username": "codex_customer",
+                    "language_code": "en",
+                },
+            },
+        }
+        webhook_result = await webhook_service.handle_update(
+            db,
+            integration_id=integration_id,
+            webhook_secret=str(integration.webhook_secret),
+            update=update,
+        )
+        if not webhook_result.get("ok") or not webhook_result.get("conversation_id"):
+            fail(f"Mocked webhook did not return a conversation id: {webhook_result}")
+        if len(mock_telegram.sent_messages) != 1:
+            fail(f"Mocked webhook should send exactly one Telegram reply: {mock_telegram.sent_messages}")
+        if mock_telegram.sent_messages[0]["token"] != mock_token:
+            fail("Mocked webhook did not decrypt and use the integration-scoped bot token")
+
+        conversation_id = int(webhook_result["conversation_id"])
+        customer = (
+            await db.execute(
+                select(TelegramCustomer).where(
+                    TelegramCustomer.owner_id == owner_id,
+                    TelegramCustomer.bot_integration_id == integration_id,
+                    TelegramCustomer.chat_id == "88001",
+                )
+            )
+        ).scalar_one_or_none()
+        if customer is None:
+            fail("Mocked webhook did not persist the Telegram customer")
+
+        conversation = (
+            await db.execute(
+                select(Conversation).where(
+                    Conversation.id == conversation_id,
+                    Conversation.owner_id == owner_id,
+                    Conversation.bot_integration_id == integration_id,
+                    Conversation.project_id == project_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if conversation is None:
+            fail("Mocked webhook did not persist an owner/project scoped conversation")
+
+        messages = list(
+            (
+                await db.execute(
+                    select(ConversationMessage)
+                    .where(ConversationMessage.conversation_id == conversation_id)
+                    .order_by(ConversationMessage.id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        sender_types = [message.sender_type for message in messages]
+        if sender_types != ["customer", "bot"]:
+            fail(f"Mocked webhook should persist customer and bot messages, got {sender_types}")
+        if not messages[-1].answer_sources_json or not messages[-1].retrieval_metadata_json:
+            fail("Mocked webhook did not store internal sources and retrieval metadata")
+
+        _, conversation_list = request_json(authed, "GET", "/conversations/", expected_status=200)
+        if not any(item.get("id") == conversation_id for item in conversation_list):
+            fail(f"Company conversation endpoint did not include mocked webhook conversation: {conversation_list}")
+        _, message_list = request_json(authed, "GET", f"/conversations/{conversation_id}/messages", expected_status=200)
+        if [item.get("sender_type") for item in message_list] != ["customer", "bot"]:
+            fail(f"Company message endpoint returned unexpected mocked webhook messages: {message_list}")
+
+        await bot_service.delete_integration(db, owner_id=owner_id, integration_id=integration_id)
+        integration_id = None
+
+    if integration_id is not None:
+        async with async_session_maker() as db:
+            await BotIntegrationService(crypto_service=crypto, telegram_api=mock_telegram).delete_integration(
+                db,
+                owner_id=owner_id,
+                integration_id=integration_id,
+            )
+
+
 def main() -> None:
     # Use UTF-8 for printing to avoid charmap codec issues on Windows
     sys.stdout.reconfigure(encoding='utf-8')
@@ -77,9 +280,14 @@ def main() -> None:
 
     anonymous = requests.Session()
     authed = requests.Session()
+    platform_owner = requests.Session()
+    if PLATFORM_OWNER_TOKEN:
+        platform_owner.headers.update({"Authorization": f"Bearer {PLATFORM_OWNER_TOKEN}"})
 
     project_id: int | None = None
+    second_project_id: int | None = None
     asset_id: int | None = None
+    bot_integration_id: int | None = None
     selected_llm_provider: str | None = None
     selected_embedding_provider: str | None = None
     processing_degraded = False
@@ -87,6 +295,8 @@ def main() -> None:
     suffix = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}"
     username = f"codex_smoke_{suffix}"
     password = f"SmokePass_{suffix}!"
+    second_username = f"codex_smoke_other_{suffix}"
+    second_password = f"SmokeOtherPass_{suffix}!"
     test_filename = "codex_endpoint_smoke.txt"
     test_content = (
         "Candidate name: Codex Smoke Tester.\n"
@@ -98,11 +308,6 @@ def main() -> None:
         _, health = request_json(anonymous, "GET", "/health", expected_status=200)
         if health.get("status") != "healthy":
             fail(f"Health endpoint returned unexpected payload: {health}")
-
-        _, stats = request_json(anonymous, "GET", "/stats/", expected_status=200)
-        for key in ("projects", "documents", "chunks"):
-            if key not in stats:
-                fail(f"Stats response missing key '{key}': {stats}")
 
         _, signup = request_json(
             anonymous,
@@ -128,6 +333,26 @@ def main() -> None:
         _, me = request_json(authed, "GET", "/auth/me", expected_status=200)
         if me.get("username") != username:
             fail(f"/auth/me returned unexpected user payload: {me}")
+        if me.get("role") != "company_admin":
+            fail(f"/auth/me should default smoke users to company_admin role: {me}")
+        owner_id = me.get("id")
+        if not owner_id:
+            fail(f"/auth/me response missing user id required for mocked smoke checks: {me}")
+
+        _, stats = request_json(authed, "GET", "/stats/", expected_status=200)
+        for key in ("projects", "documents", "chunks"):
+            if key not in stats:
+                fail(f"Stats response missing key '{key}': {stats}")
+
+        _, admin_denied = request_json(authed, "GET", "/admin/overview", expected_status=403)
+        if "platform" not in str(admin_denied).lower():
+            fail(f"Company user /admin denial should mention platform-owner access: {admin_denied}")
+        if PLATFORM_OWNER_TOKEN:
+            _, admin_companies = request_json(platform_owner, "GET", "/admin/companies", expected_status=200)
+            if not isinstance(admin_companies, list):
+                fail(f"Platform owner /admin/companies should return a list: {admin_companies}")
+        else:
+            warn("Skipping platform-owner positive admin smoke; set RAGMIND_PLATFORM_OWNER_TOKEN to enable it.")
 
         # Configure providers with a compatibility-aware embedding choice.
         _, providers_config = request_json(
@@ -217,6 +442,115 @@ def main() -> None:
         project_id = project.get("id")
         if not project_id:
             fail(f"Project creation response missing id: {project}")
+
+        second_authed = requests.Session()
+        request_json(
+            anonymous,
+            "POST",
+            "/auth/signup",
+            expected_status=201,
+            json={"username": second_username, "password": second_password},
+        )
+        _, second_login = request_json(
+            anonymous,
+            "POST",
+            "/auth/login",
+            expected_status=200,
+            json={"username": second_username, "password": second_password},
+        )
+        second_token = second_login.get("access_token")
+        if not second_token:
+            fail(f"Second login response missing access_token: {second_login}")
+        second_authed.headers.update({"Authorization": f"Bearer {second_token}"})
+        _, second_project = request_json(
+            second_authed,
+            "POST",
+            "/projects/",
+            expected_status=201,
+            json={
+                "name": f"Codex Other Company Project {suffix}",
+                "description": "Cross-company bot integration denial probe",
+            },
+        )
+        second_project_id = second_project.get("id")
+        if not second_project_id:
+            fail(f"Second project creation response missing id: {second_project}")
+
+        _, bot_missing_project_denial = request_json(
+            authed,
+            "POST",
+            "/bot-integrations/",
+            expected_status=404,
+            json={
+                "project_id": 2147483647,
+                "name": "Cross Scope Probe",
+                "bot_token": "1234567890:invalid-token-for-scope-probe",
+            },
+        )
+        if "token" in str(bot_missing_project_denial).lower():
+            fail(
+                "Bot integration missing-project probe should fail on project ownership before token validation: "
+                f"{bot_missing_project_denial}"
+            )
+
+        _, bot_cross_company_denial = request_json(
+            authed,
+            "POST",
+            "/bot-integrations/",
+            expected_status=404,
+            json={
+                "project_id": second_project_id,
+                "name": "Cross Company Probe",
+                "bot_token": "1234567890:invalid-token-for-cross-company-probe",
+            },
+        )
+        if "token" in str(bot_cross_company_denial).lower():
+            fail(
+                "Bot integration cross-company probe should fail on project ownership before token validation: "
+                f"{bot_cross_company_denial}"
+            )
+
+        assert_product_telegram_flow_excludes_legacy()
+        asyncio.run(
+            run_mocked_bot_webhook_smoke(
+                owner_id=int(owner_id),
+                project_id=int(project_id),
+                authed=authed,
+                suffix=suffix,
+            )
+        )
+
+        if TEST_TELEGRAM_BOT_TOKEN:
+            _, bot_integration = request_json(
+                authed,
+                "POST",
+                "/bot-integrations/",
+                expected_status=201,
+                json={
+                    "project_id": project_id,
+                    "name": f"Codex Smoke Bot {suffix}",
+                    "bot_token": TEST_TELEGRAM_BOT_TOKEN,
+                    "show_sources_to_customer": False,
+                    "human_handoff_enabled": True,
+                },
+            )
+            bot_integration_id = bot_integration.get("id")
+            if not bot_integration_id:
+                fail(f"Bot integration response missing id: {bot_integration}")
+            for forbidden_key in ("bot_token", "token_encrypted", "token_hash", "webhook_secret", "webhook_url"):
+                if forbidden_key in bot_integration:
+                    fail(f"Bot integration response exposed secret field '{forbidden_key}': {bot_integration}")
+
+            _, readiness = request_json(
+                authed,
+                "GET",
+                f"/bot-integrations/{bot_integration_id}/readiness",
+                expected_status=200,
+            )
+            if "ready" not in readiness:
+                fail(f"Readiness response missing ready flag: {readiness}")
+        else:
+            warn("Skipping live bot integration creation; set RAGMIND_TEST_TELEGRAM_BOT_TOKEN to enable it.")
 
         files = {"file": (test_filename, test_content.encode("utf-8"), "text/plain")}
         _, asset = request_json(
@@ -321,6 +655,11 @@ def main() -> None:
 
         print("[OK] Smoke test completed successfully")
     finally:
+        if bot_integration_id is not None:
+            try:
+                request_no_content(authed, "DELETE", f"/bot-integrations/{bot_integration_id}", expected_status=204)
+            except SystemExit:
+                print("[WARN] Bot integration cleanup failed")
         if asset_id is not None:
             try:
                 request_no_content(authed, "DELETE", f"/documents/{asset_id}", expected_status=204)
@@ -331,6 +670,11 @@ def main() -> None:
                 request_no_content(authed, "DELETE", f"/projects/{project_id}", expected_status=204)
             except SystemExit:
                 print("[WARN] Project cleanup failed")
+        if second_project_id is not None:
+            try:
+                request_no_content(second_authed, "DELETE", f"/projects/{second_project_id}", expected_status=204)
+            except Exception:
+                print("[WARN] Second project cleanup failed")
 
 
 if __name__ == "__main__":

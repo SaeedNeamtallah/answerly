@@ -106,6 +106,9 @@ dmypy.json
 .codersinflow
 node_modules
 .codex
+.code-review-graph/
+.agents/
+.specify/
 out
 dist
 *.vsix
@@ -118,4 +121,6 @@ __pycache__
 # Generated output files
 all_project_code.txt
 server_output.txt
+project-graph.md
+newplan.md
 tmp/

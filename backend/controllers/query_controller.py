@@ -12,6 +12,10 @@ from backend.database.models import Asset, Project
 logger = logging.getLogger(__name__)
 
 
+class QueryInfrastructureError(RuntimeError):
+    """Raised when query infrastructure dependencies are unavailable."""
+
+
 class QueryController:
     """Controller for query operations."""
 
@@ -158,9 +162,5 @@ class QueryController:
             return result
             
         except Exception as e:
-            logger.error(f"Error processing query: {str(e)}")
-            return {
-                'answer': self._fallback_answer(language),
-                'sources': [],
-                'context_used': 0
-            }
+            logger.exception("Error processing query infrastructure")
+            raise QueryInfrastructureError("Query infrastructure failure") from e

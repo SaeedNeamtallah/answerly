@@ -1,0 +1,57 @@
+# code-review-graph input filter for this repo.
+# Keep runtime source graphable; skip generated, local, and probe artifacts.
+
+# Runtime/generated data
+uploads/**
+tmp/**
+logs/**
+*.log
+*.out
+*.err
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/**
+qdrant_data/**
+qdrant_data_test/**
+
+# Local editor and agent artifacts
+.history/**
+.playwright-cli/**
+.vscode/**
+.idea/**
+.codex/**
+.agents/**
+.specify/**
+.claude/**
+CLAUDE.md
+
+# Local environments and caches
+venv/**
+.venv/**
+env/**
+ENV/**
+node_modules/**
+__pycache__/**
+.pytest_cache/**
+.mypy_cache/**
+htmlcov/**
+coverage/**
+
+# Build/package output
+dist/**
+build/**
+out/**
+.next/**
+*.egg-info/**
+
+# Generated notes and one-off maintenance outputs
+docs/notes/**
+project-graph.md
+newplan.md
+specs/**
+problem.md
+all_project_code.txt
+server_output.txt
+tools/combine_code.py
+tools/check_agents_sync.py

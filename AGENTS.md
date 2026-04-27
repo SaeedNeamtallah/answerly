@@ -52,6 +52,8 @@ Cross-cutting layers:
 Top-level repo organization:
 
 - `.dockerignore`: Docker build allowlist for runtime-only context
+- `.code-review-graphignore`: code-review-graph parse filter; excludes generated/runtime/local artifacts and one-off maintenance outputs from graph builds
+- `.github/workflows/secret-scan.yml`: CI gitleaks secret scanning on pushes and pull requests
 - `scripts/dev/`: local Windows startup helpers
   - only three entry scripts should remain here: `setup.bat`, `start.bat`, `stop.bat`
 - `tools/`: maintenance and one-off repo utilities
@@ -85,6 +87,7 @@ Main persistence model:
   - handler wiring
 - `frontend/app.js`
   - browser-side API integration and dashboard behavior
+  - Chat submit calls the supported non-streaming `POST /projects/{project_id}/query` endpoint directly; do not reintroduce a `/query/stream` frontend probe unless a backend route is added first
   - Security Center simulation reset is now a view-only feed clear action: it removes simulated events from the transient feed UI and logs an audit message without clearing incidents or overview metrics
 - `scripts/dev/*.bat`
   - local developer entrypoints
@@ -115,20 +118,36 @@ Main persistence model:
   - `close_db()`
 - `backend/database/models.py`
   - `User`
+  - `UserRole`
   - `Project`
   - `Asset`
   - `Chunk`
+  - `BotIntegration`
+  - `TelegramCustomer`
+  - `Conversation`
+  - `ConversationMessage`
   - `CeleryTaskExecution`
 
 Relationships:
 
 - `User.projects -> Project.owner`
+- `User.bot_integrations -> BotIntegration.owner`
+- `User.telegram_customers`
+- `User.conversations`
+- `User.conversation_messages`
 - `Project.assets`
 - `Project.chunks`
+- `Project.bot_integrations`
 - `Asset.project`
 - `Asset.chunks`
 - `Chunk.project`
 - `Chunk.asset`
+- `BotIntegration.project`
+- `BotIntegration.customers`
+- `BotIntegration.conversations`
+- `BotIntegration.messages`
+- `TelegramCustomer.conversations`
+- `Conversation.messages`
 
 Schema management rules:
 
@@ -164,6 +183,51 @@ Schema management rules:
   - `get_task_status()`
 - `backend/routes/query.py`
   - `query_project()`
+- `backend/routes/bot_integrations.py`
+  - `get_bot_integration_service()`
+  - `list_bot_integrations()`
+  - `create_bot_integration()`
+  - `get_bot_integration()`
+  - `update_bot_integration()`
+  - `rotate_bot_token()`
+  - `enable_bot_integration()`
+  - `disable_bot_integration()`
+  - `bot_integration_readiness()`
+  - `delete_bot_integration()`
+- `backend/routes/conversations.py`
+  - `get_conversation_service()`
+  - `list_conversations()`
+  - `get_conversation()`
+  - `list_conversation_messages()`
+  - `manual_reply()`
+  - `assign_conversation_to_self()`
+  - `escalate_conversation()`
+  - `resolve_conversation()`
+  - `block_customer()`
+- `backend/routes/telegram_webhook.py`
+  - `get_telegram_webhook_service()`
+  - `telegram_webhook()`
+- `backend/routes/admin_console.py`
+  - `admin_overview()`
+  - `admin_stats()`
+  - `list_admin_companies()`
+  - `get_admin_company()`
+  - `list_admin_company_projects()`
+  - `list_admin_company_bot_integrations()`
+  - `list_admin_company_conversations()`
+  - `list_admin_bot_integrations()`
+  - `list_admin_conversations()`
+  - `get_admin_conversation()`
+  - `list_admin_conversation_messages()`
+  - `activate_company()`
+  - `suspend_company()`
+  - `block_company()`
+- `backend/routes/admin_users.py`
+  - `admin_suspend_user()`
+  - `admin_block_user()`
+  - `admin_restore_user()`
+- `backend/routes/admin.py`
+  - compatibility module that re-exports `admin_console.router`
 - `backend/routes/security.py`
   - `security_stats()`
   - `security_events()`
@@ -182,6 +246,7 @@ Schema management rules:
   - `get_bot_config()`
   - `update_bot_config()`
   - `update_bot_profile()`
+  - legacy/demo only; production Telegram flows use `bot_integrations.py` plus `telegram_webhook.py`
 
 ### Controller Layer
 
@@ -242,6 +307,37 @@ Schema management rules:
   - `_build_prompt()`
   - `_extract_sources()`
   - `_fallback_answer()`
+- `backend/services/token_crypto_service.py`
+  - `TokenCryptoService.encrypt_token()`
+  - `TokenCryptoService.decrypt_token()`
+  - `TokenCryptoService.hash_token()`
+- `backend/services/token_encryption_service.py`
+  - compatibility wrapper exposing `encrypt_secret()`, `decrypt_secret()`, and `hash_secret()`
+- `backend/services/telegram_api_service.py`
+  - `validate_token()`
+  - `set_webhook()`
+  - `delete_webhook()`
+  - `get_webhook_info()`
+  - `send_message()`
+- `backend/services/bot_integration_service.py`
+  - company-owned bot CRUD, token validation/encryption, server-side webhook registration, readiness checks
+  - readiness validates token decryptability, live Telegram token validity, real webhook state, linked chunk availability, and LLM/embedding/vector provider readiness
+  - API serializers expose `webhook_configured` only; do not return bot tokens, token hashes, encrypted tokens, webhook secrets, or webhook URLs
+- `backend/services/conversation_service.py`
+  - customer/conversation/message persistence, manual replies, assignment, escalation, resolve, customer block
+- `backend/services/customer_bot_query_service.py`
+  - customer-safe wrapper around `QueryController.answer_query()`
+- `backend/services/telegram_webhook_service.py`
+  - Telegram update parsing, per-integration throttling, idempotency, RAG answer orchestration, fallback/error persistence
+- `backend/services/admin_service.py`
+  - `overview()`
+  - `list_companies()`
+  - `get_company()`
+  - `list_company_projects()`
+  - `list_company_bot_integrations()`
+  - `list_company_conversations()`
+  - `list_conversation_messages()`
+  - `set_company_status()`
 - `backend/services/login_security_service.py`
   - `check_block()`
   - `log_blocked_attempt()`
@@ -265,10 +361,10 @@ LLM:
   - `LLMProviderFactory.create_embedding_provider()`
 - Implementations:
   - `GeminiProvider`
+    - uses `google.genai` (`google-genai` package), not deprecated `google.generativeai`
   - `CohereProvider`
-  - `VoyageProvider`
-  - `BgeM3Provider`
   - `OpenAICompatProvider`
+    - OpenRouter Gemma 4 26B A4B, OpenRouter Gemini, OpenRouter Free, Groq Llama 3.3, and Cerebras Llama 3.1 routes
 
 Vector DB:
 
@@ -288,10 +384,14 @@ Vector DB:
 - `backend/security/auth.py`
   - token decode and current-user dependencies
   - role resolution
+  - product roles: `platform_owner` and `company_admin`
+  - `require_platform_owner_access()` for `/admin/*`
+  - `require_company_dashboard_access()` for company-scoped SaaS endpoints
 - `backend/security/jwt_utils.py`
   - token create/decode helpers
 - `backend/security/middleware.py`
   - `SecurityRateLimitMiddleware`
+    - chat rate limiting matches the supported `POST /projects/{project_id}/query` route only
 - `backend/security/rate_limit.py`
   - in-memory limiter primitives
 - `backend/security/sanitization.py`
@@ -345,12 +445,18 @@ Vector DB:
 - `tools/combine_code.py`
   - default mode still writes `tmp/all_project_code.txt`
   - `--profile database` writes focused storage/database snippets to `tmp/database_code.txt`
+  - database profile now includes Alembic config/templates and the current B2B Telegram SaaS route/service paths
 - `tools/test_all.py`
   - authenticated smoke test for `health -> signup/login -> project -> upload/process -> query -> cleanup`
   - supports `RAGMIND_BASE_URL`, `RAGMIND_REQUEST_TIMEOUT`, `RAGMIND_PROCESSING_TIMEOUT`, and `RAGMIND_STRICT_QUERY=1`
 
 ### Telegram Bot
 
+- Production customer support now uses DB-backed bot integrations:
+  - company dashboard calls `/bot-integrations`
+  - Telegram calls `/telegram/webhook/{integration_id}/{webhook_secret}`
+  - webhook resolves `BotIntegration -> owner_id/project_id -> TelegramCustomer -> Conversation -> ConversationMessage -> QueryController.answer_query()`
+  - bot tokens are encrypted in `bot_integrations.token_encrypted`; API responses never return tokens, token hashes, encrypted tokens, webhook secrets, or webhook URLs
 - `telegram_bot/config.py`
   - `BotSettings`
   - `BOT_CONFIG_PATH`
@@ -361,6 +467,7 @@ Vector DB:
     - resolves active project from shared `uploads/config/bot_config.json`, then falls back to `BOT_ACTIVE_PROJECT_ID` only if the shared config is unset
     - obtains JWT via `/auth/login` using `BOT_API_USERNAME/BOT_API_PASSWORD` (fallback to `AUTH_ADMIN_*`), which now provisions or syncs a DB-backed service account row on successful login
     - on `403/404`, auto-selects first accessible project for bot user, persists it to shared bot config, and retries once
+    - legacy/demo path only; do not use it for production multi-company Telegram behavior
 - `telegram_bot/bot.py`
   - `print_bot_link()`
   - `setup_handlers()`
@@ -381,12 +488,23 @@ Vector DB:
 
 ### Query
 
-1. `POST /projects/{project_id}/query` in `backend/routes/query.py`
-2. `QueryController.answer_query()`
-3. `QueryService.search_similar_chunks()`
-4. `EmbeddingService.generate_single_embedding()`
-5. `VectorDBProvider.search()`
-6. `AnswerService.generate_answer()`
+1. Frontend `handleChatSubmit()` calls `POST /projects/{project_id}/query` directly
+2. `POST /projects/{project_id}/query` in `backend/routes/query.py`
+3. `QueryController.answer_query()`
+4. `QueryService.search_similar_chunks()`
+5. `EmbeddingService.generate_single_embedding()`
+6. `VectorDBProvider.search()`
+7. `AnswerService.generate_answer()`
+
+### Production Telegram Customer Query
+
+1. Telegram sends update to `POST /telegram/webhook/{integration_id}/{webhook_secret}`
+2. `TelegramWebhookService` resolves exactly one `BotIntegration`
+3. `ConversationService` creates/updates `TelegramCustomer`, `Conversation`, and customer `ConversationMessage`
+4. `CustomerBotQueryService` calls `QueryController.answer_query()` with the integration `owner_id` and `project_id`
+5. Sources/retrieval metadata are stored internally on `ConversationMessage`
+6. Customer reply hides sources unless `show_sources_to_customer` is enabled
+7. Bot reply or fallback is sent through `TelegramAPIService` and saved durably
 
 ### Project Reindex
 
@@ -398,11 +516,21 @@ Vector DB:
 ## Ownership and Security Rules
 
 - Ownership is derived from JWT-backed `current_user`, not request payloads.
+- Product role is DB-backed on `users.role`; default is `company_admin`.
+- `PLATFORM_OWNER_USERNAME` promotes the matching DB user to `platform_owner` after login.
+- `/admin/*` product console routes must use `require_platform_owner_access()`.
 - Retrieval depends on `owner_id` scoping.
 - Vector search providers expect owner-aware filtering.
 - Any change to retrieval/indexing must preserve `owner_id` in vector metadata.
 - Any route calling `ProjectController.get_project()` or `DocumentController.get_document()` must pass `owner_id`.
+- Company SaaS routes must filter by `owner_id == current_user.id`.
+- Telegram webhook retrieval must use only the `owner_id` and `project_id` on the receiving `BotIntegration`; no project fallback is allowed.
+- Telegram bot tokens must be encrypted, hashed for dedupe, never logged, and never returned to clients.
+- Conversation sources/retrieval metadata are internal by default; customer-visible sources require `show_sources_to_customer`.
+- `POST /config/providers` now always requires an authenticated JWT user (no anonymous mutation fallback).
+- `GET /stats/` now requires an authenticated JWT user.
 - `POST /bot/config` now requires a real JWT-backed DB user and only accepts `active_project_id` values owned by that user.
+- `/bot/config` remains legacy/demo configuration and now returns a deprecation warning; do not build production behavior on it.
 - Configured `BOT_API_*` / `AUTH_ADMIN_*` service-account usernames are reserved from normal signup/password rotation, and successful service-account login keeps a matching DB user row available for `get_current_db_user()`.
 
 ## Review Findings
@@ -442,7 +570,7 @@ Recently fixed:
 15. `backend/utils/task_tracking.py`, `backend/utils/idempotency_manager.py`, `backend/routes/projects.py`, `backend/routes/documents.py`, `backend/tasks/data_indexing.py`, `backend/tasks/file_processing.py`, `backend/tasks/process_workflow.py`, and `backend/celery_app.py`
   Task ownership is now persisted by `celery_task_id` instead of relying on in-memory-only `_TASK_OWNER_MAP`, manual project reindex uses the default worker queue plus durable owner tracking, worker tasks reuse the pre-created execution row instead of duplicating it, duplicate historical rows are merged away by `celery_task_id`, and `process-and-index` parent workflows now finalize from child-task reconciliation instead of needing `/tasks/{id}` polling to reach a terminal state.
 16. `backend/providers/llm/factory.py` and `backend/routes/app_config.py`
-  Embedding provider alias handling is now consistent: `get_available_embedding_providers()` is registry-backed, so aliases like `hf-bge-m3` pass `/config/providers` validation and match factory capabilities.
+  Provider availability is registry-backed. Embeddings are currently `gemini` and `cohere`; broken `voyage`/`bge-m3` options were removed from production selection.
 17. `backend/providers/llm/factory.py`
   `gemini-2.5-lite-flash` now resolves through a dedicated lite builder, ensuring explicit lite provider selection uses `settings.gemini_lite_model` instead of falling back to the standard Gemini model.
 18. `backend/providers/llm/gemini_provider.py`
@@ -452,7 +580,7 @@ Recently fixed:
 20. `backend/security/middleware.py` and `backend/config.py`
   Rate limiting now keys authenticated traffic by JWT subject (`user:<sub>`) with IP fallback to reduce shared-IP bottlenecks, and default throughput caps were raised (`chat` and `upload` request/in-flight limits) while retaining endpoint-specific throttling.
 21. `backend/config.py`, `.env`, and `.env.example`
-  The default Google LLM model was switched to `gemma-4-26b-a4b-it` (via `GEMINI_MODEL`) while keeping the provider as `gemini`, so new and local setups use Gemma 4 by default in Google AI Studio-backed flows.
+  OpenRouter Gemma 4 26B A4B and optional local Gemma 4 E4B are supported as separate LLM providers; Google Gemini still uses the Gemini API models.
 22. `backend/shared_config_paths.py`, `backend/runtime_config.py`, `backend/routes/bot_config.py`, `telegram_bot/config.py`, `telegram_bot/handlers.py`, and `docker/docker-compose.yml`
   Runtime app/bot config now resolves through shared files under `uploads/config/`, Compose passes `RAGMIND_SHARED_CONFIG_DIR` to backend/worker/bot and mounts `uploads/` into the bot, the hardcoded `BOT_ACTIVE_PROJECT_ID` compose override was removed, `/bot/config` now requires an authenticated DB user plus owned-project validation, and the bot idles instead of crash-looping when `TELEGRAM_BOT_TOKEN` is blank.
 23. `backend/security/auth.py` and `backend/services/auth_service.py`
@@ -465,11 +593,22 @@ Recently fixed:
   Startup readiness now reflects the actual stack: `/health` returns `healthy` only when database, broker, result backend, Celery worker, shared config, and vector store are reachable, and `start.bat` waits for that JSON-ready state instead of any HTTP 200.
 27. `frontend/app.js`
   Security Center simulation reset is intentionally scoped to transient event streams only (feed clear), while incidents and security overview metrics remain intact for investigation continuity.
+28. `frontend/app.js` and `backend/security/middleware.py`
+  Chat submit now calls the supported non-streaming `POST /projects/{project_id}/query` endpoint directly, and chat rate limiting no longer includes the nonexistent `/query/stream` route.
+29. `.env.example`, `.github/workflows/secret-scan.yml`, `backend/main.py`, `backend/routes/app_config.py`, `backend/config.py`, `backend/routes/documents.py`, `backend/providers/vectordb/pgvector_provider.py`, `backend/controllers/query_controller.py`, `backend/routes/query.py`, `backend/init_database.py`, `backend/routes/stats.py`, and `frontend/app.js`
+  Security and reliability hardening pass: leaked example credentials were replaced with placeholders and CI secret scanning was added; CORS now reads `settings.cors_origins`; provider mutation and global stats endpoints require JWT auth by default; upload reads are capped to `max_size + 1` before rejection; pgvector vector deletion now rejects empty/unknown/null-only filters; query infrastructure failures now surface as sanitized `503` errors instead of `200` fallback answers; database bootstrap SQL now uses parameterization and `sql.Identifier`; duplicate frontend helper definitions were removed to avoid silent overrides.
+30. `backend/database/models.py`, `backend/alembic/versions/20260427_01_add_b2b_telegram_saas.py`, `backend/routes/bot_integrations.py`, `backend/routes/conversations.py`, `backend/routes/telegram_webhook.py`, `backend/routes/admin_console.py`, `backend/services/*telegram*`, `backend/services/bot_integration_service.py`, `backend/services/conversation_service.py`, `backend/security/auth.py`, `frontend/index.html`, and `frontend/app.js`
+  B2B Telegram SaaS implementation added DB-backed bot integrations, encrypted token storage, durable Telegram customers/conversations/messages, customer-safe RAG replies, per-integration webhook throttling/idempotency, company-scoped dashboard routes, platform-owner-only `/admin/*` product routes, and frontend views for bot integrations, conversations, and the Admin Console.
+31. `backend/routes/admin_users.py` and `backend/tests/test_admin_service.py`
+  `/admin/users/*` status-mutation routes now require `require_platform_owner_access` (not legacy `require_admin_access`) and regression tests assert platform-owner-only enforcement.
+32. `backend/services/telegram_api_service.py`, `backend/services/bot_integration_service.py`, and `backend/tests/test_bot_integrations.py`
+  Bot integration readiness now validates decrypted token health, live Telegram token validation, real Telegram webhook alignment, and provider-stack readiness (LLM + embedding + vector backend) before reporting `ready=true`.
+33. `backend/routes/app_config.py`, `backend/main.py`, and `backend/tests/test_app_config.py`
+  Runtime provider selections are now normalized/migrated when invalid legacy values are found (for example removed providers), both at startup and via `GET /config/providers`, preventing stale config from breaking query/indexing.
 
 ## Known Drift Between Docs and Code
 
-- `README.md` is not fully aligned with current implementation.
-- Security/auth ownership constraints are stronger in code than in README.
+- `README.md` is aligned with the current SaaS/product entry points at a high level, but code remains source of truth for endpoint details.
 - Celery/background-task paths are central in code and should be trusted over README summaries.
 - Runtime-config-driven retrieval behavior exists in code and is not fully captured in README.
 - Alembic migrations must stay in sync with `backend/database/models.py`; do not assume old revisions reflect current field names.
@@ -516,3 +655,8 @@ When updating:
 ## Bottom Line
 
 Yes, maintaining a repo-aware `AGENTS.md` with a concise code graph and update rules is a modern and useful workflow, especially for agent-assisted development. The important part is that it must stay short, code-grounded, and updated with every structural change, otherwise it becomes another stale doc that increases token cost instead of reducing it.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

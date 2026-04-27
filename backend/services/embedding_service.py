@@ -64,7 +64,6 @@ class EmbeddingService:
                     result = await self.llm_provider.generate_embeddings(
                         texts=batch,
                         batch_size=len(batch),
-                        max_batch_tokens=settings.voyage_max_batch_tokens
                     )
                 if on_batch:
                     async with lock:

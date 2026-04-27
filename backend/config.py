@@ -47,10 +47,6 @@ class Settings(BaseSettings):
         default=2.0,
         alias="COHERE_BASE_RETRY_DELAY"
     )
-    voyage_api_key: str = Field(default="", alias="VOYAGE_API_KEY")
-    voyage_embed_model: str = Field(default="voyage-3-large", alias="VOYAGE_EMBED_MODEL")
-    voyage_output_dimension: int = Field(default=1024, alias="VOYAGE_OUTPUT_DIMENSION")
-    hf_embedding_model: str = Field(default="BAAI/bge-m3", alias="HF_EMBED_MODEL")
     # OpenAI-compatible LLM providers
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     openrouter_base_url: str = Field(
@@ -65,6 +61,10 @@ class Settings(BaseSettings):
         default="openrouter/free",
         alias="OPENROUTER_FREE_MODEL"
     )
+    openrouter_gemma_4_26b_a4b_model: str = Field(
+        default="google/gemma-4-26b-a4b-it",
+        alias="OPENROUTER_GEMMA_4_26B_A4B_MODEL"
+    )
     openrouter_site_url: str = Field(default="", alias="OPENROUTER_SITE_URL")
     openrouter_app_name: str = Field(default="", alias="OPENROUTER_APP_NAME")
 
@@ -77,31 +77,17 @@ class Settings(BaseSettings):
         default="llama-3.3-70b-versatile",
         alias="GROQ_LLAMA_3_3_70B_VERSATILE_MODEL"
     )
-    groq_gpt_oss_120b_model: str = Field(
-        default="gpt-oss-120b",
-        alias="GROQ_GPT_OSS_120B_MODEL"
-    )
-
     cerebras_api_key: str = Field(default="", alias="CEREBRAS_API_KEY")
     cerebras_base_url: str = Field(
         default="https://api.cerebras.ai/v1",
         alias="CEREBRAS_BASE_URL"
     )
-    cerebras_llama_3_3_70b_model: str = Field(
-        default="llama-3.3-70b",
-        alias="CEREBRAS_LLAMA_3_3_70B_MODEL"
-    )
     cerebras_llama_3_1_8b_model: str = Field(
         default="llama-3.1-8b",
         alias="CEREBRAS_LLAMA_3_1_8B_MODEL"
     )
-    cerebras_gpt_oss_120b_model: str = Field(
-        default="gpt-oss-120b",
-        alias="CEREBRAS_GPT_OSS_120B_MODEL"
-    )
     embedding_batch_size: int = Field(default=96, alias="EMBEDDING_BATCH_SIZE")
     embedding_concurrency: int = Field(default=4, alias="EMBEDDING_CONCURRENCY")
-    voyage_max_batch_tokens: int = Field(default=120000, alias="VOYAGE_MAX_BATCH_TOKENS")
     
     # Vector DB Configuration
     vector_db_provider: str = Field(default="pgvector", alias="VECTOR_DB_PROVIDER")
@@ -144,7 +130,7 @@ class Settings(BaseSettings):
     auth_admin_username: str = Field(default="admin", alias="AUTH_ADMIN_USERNAME")
     auth_admin_password: str = Field(default="admin123", alias="AUTH_ADMIN_PASSWORD")
     auth_admin_password_hash: str = Field(default="", alias="AUTH_ADMIN_PASSWORD_HASH")
-    security_require_auth_for_mutations: bool = Field(default=False, alias="SECURITY_REQUIRE_AUTH_FOR_MUTATIONS")
+    security_require_auth_for_mutations: bool = Field(default=True, alias="SECURITY_REQUIRE_AUTH_FOR_MUTATIONS")
     security_user_suspension_default_minutes: int = Field(
         default=30,
         alias="SECURITY_USER_SUSPENSION_DEFAULT_MINUTES"
@@ -236,10 +222,29 @@ class Settings(BaseSettings):
 
     security_upload_validate_magic: bool = Field(default=True, alias="SECURITY_UPLOAD_VALIDATE_MAGIC")
     security_upload_max_scan_bytes: int = Field(default=8192, alias="SECURITY_UPLOAD_MAX_SCAN_BYTES")
+
+    # Product role bootstrap
+    platform_owner_username: str = Field(default="", alias="PLATFORM_OWNER_USERNAME")
     
-    # Telegram Bot Configuration
+    # Legacy Telegram Bot Configuration
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_admin_id: str = Field(default="", alias="TELEGRAM_ADMIN_ID")
+
+    # Database-backed Telegram SaaS Configuration
+    bot_token_encryption_key: str = Field(default="", alias="BOT_TOKEN_ENCRYPTION_KEY")
+    public_webhook_base_url: str = Field(default="", alias="PUBLIC_WEBHOOK_BASE_URL")
+    telegram_webhook_requests_per_minute: int = Field(
+        default=30,
+        alias="TELEGRAM_WEBHOOK_REQUESTS_PER_MINUTE",
+    )
+    telegram_webhook_max_in_flight: int = Field(
+        default=2,
+        alias="TELEGRAM_WEBHOOK_MAX_IN_FLIGHT",
+    )
+    telegram_raw_payload_retention_days: int = Field(
+        default=30,
+        alias="TELEGRAM_RAW_PAYLOAD_RETENTION_DAYS",
+    )
     
     # CORS Configuration
     cors_origins: List[str] = Field(

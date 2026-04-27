@@ -15,7 +15,7 @@ from backend.database import get_db
 from backend.database.models import User
 from backend.controllers.project_controller import ProjectController
 from backend.controllers.document_controller import DocumentController
-from backend.controllers.query_controller import QueryController
+from backend.controllers.query_controller import QueryController, QueryInfrastructureError
 from backend.security.auth import get_current_db_user
 from backend.security.event_service import log_event
 from backend.security.security_event import SecurityEventType, SecuritySeverity
@@ -164,6 +164,9 @@ async def query_project(
 
     except HTTPException:
         raise
+    except QueryInfrastructureError:
+        logger.exception("Query infrastructure failure while executing project query")
+        raise HTTPException(status_code=503, detail="Query service unavailable")
     except Exception:
         logger.exception("Unexpected error while executing query")
         raise HTTPException(status_code=500, detail="Internal server error")

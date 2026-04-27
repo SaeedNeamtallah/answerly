@@ -1,13 +1,13 @@
 """
 Google Gemini 2.5 Flash LLM Provider Implementation.
-Uses google-generativeai SDK for text generation and embeddings.
+Uses the Google GenAI SDK for text generation and embeddings.
 """
 from typing import Any, List, Optional, AsyncIterator
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from backend.providers.llm.interface import LLMInterface
 from backend.config import settings
 import logging
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -91,10 +91,7 @@ class GeminiProvider(LLMInterface):
                     self.model_name = getattr(settings, "gemini_lite_model", "gemini-2.5-lite-flash")
                 else:
                     self.model_name = settings.gemini_model
-        # Configure Gemini
-        genai.configure(api_key=self.api_key)
-        # Initialize models
-        self.chat_model = genai.GenerativeModel(self.model_name)
+        self.client = genai.Client(api_key=self.api_key)
         self.embedding_model = settings.gemini_embed_model
         self._detected_embedding_dimension: Optional[int] = None
         logger.info(f"Gemini provider initialized with model: {self.model_name}")
@@ -137,20 +134,16 @@ class GeminiProvider(LLMInterface):
             if system_prompt:
                 full_prompt = f"{system_prompt}\n\n{prompt}"
             
-            # Configure generation
-            generation_config = genai.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
+                system_instruction=system_prompt,
                 temperature=temperature,
                 max_output_tokens=max_tokens or 2048,
             )
-            
-            # Generate response (run in thread pool for async)
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.chat_model.generate_content(
-                    full_prompt,
-                    generation_config=generation_config
-                )
+
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt if system_prompt else full_prompt,
+                config=generation_config,
             )
 
             text = self._extract_text_from_response(response)
@@ -179,24 +172,20 @@ class GeminiProvider(LLMInterface):
             if system_prompt:
                 full_prompt = f"{system_prompt}\n\n{prompt}"
 
-            generation_config = genai.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
+                system_instruction=system_prompt,
                 temperature=temperature,
                 max_output_tokens=max_tokens or 2048,
             )
 
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.chat_model.generate_content(
-                    full_prompt,
-                    generation_config=generation_config,
-                    stream=True,
-                ),
-            )
-
             emitted_any = False
             last_finish_reason = "unknown"
-            for chunk in response:
+            stream = await self.client.aio.models.generate_content_stream(
+                model=self.model_name,
+                contents=prompt if system_prompt else full_prompt,
+                config=generation_config,
+            )
+            async for chunk in stream:
                 last_finish_reason = self._extract_finish_reason(chunk)
                 text = self._extract_text_from_response(chunk)
                 if text:
@@ -228,31 +217,17 @@ class GeminiProvider(LLMInterface):
             List of embedding vectors
         """
         try:
+            response = await self.client.aio.models.embed_content(
+                model=self.embedding_model,
+                contents=texts,
+                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+            )
             embeddings = []
-            
-            # Use asyncio.gather for parallel processing with a semaphore to control concurrency
-            # This is significantly faster than sequential processing
-            MAX_CONCURRENT_REQUESTS = 20
-            sem = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
-            
-            async def embed_single(text):
-                async with sem:
-                    loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(
-                        None,
-                        lambda: genai.embed_content(
-                            model=self.embedding_model,
-                            content=text,
-                            task_type="retrieval_document"
-                        )
-                    )
-                    return result["embedding"]
-            
-            # Create tasks
-            tasks = [embed_single(text) for text in texts]
-            
-            # Execute in parallel
-            embeddings = await asyncio.gather(*tasks)
+            for item in response.embeddings or []:
+                values = self._get_attr_or_key(item, "values")
+                if values is None:
+                    values = self._get_attr_or_key(item, "embedding", [])
+                embeddings.append(list(values or []))
 
             if embeddings and embeddings[0]:
                 self._detected_embedding_dimension = len(embeddings[0])

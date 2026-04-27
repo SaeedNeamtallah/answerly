@@ -56,7 +56,7 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
                 EndpointRateRule(
                     name="chat",
                     methods={"POST"},
-                    path_pattern=re.compile(r"^/projects/\d+/query(?:/stream)?/?$"),
+                    path_pattern=re.compile(r"^/projects/\d+/query/?$"),
                     limiter=InMemoryRateLimiter(
                         max_requests=settings.security_rate_limit_chat_requests_per_window,
                         window_seconds=settings.security_rate_limit_chat_window_seconds,

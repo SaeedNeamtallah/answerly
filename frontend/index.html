@@ -47,9 +47,17 @@
                         <i class="fas fa-comment-dots"></i>
                         <span data-i18n="nav_chat">المحادثة الذكية</span>
                     </li>
-                    <li data-view="bot-config">
+                    <li data-view="bot-integrations">
                         <i class="fas fa-robot"></i>
-                        <span data-i18n="nav_bot">إعدادات البوت</span>
+                        <span data-i18n="nav_bot">تكاملات البوت</span>
+                    </li>
+                    <li data-view="conversations">
+                        <i class="fas fa-headset"></i>
+                        <span data-i18n="nav_conversations">المحادثات</span>
+                    </li>
+                    <li data-view="admin-console" style="display: none;">
+                        <i class="fas fa-building-shield"></i>
+                        <span data-i18n="nav_admin_console">Admin Console</span>
                     </li>
                     <li data-view="ai-config">
                         <i class="fas fa-sliders"></i>
@@ -628,38 +636,85 @@
         </div>
     </template>
 
-    <template id="bot-config-template">
+    <template id="bot-integrations-template">
         <div class="bot-config-view">
-            <h1 class="view-title" data-i18n="bot_settings_title">إعدادات بوت التليجرام</h1>
+            <h1 class="view-title" data-i18n="bot_integrations_title">تكاملات بوتات التليجرام</h1>
 
             <div class="config-card">
                 <div class="config-section">
-                    <h3 data-i18n="bot_active_project">المشروع النشط</h3>
-                    <p class="config-desc" data-i18n="bot_active_project_desc">اختر المشروع الذي سيقوم البوت بالإجابة
-                        منه.</p>
-                    <select id="bot-active-project" class="form-control">
+                    <h3 data-i18n="bot_create_title">ربط بوت جديد</h3>
+                    <div class="form-group">
+                        <label for="bot-integration-name" data-i18n="bot_integration_name">اسم التكامل</label>
+                        <input type="text" id="bot-integration-name" class="form-control" placeholder="Support Bot">
+                    </div>
+                    <div class="form-group">
+                        <label for="bot-integration-project" data-i18n="bot_linked_project">المشروع المرتبط</label>
+                        <select id="bot-integration-project" class="form-control">
                         <option value="">اختر مشروعاً...</option>
-                    </select>
-                    <button id="save-bot-config-btn" class="btn btn-primary mt-4">
-                        <i class="fas fa-save"></i>
-                        <span data-i18n="save_settings">حفظ الإعدادات</span>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bot-integration-token" data-i18n="bot_token">توكن البوت</label>
+                        <input type="password" id="bot-integration-token" class="form-control" autocomplete="off">
+                    </div>
+                    <div class="settings-grid compact">
+                        <label class="toggle-row">
+                            <input type="checkbox" id="bot-human-handoff" checked>
+                            <span data-i18n="bot_handoff_enabled">تفعيل التحويل للدعم البشري</span>
+                        </label>
+                        <label class="toggle-row">
+                            <input type="checkbox" id="bot-show-sources">
+                            <span data-i18n="bot_show_sources">إظهار المصادر للعميل</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="bot-fallback-message" data-i18n="bot_fallback_message">رسالة fallback</label>
+                        <textarea id="bot-fallback-message" class="form-control" rows="3"></textarea>
+                    </div>
+                    <button id="create-bot-integration-btn" class="btn btn-primary mt-4">
+                        <i class="fas fa-link"></i>
+                        <span data-i18n="bot_create_btn">ربط البوت</span>
                     </button>
                 </div>
 
                 <div class="config-section mt-4">
-                    <h3 data-i18n="bot_profile">ملف البوت</h3>
-                    <p class="config-desc" data-i18n="bot_profile_desc">تحديث اسم البوت على تليجرام.</p>
-
-                    <div class="form-group">
-                        <label for="bot-name-input" data-i18n="bot_name">اسم البوت</label>
-                        <input type="text" id="bot-name-input" class="form-control" placeholder="RAGMind Bot">
-                    </div>
-
-                    <button id="update-bot-profile-btn" class="btn btn-primary mt-4">
-                        <i class="fas fa-user-edit"></i>
-                        <span data-i18n="update_profile">تحديث الملف الشخصي</span>
-                    </button>
+                    <h3 data-i18n="bot_integrations_list">البوتات المرتبطة</h3>
+                    <div id="bot-integrations-list" class="product-list"></div>
                 </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="conversations-template">
+        <div class="conversations-view">
+            <div class="view-header-row">
+                <h1 class="view-title" data-i18n="conversations_title">محادثات العملاء</h1>
+                <select id="conversation-status-filter" class="form-control compact-select">
+                    <option value="" data-i18n="conversation_filter_all">كل الحالات</option>
+                    <option value="open">open</option>
+                    <option value="escalated">escalated</option>
+                    <option value="resolved">resolved</option>
+                    <option value="blocked">blocked</option>
+                </select>
+            </div>
+            <div class="conversation-layout">
+                <div id="conversations-list" class="product-list conversation-list"></div>
+                <div id="conversation-detail" class="conversation-detail-panel"></div>
+            </div>
+        </div>
+    </template>
+
+    <template id="admin-console-template">
+        <div class="admin-console-view">
+            <h1 class="view-title" data-i18n="admin_console_title">Admin Console</h1>
+            <div id="admin-overview-grid" class="stats-grid"></div>
+            <div class="config-card mt-4">
+                <h3 data-i18n="admin_companies_title">Companies</h3>
+                <div id="admin-companies-list" class="product-list"></div>
+            </div>
+            <div class="config-card mt-4">
+                <h3 data-i18n="admin_company_detail_title">Company Detail</h3>
+                <div id="admin-company-detail" class="admin-detail-panel"></div>
             </div>
         </div>
     </template>
@@ -690,15 +745,6 @@
                         <select id="vector-db-provider" class="form-control"></select>
                     </div>
 
-                    <div class="config-section mt-4">
-                        <label class="config-label" data-i18n="embedding_size_label">أبعاد التضمين</label>
-                        <select id="embedding-size" class="form-control">
-                            <option value="256">256</option>
-                            <option value="512">512</option>
-                            <option value="1024">1024</option>
-                            <option value="2048">2048</option>
-                        </select>
-                    </div>
                 </div>
 
                 <!-- Chunking Group -->

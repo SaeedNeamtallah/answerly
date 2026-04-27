@@ -1,6 +1,6 @@
 # RAGMind
 
-RAGMind is a Retrieval Augmented Generation (RAG) platform for turning uploaded documents into searchable project knowledge bases.
+RAGMind is a B2B SaaS Retrieval Augmented Generation (RAG) platform for turning uploaded company documents into searchable project knowledge bases and Telegram customer-support bots.
 
 It combines a FastAPI backend, background processing with Celery, vector search with pgvector or Qdrant, and a lightweight static frontend.
 
@@ -10,7 +10,9 @@ It combines a FastAPI backend, background processing with Celery, vector search 
 - Background jobs: Celery + RabbitMQ + Redis
 - Databases: PostgreSQL (with pgvector) and optional Qdrant
 - Frontend: static HTML/CSS/JS served locally on port 8080
-- Bot: optional Telegram bot service
+- Product roles: `company_admin` and `platform_owner`
+- Telegram support: database-backed bot integrations plus durable conversations
+- Legacy bot: optional single-bot service kept for demo/backward compatibility
 
 ## Architecture At A Glance
 
@@ -18,13 +20,16 @@ It combines a FastAPI backend, background processing with Celery, vector search 
 2. Celery worker extracts text, chunks content, and generates embeddings.
 3. Vectors are written to the active vector provider.
 4. Query endpoint retrieves relevant chunks and sends context to the configured LLM provider.
-5. Response is returned with source context.
+5. Response is returned with source context for dashboard testing.
+6. Production Telegram webhooks resolve a bot integration, persist the customer conversation, reuse the same RAG stack with `owner_id`/`project_id` scoping, and hide sources from customers by default.
 
 Code entry points:
 
 - Backend app: backend/main.py
 - Celery app: backend/celery_app.py
-- Bot: telegram_bot/bot.py
+- Legacy bot: telegram_bot/bot.py
+- Production Telegram routes: backend/routes/bot_integrations.py, backend/routes/telegram_webhook.py, backend/routes/conversations.py
+- Platform owner routes: backend/routes/admin_console.py
 - Frontend runtime logic: frontend/app.js
 
 ## Quick Start (Windows)
@@ -64,8 +69,20 @@ Edit .env and set provider credentials you plan to use.
 Common required values:
 
 - GEMINI_API_KEY (if using Gemini provider)
-- COHERE_API_KEY or VOYAGE_API_KEY (if using those embedding providers)
-- TELEGRAM_BOT_TOKEN (only if running bot features)
+- OPENROUTER_API_KEY (if using OpenRouter Gemini, Free, or Gemma 4 26B A4B providers)
+- GROQ_API_KEY (if using Groq Llama 3.3)
+- CEREBRAS_API_KEY (if using Cerebras Llama 3.1)
+- COHERE_API_KEY (if using Cohere embeddings)
+- BOT_TOKEN_ENCRYPTION_KEY (required before saving production Telegram bot integrations)
+- PUBLIC_WEBHOOK_BASE_URL (public HTTPS backend URL used to register Telegram webhooks)
+- PLATFORM_OWNER_USERNAME (username promoted to platform_owner after login)
+- TELEGRAM_BOT_TOKEN (legacy single-bot service only)
+
+Generate a Fernet encryption key for bot tokens:
+
+```powershell
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
 
 ### 4. Start The Local Stack
 
@@ -152,6 +169,15 @@ alembic -c backend/alembic/alembic.ini downgrade -1
 - Route inventory: backend/ENDPOINTS.md
 - Interactive docs: /docs when backend is running
 
+Production Telegram endpoints:
+
+- `POST /bot-integrations/` creates a company-owned Telegram bot integration for an owned project.
+- `POST /telegram/webhook/{integration_id}/{webhook_secret}` receives Telegram updates for exactly one integration.
+- `GET /conversations/` and related routes power the company support inbox.
+- `/admin/*` routes are platform-owner-only and return `403` for normal company users.
+
+The legacy `/bot/config` and `telegram_bot/` active-project flow remains for demo compatibility only. It must not be used for multi-company production support behavior.
+
 ## Smoke Test
 
 Run the end-to-end smoke test against a running backend:
@@ -174,7 +200,7 @@ backend/        FastAPI app, routes, services, providers, tasks
 backend/templates/ Prompt templates used by answer and query services
 docker/         Dockerfile and docker-compose setup
 frontend/       Static dashboard/login UI
-telegram_bot/   Telegram bot integration
+telegram_bot/   Legacy single-bot integration
 scripts/dev/    setup/start/stop scripts for local Windows workflow
 backend/alembic/ Database migration revisions
 docs/notes/     reports and long-form notes (non-runtime docs)

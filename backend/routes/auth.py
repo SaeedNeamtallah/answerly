@@ -26,7 +26,7 @@ from backend.services.login_security_service import (
     login_security_service,
 )
 from backend.security.event_service import log_event
-from backend.security.auth import get_current_db_user, resolve_roles_for_username
+from backend.security.auth import get_current_db_user, get_product_role_for_user, resolve_roles_for_username
 from backend.security.jwt_utils import create_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 
@@ -126,6 +126,9 @@ class IdentityResponse(BaseModel):
     username: str
     role: str
     roles: list[str]
+    status: str
+    company_name: str | None = None
+    company_website: str | None = None
     created_at: datetime
 
 
@@ -490,12 +493,19 @@ async def login(
 @router.get("/me", response_model=IdentityResponse)
 async def me(current_user: User = Depends(get_current_db_user)):
     """Return current authenticated user from database."""
-    roles = resolve_roles_for_username(current_user.username)
+    product_role = get_product_role_for_user(current_user)
+    roles = [product_role]
+    for role in resolve_roles_for_username(current_user.username):
+        if role not in roles:
+            roles.append(role)
     return IdentityResponse(
         id=current_user.id,
         username=current_user.username,
-        role=roles[0] if roles else "user",
+        role=product_role,
         roles=roles,
+        status=_normalize_account_status_label(current_user.status),
+        company_name=current_user.company_name,
+        company_website=current_user.company_website,
         created_at=current_user.created_at,
     )
 

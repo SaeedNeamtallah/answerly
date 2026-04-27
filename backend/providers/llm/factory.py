@@ -33,18 +33,12 @@ class LLMProviderFactory:
         cls.register_provider(LLMProvider.GEMINI_2_5_LITE_FLASH.value, cls._build_gemini_lite_provider)
         cls.register_provider(LLMProvider.OPENROUTER_GEMINI_2_0_FLASH.value, cls._build_openrouter_gemini_2_flash_provider)
         cls.register_provider(LLMProvider.OPENROUTER_FREE.value, cls._build_openrouter_free_provider)
+        cls.register_provider(LLMProvider.OPENROUTER_GEMMA_4_26B_A4B.value, cls._build_openrouter_gemma_4_26b_a4b_provider)
         cls.register_provider(LLMProvider.GROQ_LLAMA_3_3_70B_VERSATILE.value, cls._build_groq_llama_3_3_70b_versatile_provider)
-        cls.register_provider(LLMProvider.GROQ_GPT_OSS_120B.value, cls._build_groq_gpt_oss_120b_provider)
-        cls.register_provider(LLMProvider.CEREBRAS_LLAMA_3_3_70B.value, cls._build_cerebras_llama_3_3_70b_provider)
         cls.register_provider(LLMProvider.CEREBRAS_LLAMA_3_1_8B.value, cls._build_cerebras_llama_3_1_8b_provider)
-        cls.register_provider(LLMProvider.CEREBRAS_GPT_OSS_120B.value, cls._build_cerebras_gpt_oss_120b_provider)
 
         cls.register_embedding_provider(EmbeddingProvider.GEMINI.value, cls._build_gemini_provider)
         cls.register_embedding_provider(EmbeddingProvider.COHERE.value, cls._build_cohere_provider)
-        cls.register_embedding_provider(EmbeddingProvider.VOYAGE.value, cls._build_voyage_provider)
-        cls.register_embedding_provider(EmbeddingProvider.BGE_M3.value, cls._build_bge_m3_provider)
-        # Keep compatibility for environments configured with the explicit HF alias.
-        cls.register_embedding_provider(EmbeddingProvider.HF_BGE_M3.value, cls._build_bge_m3_provider)
 
         cls._initialized = True
 
@@ -99,6 +93,16 @@ class LLMProviderFactory:
             extra_headers=cls._build_openrouter_headers(),
         )
 
+    @classmethod
+    def _build_openrouter_gemma_4_26b_a4b_provider(cls) -> LLMInterface:
+        return OpenAICompatProvider(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            model_name=settings.openrouter_gemma_4_26b_a4b_model,
+            provider_label="OpenRouter",
+            extra_headers=cls._build_openrouter_headers(),
+        )
+
     @staticmethod
     def _build_groq_llama_3_3_70b_versatile_provider() -> LLMInterface:
         return OpenAICompatProvider(
@@ -106,24 +110,6 @@ class LLMProviderFactory:
             base_url=settings.groq_base_url,
             model_name=settings.groq_llama_3_3_70b_versatile_model,
             provider_label="Groq",
-        )
-
-    @staticmethod
-    def _build_groq_gpt_oss_120b_provider() -> LLMInterface:
-        return OpenAICompatProvider(
-            api_key=settings.groq_api_key,
-            base_url=settings.groq_base_url,
-            model_name=settings.groq_gpt_oss_120b_model,
-            provider_label="Groq",
-        )
-
-    @staticmethod
-    def _build_cerebras_llama_3_3_70b_provider() -> LLMInterface:
-        return OpenAICompatProvider(
-            api_key=settings.cerebras_api_key,
-            base_url=settings.cerebras_base_url,
-            model_name=settings.cerebras_llama_3_3_70b_model,
-            provider_label="Cerebras",
         )
 
     @staticmethod
@@ -136,31 +122,10 @@ class LLMProviderFactory:
         )
 
     @staticmethod
-    def _build_cerebras_gpt_oss_120b_provider() -> LLMInterface:
-        return OpenAICompatProvider(
-            api_key=settings.cerebras_api_key,
-            base_url=settings.cerebras_base_url,
-            model_name=settings.cerebras_gpt_oss_120b_model,
-            provider_label="Cerebras",
-        )
-
-    @staticmethod
     def _build_cohere_provider() -> LLMInterface:
         from backend.providers.llm.cohere_provider import CohereProvider
 
         return CohereProvider()
-
-    @staticmethod
-    def _build_voyage_provider() -> LLMInterface:
-        from backend.providers.llm.voyage_provider import VoyageProvider
-
-        return VoyageProvider()
-
-    @staticmethod
-    def _build_bge_m3_provider() -> LLMInterface:
-        from backend.providers.llm.hf_bge_m3_provider import BgeM3Provider
-
-        return BgeM3Provider()
 
     @classmethod
     def create_provider(cls, provider_name: str = None) -> LLMInterface:

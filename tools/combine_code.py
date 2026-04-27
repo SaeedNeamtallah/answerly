@@ -32,9 +32,11 @@ VALID_EXTENSIONS = {
     ".json",
     ".md",
     ".yml",
+    ".ini",
+    ".mako",
 }
 
-SPECIAL_FILES = {"Dockerfile", ".env.example"}
+SPECIAL_FILES = {"Dockerfile", ".env.example", "README"}
 SKIP_FILES = {
     "combine_code.py",
     "combinecode.py",
@@ -57,21 +59,43 @@ class FocusProfile:
 DATABASE_PROFILE = FocusProfile(
     name="database",
     description=(
-        "Extract the important database and storage paths for the backend, vector store, "
-        "Telegram bot config, and Docker wiring."
+        "Extract the important database, storage, and SaaS support paths for the backend, "
+        "vector store, Telegram bot integrations, and Docker wiring."
     ),
     output_name="database_code.txt",
     path_tokens=(
         "backend/database/",
         "backend/alembic/",
         "backend/providers/vectordb/",
+        "backend/routes/auth.py",
+        "backend/routes/projects.py",
+        "backend/routes/documents.py",
+        "backend/routes/query.py",
+        "backend/routes/bot_integrations.py",
+        "backend/routes/conversations.py",
+        "backend/routes/telegram_webhook.py",
+        "backend/routes/admin_console.py",
         "backend/tasks/file_processing.py",
         "backend/tasks/data_indexing.py",
+        "backend/tasks/process_workflow.py",
+        "backend/tasks/maintenance.py",
+        "backend/services/bot_integration_service.py",
+        "backend/services/conversation_service.py",
+        "backend/services/telegram_webhook_service.py",
+        "backend/services/customer_bot_query_service.py",
+        "backend/services/admin_service.py",
+        "backend/services/telegram_api_service.py",
+        "backend/services/token_crypto_service.py",
+        "backend/security/auth.py",
+        "backend/security/jwt_utils.py",
         "backend/services/query_service.py",
         "backend/routes/app_config.py",
         "backend/routes/bot_config.py",
+        "backend/routes/health.py",
+        "backend/routes/stats.py",
         "backend/runtime_config.py",
         "backend/config.py",
+        "backend/celery_app.py",
         "telegram_bot/config.py",
         "telegram_bot/handlers.py",
         "docker/docker-compose.yml",
@@ -79,6 +103,10 @@ DATABASE_PROFILE = FocusProfile(
         "app_config.json",
         "bot_config.json",
         ".env.example",
+        "backend/alembic/alembic.ini",
+        "backend/alembic/env.py",
+        "backend/alembic/init-db.sql",
+        "backend/alembic/script.py.mako",
     ),
     patterns=(
         r"\bdatabase\b",
@@ -104,6 +132,12 @@ DATABASE_PROFILE = FocusProfile(
         r"\bprojects\b",
         r"\bassets\b",
         r"\bcelery_task_executions\b",
+        r"\bbot_integrations\b",
+        r"\bconversations\b",
+        r"\bconversation_messages\b",
+        r"\btelegram_customers\b",
+        r"\bplatform_owner\b",
+        r"\bcompany_admin\b",
     ),
 )
 

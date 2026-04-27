@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from backend.database import get_db
-from backend.database.models import Project, Asset, Chunk
+from backend.database.models import Project, Asset, Chunk, User
+from backend.security.auth import get_current_db_user
 
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stats", tags=["Stats"])
 
 @router.get("/")
-async def get_global_stats(db: AsyncSession = Depends(get_db)):
+async def get_global_stats(
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_db_user),
+):
     """Get global statistics."""
     try:
         row = (await db.execute(

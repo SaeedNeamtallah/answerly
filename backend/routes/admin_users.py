@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.database.models import User, UserAccountStatus
-from backend.security.auth import require_admin_access
+from backend.security.auth import require_platform_owner_access
 from backend.security.sanitization import sanitize_text
 from backend.services.auth_service import AuthService
 from backend.services.incident_management_service import IncidentManagementService
@@ -86,7 +86,7 @@ def _serialize_user_status(user: User) -> AdminUserStatusSnapshot:
 async def admin_suspend_user(
     payload: AdminSuspendUserRequest,
     user_id: int = Path(..., gt=0),
-    current_admin: User = Depends(require_admin_access),
+    current_admin: User = Depends(require_platform_owner_access),
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
     incident_management_service: IncidentManagementService = Depends(IncidentManagementService),
@@ -121,7 +121,7 @@ async def admin_suspend_user(
 async def admin_block_user(
     payload: AdminBlockUserRequest,
     user_id: int = Path(..., gt=0),
-    current_admin: User = Depends(require_admin_access),
+    current_admin: User = Depends(require_platform_owner_access),
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
     incident_management_service: IncidentManagementService = Depends(IncidentManagementService),
@@ -154,7 +154,7 @@ async def admin_block_user(
 @router.post("/{user_id}/restore", response_model=AdminUserStatusActionResponse)
 async def admin_restore_user(
     user_id: int = Path(..., gt=0),
-    current_admin: User = Depends(require_admin_access),
+    current_admin: User = Depends(require_platform_owner_access),
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
     incident_management_service: IncidentManagementService = Depends(IncidentManagementService),

@@ -31,6 +31,8 @@ security_scheme = HTTPBearer(auto_error=False)
 
 ROLE_USER = "user"
 ROLE_ADMIN = "admin"
+ROLE_PLATFORM_OWNER = "platform_owner"
+ROLE_COMPANY_ADMIN = "company_admin"
 ROLE_SECURITY_ENGINEER = "security_engineer"
 ROLE_CYBERSECURITY_ENGINEER = "cybersecurity_engineer"
 
@@ -61,6 +63,41 @@ def _normalize_username(value: str) -> str:
 def _normalize_role(value: str) -> str:
     clean = sanitize_text(value, max_length=64, strip_html=True, allow_newlines=False).strip().lower()
     return clean or ROLE_USER
+
+
+def _configured_platform_owner_username() -> str:
+    return _normalize_username(settings.platform_owner_username or "")
+
+
+def get_product_role_for_user(user: User | None) -> str:
+    """Return the DB-backed product role used for SaaS authorization."""
+    role = _normalize_role(str(getattr(user, "role", "") or ""))
+    if role == ROLE_PLATFORM_OWNER:
+        return ROLE_PLATFORM_OWNER
+    return ROLE_COMPANY_ADMIN
+
+
+async def _sync_bootstrap_platform_owner_role(db: AsyncSession, user: User) -> User:
+    configured_username = _configured_platform_owner_username()
+    if not configured_username:
+        return user
+
+    if _normalize_username(user.username) != configured_username:
+        return user
+
+    if get_product_role_for_user(user) == ROLE_PLATFORM_OWNER:
+        return user
+
+    user.role = ROLE_PLATFORM_OWNER
+    db.add(user)
+    try:
+        await db.commit()
+        await db.refresh(user)
+    except Exception:
+        await db.rollback()
+        raise
+
+    return user
 
 
 def _load_engineer_usernames_from_env_file() -> Set[str]:
@@ -387,7 +424,7 @@ async def _get_user_for_token_subject(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return user
+    return await _sync_bootstrap_platform_owner_role(db, user)
 
 
 async def _enforce_account_status_policy(
@@ -666,3 +703,42 @@ async def require_admin_access(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Admin access is restricted to admin role",
     )
+
+
+async def require_platform_owner_access(
+    request: Request,
+    current_user: User = Depends(get_current_db_user),
+) -> User:
+    """Allow /admin product endpoints only for platform_owner users."""
+    product_role = get_product_role_for_user(current_user)
+    if product_role == ROLE_PLATFORM_OWNER:
+        return current_user
+
+    log_event(
+        {
+            "event_type": SecurityEventType.AUTHZ_DENIED,
+            "severity": SecuritySeverity.HIGH,
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "ip_address": _extract_client_ip(request),
+            "message": "Platform owner access denied",
+            "metadata": {
+                "path": request.url.path,
+                "method": request.method,
+                "required_roles": [ROLE_PLATFORM_OWNER],
+                "user_role": product_role,
+            },
+        }
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Platform owner access is restricted to platform_owner role",
+    )
+
+
+async def require_company_dashboard_access(
+    current_user: User = Depends(get_current_db_user),
+) -> User:
+    """Require an active dashboard user for company-scoped product endpoints."""
+    # Account status enforcement already ran in get_current_db_user.
+    return current_user

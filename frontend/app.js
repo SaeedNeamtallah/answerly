@@ -13,7 +13,9 @@ const i18n = {
         nav_security_center: "Security Center",
         nav_projects: "المشاريع",
         nav_chat: "المحادثة الذكية",
-        nav_bot: "إعدادات البوت",
+        nav_bot: "تكاملات البوت",
+        nav_conversations: "المحادثات",
+        nav_admin_console: "Admin Console",
         nav_ai_config: "إعدادات الذكاء الاصطناعي",
         nav_account_settings: "إعدادات الحساب",
         status_online: "متصل",
@@ -155,6 +157,39 @@ const i18n = {
         bot_profile_desc: "تحديث اسم البوت على تليجرام.",
         bot_name: "اسم البوت",
         update_profile: "تحديث الملف الشخصي",
+        bot_integrations_title: "تكاملات بوتات التليجرام",
+        bot_create_title: "ربط بوت جديد",
+        bot_integration_name: "اسم التكامل",
+        bot_linked_project: "المشروع المرتبط",
+        bot_token: "توكن البوت",
+        bot_handoff_enabled: "تفعيل التحويل للدعم البشري",
+        bot_show_sources: "إظهار المصادر للعميل",
+        bot_fallback_message: "رسالة fallback",
+        bot_create_btn: "ربط البوت",
+        bot_integrations_list: "البوتات المرتبطة",
+        conversations_title: "محادثات العملاء",
+        conversation_filter_all: "كل الحالات",
+        conversation_empty: "لا توجد محادثات بعد",
+        conversation_messages_empty: "اختر محادثة لعرض الرسائل",
+        conversation_reply_placeholder: "اكتب رد الدعم...",
+        conversation_reply_btn: "إرسال الرد",
+        conversation_escalate_btn: "تصعيد",
+        conversation_resolve_btn: "حل",
+        conversation_block_btn: "حظر العميل",
+        admin_console_title: "Admin Console",
+        admin_companies_title: "Companies",
+        admin_company_detail_title: "تفاصيل الشركة",
+        admin_view_detail_btn: "عرض التفاصيل",
+        admin_suspend_btn: "تعليق",
+        admin_block_btn: "حظر",
+        admin_activate_btn: "تفعيل",
+        bot_edit_btn: "تعديل",
+        bot_rotate_btn: "تدوير التوكن",
+        bot_view_conversations_btn: "المحادثات",
+        bot_new_token_prompt: "أدخل توكن البوت الجديد",
+        conversation_assign_btn: "تعيين لي",
+        conversation_sources_label: "المصادر الداخلية",
+        conversation_metadata_label: "بيانات الاسترجاع",
         processing_label: "جار المعالجة",
         stage_chunking: "تجزئة النص",
         stage_embedding: "تضمين النص",
@@ -245,7 +280,9 @@ const i18n = {
         nav_security_center: "Security Center",
         nav_projects: "Projects",
         nav_chat: "Smart Chat",
-        nav_bot: "Bot Settings",
+        nav_bot: "Bot Integrations",
+        nav_conversations: "Conversations",
+        nav_admin_console: "Admin Console",
         nav_ai_config: "AI Settings",
         nav_account_settings: "Account Settings",
         status_online: "Online",
@@ -387,6 +424,39 @@ const i18n = {
         bot_profile_desc: "Update Bot Name on Telegram.",
         bot_name: "Bot Name",
         update_profile: "Update Profile",
+        bot_integrations_title: "Telegram Bot Integrations",
+        bot_create_title: "Connect a New Bot",
+        bot_integration_name: "Integration Name",
+        bot_linked_project: "Linked Project",
+        bot_token: "Bot Token",
+        bot_handoff_enabled: "Enable Human Handoff",
+        bot_show_sources: "Show Sources to Customer",
+        bot_fallback_message: "Fallback Message",
+        bot_create_btn: "Connect Bot",
+        bot_integrations_list: "Connected Bots",
+        conversations_title: "Customer Conversations",
+        conversation_filter_all: "All Status",
+        conversation_empty: "No conversations yet",
+        conversation_messages_empty: "Select a conversation to view messages",
+        conversation_reply_placeholder: "Write a support reply...",
+        conversation_reply_btn: "Send Reply",
+        conversation_escalate_btn: "Escalate",
+        conversation_resolve_btn: "Resolve",
+        conversation_block_btn: "Block Customer",
+        admin_console_title: "Admin Console",
+        admin_companies_title: "Companies",
+        admin_company_detail_title: "Company Detail",
+        admin_view_detail_btn: "Details",
+        admin_suspend_btn: "Suspend",
+        admin_block_btn: "Block",
+        admin_activate_btn: "Activate",
+        bot_edit_btn: "Edit",
+        bot_rotate_btn: "Rotate Token",
+        bot_view_conversations_btn: "Conversations",
+        bot_new_token_prompt: "Enter the new bot token",
+        conversation_assign_btn: "Assign to me",
+        conversation_sources_label: "Internal Sources",
+        conversation_metadata_label: "Retrieval Metadata",
         processing_label: "Processing",
         stage_chunking: "Chunking",
         stage_embedding: "Embedding",
@@ -507,6 +577,11 @@ const state = {
     incidentBaselineInitialized: false,
     unseenIncidentCount: 0,
     selectedIncident: null,
+    botIntegrations: [],
+    conversations: [],
+    selectedConversationId: null,
+    conversationBotFilter: null,
+    adminOverview: null,
     incidentDetailsRequestToken: 0,
     incidentDetailsCloseTimer: null,
     incidentPanelOutsideClickHandler: null,
@@ -544,6 +619,8 @@ const INCIDENT_PANEL_CLOSE_ANIMATION_MS = 180;
 const SIMULATION_RESET_STATE_KEY = 'ragmind_security_simulation_reset_state';
 const ROLE_USER = 'user';
 const ROLE_ADMIN = 'admin';
+const ROLE_PLATFORM_OWNER = 'platform_owner';
+const ROLE_COMPANY_ADMIN = 'company_admin';
 const ROLE_SECURITY_ENGINEER = 'security_engineer';
 const ROLE_CYBERSECURITY_ENGINEER = 'cybersecurity_engineer';
 
@@ -1009,12 +1086,14 @@ async function getCurrentUser() {
     if (state.currentUser) {
         updateSidebarUserInfo(state.currentUser);
         applySecurityCenterNavAccess();
+        applyAdminConsoleNavAccess();
         return state.currentUser;
     }
 
     state.currentUser = await api.get('/auth/me');
     updateSidebarUserInfo(state.currentUser);
     applySecurityCenterNavAccess();
+    applyAdminConsoleNavAccess();
     return state.currentUser;
 }
 
@@ -1083,6 +1162,14 @@ function formatPrimaryRoleLabel(user = state.currentUser) {
         return t.account_role_admin || primaryRole;
     }
 
+    if (primaryRole === ROLE_PLATFORM_OWNER) {
+        return 'platform_owner';
+    }
+
+    if (primaryRole === ROLE_COMPANY_ADMIN) {
+        return 'company_admin';
+    }
+
     return t.account_role_user || primaryRole;
 }
 
@@ -1112,11 +1199,23 @@ function canAccessSecurityCenter(user = state.currentUser) {
     return roles.includes(ROLE_SECURITY_ENGINEER) || roles.includes(ROLE_CYBERSECURITY_ENGINEER) || roles.includes(ROLE_ADMIN);
 }
 
+function canAccessAdminConsole(user = state.currentUser) {
+    const roles = normalizeUserRoles(user);
+    return roles.includes(ROLE_PLATFORM_OWNER);
+}
+
 function applySecurityCenterNavAccess() {
     const navItem = document.querySelector('.sidebar-nav li[data-view="securityCenter"]');
     if (!navItem) return;
 
     navItem.style.display = canAccessSecurityCenter() ? '' : 'none';
+}
+
+function applyAdminConsoleNavAccess() {
+    const navItem = document.querySelector('.sidebar-nav li[data-view="admin-console"]');
+    if (!navItem) return;
+
+    navItem.style.display = canAccessAdminConsole() ? '' : 'none';
 }
 
 async function fetchUserProjects() {
@@ -3296,6 +3395,366 @@ function setupIncidentBackToEventsFloatingButton() {
 
 // --- View Rendering ---
 
+function renderBotIntegrationsList(integrations) {
+    const list = document.getElementById('bot-integrations-list');
+    if (!list) return;
+
+    if (!Array.isArray(integrations) || integrations.length === 0) {
+        list.innerHTML = `<div class="empty-state">${state.lang === 'ar' ? 'لا توجد بوتات مرتبطة بعد' : 'No connected bots yet'}</div>`;
+        return;
+    }
+
+    list.innerHTML = integrations.map((bot) => `
+        <div class="product-row" data-bot-id="${bot.id}">
+            <div class="product-row-main">
+                <div class="product-row-title">${escapeHtml(bot.name || bot.telegram_username || 'Telegram Bot')}</div>
+                <div class="product-row-meta">
+                    <span>@${escapeHtml(bot.telegram_username || '-')}</span>
+                    <span>project ${escapeHtml(bot.project_id)}</span>
+                    <span class="status-pill status-${escapeHtml(bot.status || 'unknown')}">${escapeHtml(bot.status || 'unknown')}</span>
+                </div>
+                ${bot.last_error ? `<div class="product-row-error">${escapeHtml(bot.last_error)}</div>` : ''}
+                <div class="product-row-url">${bot.webhook_configured ? (state.lang === 'ar' ? 'الويب هوك مهيأ' : 'Webhook configured') : (state.lang === 'ar' ? 'الويب هوك غير مهيأ' : 'Webhook not configured')}</div>
+            </div>
+            <div class="product-row-actions">
+                <button class="btn btn-secondary btn-sm bot-readiness-btn" data-id="${bot.id}"><i class="fas fa-heart-pulse"></i></button>
+                <button class="btn btn-secondary btn-sm bot-edit-btn" data-id="${bot.id}">${i18n[state.lang].bot_edit_btn}</button>
+                <button class="btn btn-secondary btn-sm bot-rotate-btn" data-id="${bot.id}">${i18n[state.lang].bot_rotate_btn}</button>
+                <button class="btn btn-secondary btn-sm bot-conversations-btn" data-id="${bot.id}">${i18n[state.lang].bot_view_conversations_btn}</button>
+                <button class="btn btn-secondary btn-sm bot-toggle-btn" data-id="${bot.id}" data-status="${escapeHtml(bot.status)}">
+                    <i class="fas ${bot.status === 'disabled' ? 'fa-play' : 'fa-pause'}"></i>
+                </button>
+                <button class="btn btn-danger btn-sm bot-delete-btn" data-id="${bot.id}"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
+
+    list.querySelectorAll('.bot-readiness-btn').forEach((button) => {
+        button.onclick = async () => {
+            const readiness = await api.get(`/bot-integrations/${button.dataset.id}/readiness`);
+            const chunks = Number(readiness.usable_chunks || 0);
+            showNotification(`ready=${Boolean(readiness.ready)} chunks=${chunks}`, readiness.ready ? 'success' : 'warning');
+        };
+    });
+
+    list.querySelectorAll('.bot-toggle-btn').forEach((button) => {
+        button.onclick = async () => {
+            const endpoint = button.dataset.status === 'disabled'
+                ? `/bot-integrations/${button.dataset.id}/enable`
+                : `/bot-integrations/${button.dataset.id}/disable`;
+            await api.post(endpoint, {});
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['bot-integrations']();
+        };
+    });
+
+    list.querySelectorAll('.bot-edit-btn').forEach((button) => {
+        button.onclick = async () => {
+            const bot = state.botIntegrations.find((item) => String(item.id) === String(button.dataset.id));
+            if (!bot) return;
+            const name = prompt(i18n[state.lang].bot_integration_name, bot.name || '');
+            if (name === null) return;
+            const fallbackMessage = prompt(i18n[state.lang].bot_fallback_message, bot.fallback_message || '');
+            if (fallbackMessage === null) return;
+            await api.patch(`/bot-integrations/${button.dataset.id}`, {
+                name: name.trim() || bot.name,
+                fallback_message: fallbackMessage.trim() || null
+            });
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['bot-integrations']();
+        };
+    });
+
+    list.querySelectorAll('.bot-rotate-btn').forEach((button) => {
+        button.onclick = async () => {
+            const token = prompt(i18n[state.lang].bot_new_token_prompt);
+            if (!token || !token.trim()) return;
+            await api.post(`/bot-integrations/${button.dataset.id}/rotate-token`, { bot_token: token.trim() });
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['bot-integrations']();
+        };
+    });
+
+    list.querySelectorAll('.bot-conversations-btn').forEach((button) => {
+        button.onclick = async () => {
+            state.selectedConversationId = null;
+            state.conversationBotFilter = Number(button.dataset.id);
+            await switchView('conversations');
+        };
+    });
+
+    list.querySelectorAll('.bot-delete-btn').forEach((button) => {
+        button.onclick = async () => {
+            if (!confirm(i18n[state.lang].delete_confirm)) return;
+            await api.delete(`/bot-integrations/${button.dataset.id}`);
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['bot-integrations']();
+        };
+    });
+}
+
+function renderConversationsList(conversations) {
+    const list = document.getElementById('conversations-list');
+    if (!list) return;
+
+    if (!Array.isArray(conversations) || conversations.length === 0) {
+        list.innerHTML = `<div class="empty-state">${i18n[state.lang].conversation_empty}</div>`;
+        return;
+    }
+
+    list.innerHTML = conversations.map((conversation) => `
+        <button class="conversation-item ${state.selectedConversationId === conversation.id ? 'active' : ''}" data-id="${conversation.id}">
+            <span class="conversation-title">${escapeHtml(conversation.customer_label || 'Telegram customer')}</span>
+            <span class="conversation-meta">
+                <span>${escapeHtml(conversation.bot_name || 'Bot')}</span>
+                <span class="status-pill status-${escapeHtml(conversation.status)}">${escapeHtml(conversation.status)}</span>
+                ${conversation.needs_human ? '<span class="status-pill status-escalated">human</span>' : ''}
+            </span>
+            <span class="conversation-time">${escapeHtml(formatLocaleDateTime(conversation.last_message_at || conversation.created_at))}</span>
+        </button>
+    `).join('');
+
+    list.querySelectorAll('.conversation-item').forEach((item) => {
+        item.onclick = async () => {
+            state.selectedConversationId = Number(item.dataset.id);
+            renderConversationsList(state.conversations);
+            await renderConversationDetail(state.selectedConversationId);
+        };
+    });
+}
+
+async function renderConversationDetail(conversationId) {
+    const panel = document.getElementById('conversation-detail');
+    if (!panel) return;
+    if (!conversationId) {
+        panel.innerHTML = `<div class="empty-state">${i18n[state.lang].conversation_messages_empty}</div>`;
+        return;
+    }
+
+    const [conversation, messages] = await Promise.all([
+        api.get(`/conversations/${conversationId}`),
+        api.get(`/conversations/${conversationId}/messages`)
+    ]);
+
+    const renderInternalMetadata = (message) => {
+        const sources = Array.isArray(message.answer_sources_json) ? message.answer_sources_json : [];
+        const metadata = message.retrieval_metadata_json && typeof message.retrieval_metadata_json === 'object'
+            ? message.retrieval_metadata_json
+            : null;
+        if (sources.length === 0 && !metadata) return '';
+
+        const sourceList = sources.map((source) => `
+            <span class="conversation-source-chip">
+                ${escapeHtml(source.document_name || 'source')}
+                ${typeof source.similarity !== 'undefined' ? ` · ${Number(source.similarity).toFixed(3)}` : ''}
+            </span>
+        `).join('');
+        const metadataText = metadata ? escapeHtml(JSON.stringify(metadata)) : '';
+        return `
+            <details class="conversation-internal-metadata">
+                <summary>${escapeHtml(i18n[state.lang].conversation_sources_label)}</summary>
+                ${sourceList ? `<div class="conversation-source-list">${sourceList}</div>` : ''}
+                ${metadataText ? `<pre>${metadataText}</pre>` : ''}
+            </details>
+        `;
+    };
+
+    panel.innerHTML = `
+        <div class="conversation-detail-header">
+            <div>
+                <h3>${escapeHtml(conversation.customer_label || 'Telegram customer')}</h3>
+                <p>${escapeHtml(conversation.bot_name || 'Bot')} · ${escapeHtml(conversation.status)}</p>
+            </div>
+            <div class="conversation-actions">
+                <button class="btn btn-secondary btn-sm" id="conversation-assign-btn">${i18n[state.lang].conversation_assign_btn}</button>
+                <button class="btn btn-secondary btn-sm" id="conversation-escalate-btn">${i18n[state.lang].conversation_escalate_btn}</button>
+                <button class="btn btn-secondary btn-sm" id="conversation-resolve-btn">${i18n[state.lang].conversation_resolve_btn}</button>
+                <button class="btn btn-danger btn-sm" id="conversation-block-btn">${i18n[state.lang].conversation_block_btn}</button>
+            </div>
+        </div>
+        <div class="conversation-messages">
+            ${messages.map((message) => `
+                <div class="conversation-message sender-${escapeHtml(message.sender_type)}">
+                    <div class="conversation-message-meta">${escapeHtml(message.sender_type)} · ${escapeHtml(formatLocaleDateTime(message.created_at))}</div>
+                    <div class="conversation-message-text">${escapeHtml(message.text)}</div>
+                    ${renderInternalMetadata(message)}
+                </div>
+            `).join('')}
+        </div>
+        <div class="conversation-reply-box">
+            <textarea id="conversation-reply-input" class="form-control" rows="3" placeholder="${escapeHtml(i18n[state.lang].conversation_reply_placeholder)}"></textarea>
+            <button id="conversation-reply-btn" class="btn btn-primary"><i class="fas fa-paper-plane"></i> ${i18n[state.lang].conversation_reply_btn}</button>
+        </div>
+    `;
+
+    document.getElementById('conversation-assign-btn').onclick = async () => {
+        await api.post(`/conversations/${conversationId}/assign-self`, {});
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await views.conversations();
+    };
+    document.getElementById('conversation-escalate-btn').onclick = async () => {
+        await api.post(`/conversations/${conversationId}/escalate`, {});
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await views.conversations();
+    };
+    document.getElementById('conversation-resolve-btn').onclick = async () => {
+        await api.post(`/conversations/${conversationId}/resolve`, {});
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await views.conversations();
+    };
+    document.getElementById('conversation-block-btn').onclick = async () => {
+        if (!confirm(i18n[state.lang].delete_confirm)) return;
+        await api.post(`/conversations/${conversationId}/block`, {});
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await views.conversations();
+    };
+    document.getElementById('conversation-reply-btn').onclick = async () => {
+        const input = document.getElementById('conversation-reply-input');
+        const text = input.value.trim();
+        if (!text) return;
+        await api.post(`/conversations/${conversationId}/reply`, { text });
+        input.value = '';
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await renderConversationDetail(conversationId);
+    };
+}
+
+function renderAdminOverview(overview) {
+    const grid = document.getElementById('admin-overview-grid');
+    if (!grid) return;
+    const items = [
+        ['Companies', overview.companies],
+        ['Projects', overview.projects],
+        ['Bots', overview.bot_integrations],
+        ['Conversations', overview.conversations],
+        ['Open', overview.open_conversations],
+        ['Escalated', overview.escalated_conversations],
+        ['Messages 24h', overview.messages_last_24h],
+    ];
+    grid.innerHTML = items.map(([label, value]) => `
+        <div class="stat-card">
+            <h3>${escapeHtml(label)}</h3>
+            <p>${Number(value || 0).toLocaleString()}</p>
+        </div>
+    `).join('');
+}
+
+function renderAdminCompanies(companies) {
+    const list = document.getElementById('admin-companies-list');
+    if (!list) return;
+    if (!Array.isArray(companies) || companies.length === 0) {
+        list.innerHTML = '<div class="empty-state">No companies</div>';
+        return;
+    }
+    list.innerHTML = companies.map((company) => `
+        <div class="product-row">
+            <div class="product-row-main">
+                <div class="product-row-title">${escapeHtml(company.company_name || company.username)}</div>
+                <div class="product-row-meta">
+                    <span>${escapeHtml(company.username)}</span>
+                    <span>${escapeHtml(company.role)}</span>
+                    <span class="status-pill status-${escapeHtml(company.status || 'ACTIVE').toLowerCase()}">${escapeHtml(company.status)}</span>
+                    <span>${Number(company.project_count || 0)} projects</span>
+                    <span>${Number(company.bot_count || 0)} bots</span>
+                    <span>${Number(company.conversation_count || 0)} conversations</span>
+                </div>
+            </div>
+            <div class="product-row-actions">
+                <button class="btn btn-secondary btn-sm admin-view-company" data-id="${company.id}">${i18n[state.lang].admin_view_detail_btn}</button>
+                <button class="btn btn-secondary btn-sm admin-activate-company" data-id="${company.id}">${i18n[state.lang].admin_activate_btn}</button>
+                <button class="btn btn-secondary btn-sm admin-suspend-company" data-id="${company.id}">${i18n[state.lang].admin_suspend_btn}</button>
+                <button class="btn btn-danger btn-sm admin-block-company" data-id="${company.id}">${i18n[state.lang].admin_block_btn}</button>
+            </div>
+        </div>
+    `).join('');
+    list.querySelectorAll('.admin-view-company').forEach((button) => {
+        button.onclick = async () => renderAdminCompanyDetail(button.dataset.id);
+    });
+    list.querySelectorAll('.admin-activate-company').forEach((button) => {
+        button.onclick = async () => {
+            await api.post(`/admin/companies/${button.dataset.id}/activate`, {});
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['admin-console']();
+        };
+    });
+    list.querySelectorAll('.admin-suspend-company').forEach((button) => {
+        button.onclick = async () => {
+            const reason = prompt('Reason', 'platform_owner_suspension');
+            if (reason === null) return;
+            await api.post(`/admin/companies/${button.dataset.id}/suspend`, { reason: reason || 'platform_owner_suspension' });
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['admin-console']();
+        };
+    });
+    list.querySelectorAll('.admin-block-company').forEach((button) => {
+        button.onclick = async () => {
+            const reason = prompt('Reason', 'platform_owner_block');
+            if (reason === null) return;
+            await api.post(`/admin/companies/${button.dataset.id}/block`, { reason: reason || 'platform_owner_block' });
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await views['admin-console']();
+        };
+    });
+}
+
+async function renderAdminCompanyDetail(companyId) {
+    const panel = document.getElementById('admin-company-detail');
+    if (!panel) return;
+    panel.innerHTML = '<div class="loader"></div>';
+    const [company, projects, bots, conversations] = await Promise.all([
+        api.get(`/admin/companies/${companyId}`),
+        api.get(`/admin/companies/${companyId}/projects`),
+        api.get(`/admin/companies/${companyId}/bot-integrations`),
+        api.get(`/admin/companies/${companyId}/conversations`)
+    ]);
+    panel.innerHTML = `
+        <div class="admin-detail-header">
+            <div>
+                <h3>${escapeHtml(company.company_name || company.username)}</h3>
+                <p>${escapeHtml(company.username)} · ${escapeHtml(company.role)} · ${escapeHtml(company.status)}</p>
+            </div>
+            <div class="product-row-actions">
+                <button class="btn btn-secondary btn-sm" id="admin-detail-activate">${i18n[state.lang].admin_activate_btn}</button>
+                <button class="btn btn-secondary btn-sm" id="admin-detail-suspend">${i18n[state.lang].admin_suspend_btn}</button>
+                <button class="btn btn-danger btn-sm" id="admin-detail-block">${i18n[state.lang].admin_block_btn}</button>
+            </div>
+        </div>
+        <div class="admin-detail-grid">
+            <section>
+                <h4>Projects</h4>
+                ${projects.map((project) => `<div class="admin-detail-item">${escapeHtml(project.name)} <span>${escapeHtml(formatLocaleDateTime(project.created_at))}</span></div>`).join('') || '<div class="empty-state">No projects</div>'}
+            </section>
+            <section>
+                <h4>Bots</h4>
+                ${bots.map((bot) => `<div class="admin-detail-item">${escapeHtml(bot.name)} <span>${escapeHtml(bot.status)} · @${escapeHtml(bot.telegram_username || '-')}</span></div>`).join('') || '<div class="empty-state">No bots</div>'}
+            </section>
+            <section>
+                <h4>Conversations</h4>
+                ${conversations.map((conversation) => `<div class="admin-detail-item">#${escapeHtml(conversation.id)} <span>${escapeHtml(conversation.status)} · ${escapeHtml(formatLocaleDateTime(conversation.last_message_at || conversation.created_at))}</span></div>`).join('') || '<div class="empty-state">No conversations</div>'}
+            </section>
+        </div>
+    `;
+    document.getElementById('admin-detail-activate').onclick = async () => {
+        await api.post(`/admin/companies/${companyId}/activate`, {});
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await renderAdminCompanyDetail(companyId);
+    };
+    document.getElementById('admin-detail-suspend').onclick = async () => {
+        const reason = prompt('Reason', 'platform_owner_suspension');
+        if (reason === null) return;
+        await api.post(`/admin/companies/${companyId}/suspend`, { reason: reason || 'platform_owner_suspension' });
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await renderAdminCompanyDetail(companyId);
+    };
+    document.getElementById('admin-detail-block').onclick = async () => {
+        const reason = prompt('Reason', 'platform_owner_block');
+        if (reason === null) return;
+        await api.post(`/admin/companies/${companyId}/block`, { reason: reason || 'platform_owner_block' });
+        showNotification(i18n[state.lang].success_saved, 'success');
+        await renderAdminCompanyDetail(companyId);
+    };
+}
+
 const views = {
     async dashboard() {
         renderTemplate('dashboard-template');
@@ -3521,44 +3980,47 @@ const views = {
         applyTranslations();
     },
 
-    async 'bot-config'() {
-        renderTemplate('bot-config-template');
+    async 'bot-integrations'() {
+        renderTemplate('bot-integrations-template');
         showLoader();
 
         try {
-            const [projects, config] = await Promise.all([
+            const [projects, integrations] = await Promise.all([
                 fetchUserProjects(),
-                api.get('/bot/config')
+                api.get('/bot-integrations/')
             ]);
 
-            const select = document.getElementById('bot-active-project');
+            state.botIntegrations = integrations;
+            const select = document.getElementById('bot-integration-project');
             projects.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.id;
                 opt.textContent = p.name;
-                if (config.active_project_id == p.id) opt.selected = true;
                 select.appendChild(opt);
             });
 
-            document.getElementById('save-bot-config-btn').onclick = async () => {
-                const projectId = select.value;
-                if (!projectId) return;
-                try {
-                    await api.post('/bot/config', { active_project_id: parseInt(projectId) });
-                    showNotification(i18n[state.lang].success_saved, 'success');
-                } catch (e) {
-                    console.error(e);
-                }
-            };
+            renderBotIntegrationsList(integrations);
 
-            document.getElementById('update-bot-profile-btn').onclick = async () => {
-                const name = document.getElementById('bot-name-input').value;
-                if (!name) return;
-                const formData = new FormData();
-                formData.append('name', name);
+            document.getElementById('create-bot-integration-btn').onclick = async () => {
+                const name = document.getElementById('bot-integration-name').value.trim();
+                const projectId = Number(select.value);
+                const botToken = document.getElementById('bot-integration-token').value.trim();
+                const fallbackMessage = document.getElementById('bot-fallback-message').value.trim();
+                if (!name || !projectId || !botToken) {
+                    showNotification(state.lang === 'ar' ? 'أدخل اسم التكامل والمشروع والتوكن' : 'Enter integration name, project, and token', 'warning');
+                    return;
+                }
                 try {
-                    await api.post('/bot/profile', formData, true);
+                    await api.post('/bot-integrations/', {
+                        name,
+                        project_id: projectId,
+                        bot_token: botToken,
+                        human_handoff_enabled: document.getElementById('bot-human-handoff').checked,
+                        show_sources_to_customer: document.getElementById('bot-show-sources').checked,
+                        fallback_message: fallbackMessage || null
+                    });
                     showNotification(i18n[state.lang].success_saved, 'success');
+                    await views['bot-integrations']();
                 } catch (e) {
                     console.error(e);
                 }
@@ -3566,7 +4028,64 @@ const views = {
 
             applyTranslations();
         } catch (error) {
-            console.error('Bot Config Error:', error);
+            console.error('Bot Integrations Error:', error);
+        } finally {
+            hideLoader();
+        }
+    },
+
+    async conversations() {
+        renderTemplate('conversations-template');
+        showLoader();
+
+        try {
+            const statusFilter = document.getElementById('conversation-status-filter');
+            const loadConversations = async () => {
+                const status = statusFilter.value;
+                const endpoint = status ? `/conversations/?status=${encodeURIComponent(status)}` : '/conversations/';
+                const loadedConversations = await api.get(endpoint);
+                state.conversations = state.conversationBotFilter
+                    ? loadedConversations.filter((item) => Number(item.bot_integration_id) === Number(state.conversationBotFilter))
+                    : loadedConversations;
+                renderConversationsList(state.conversations);
+                if (state.selectedConversationId && state.conversations.some(item => item.id === state.selectedConversationId)) {
+                    await renderConversationDetail(state.selectedConversationId);
+                } else {
+                    state.selectedConversationId = state.conversations[0]?.id || null;
+                    if (state.selectedConversationId) {
+                        renderConversationsList(state.conversations);
+                        await renderConversationDetail(state.selectedConversationId);
+                    } else {
+                        await renderConversationDetail(null);
+                    }
+                }
+            };
+
+            statusFilter.onchange = loadConversations;
+            await loadConversations();
+            applyTranslations();
+        } catch (error) {
+            console.error('Conversations Error:', error);
+        } finally {
+            hideLoader();
+        }
+    },
+
+    async 'admin-console'() {
+        renderTemplate('admin-console-template');
+        showLoader();
+
+        try {
+            const [overview, companies] = await Promise.all([
+                api.get('/admin/overview'),
+                api.get('/admin/companies')
+            ]);
+            state.adminOverview = overview;
+            renderAdminOverview(overview);
+            renderAdminCompanies(companies);
+            applyTranslations();
+        } catch (error) {
+            console.error('Admin Console Error:', error);
         } finally {
             hideLoader();
         }
@@ -3581,7 +4100,6 @@ const views = {
             const genSelect = document.getElementById('ai-gen-provider');
             const embedSelect = document.getElementById('ai-embed-provider');
             const vectorDbSelect = document.getElementById('vector-db-provider');
-            const embeddingSizeSelect = document.getElementById('embedding-size');
             const retrievalInput = document.getElementById('retrieval-top-k');
             const chunkStrategySelect = document.getElementById('chunk-strategy');
             const chunkSizeInput = document.getElementById('chunk-size');
@@ -3605,14 +4123,10 @@ const views = {
                 'gemini-2.5-lite-flash': 'Gemini 2.5 Lite Flash',
                 'openrouter-gemini-2.0-flash': 'OpenRouter: Gemini 2.0 Flash',
                 'openrouter-free': 'OpenRouter: Free',
+                'openrouter-gemma-4-26b-a4b': 'OpenRouter: Gemma 4 26B A4B',
                 'groq-llama-3.3-70b-versatile': 'Groq: Llama 3.3 70B Versatile',
-                'groq-gpt-oss-120b': 'Groq: GPT-oss 120B',
-                'cerebras-llama-3.3-70b': 'Cerebras: Llama 3.3 70B',
                 'cerebras-llama-3.1-8b': 'Cerebras: Llama 3.1 8B',
-                'cerebras-gpt-oss-120b': 'Cerebras: GPT-oss 120B',
                 cohere: 'Cohere',
-                voyage: 'Voyage AI',
-                'bge-m3': 'BAAI/bge-m3 (local)',
                 pgvector: 'pgvector',
                 qdrant: 'Qdrant'
             };
@@ -3646,10 +4160,6 @@ const views = {
                 state.retrievalTopK = config.retrieval_top_k;
             }
 
-            if (typeof config.voyage_output_dimension === 'number') {
-                embeddingSizeSelect.value = String(config.voyage_output_dimension);
-            }
-
             if (config.chunk_strategy) chunkStrategySelect.value = config.chunk_strategy;
             if (typeof config.chunk_size === 'number') chunkSizeInput.value = String(config.chunk_size);
             if (typeof config.chunk_overlap === 'number') chunkOverlapInput.value = String(config.chunk_overlap);
@@ -3665,7 +4175,6 @@ const views = {
             document.getElementById('save-ai-config-btn').onclick = async () => {
                 try {
                     const retrievalValue = parseInt(retrievalInput.value, 10);
-                    const embeddingSizeValue = parseInt(embeddingSizeSelect.value, 10);
                     const chunkSizeValue = parseInt(chunkSizeInput.value, 10);
                     const chunkOverlapValue = parseInt(chunkOverlapInput.value, 10);
                     const parentChunkSizeValue = parseInt(parentChunkSizeInput.value, 10);
@@ -3678,7 +4187,6 @@ const views = {
                         embedding_provider: embedSelect.value,
                         vector_db_provider: vectorDbSelect.value,
                         retrieval_top_k: Number.isFinite(retrievalValue) ? retrievalValue : undefined,
-                        voyage_output_dimension: Number.isFinite(embeddingSizeValue) ? embeddingSizeValue : undefined,
                         chunk_strategy: chunkStrategySelect.value,
                         chunk_size: Number.isFinite(chunkSizeValue) ? chunkSizeValue : undefined,
                         chunk_overlap: Number.isFinite(chunkOverlapValue) ? chunkOverlapValue : undefined,
@@ -4348,6 +4856,11 @@ async function switchView(viewName, params = null) {
         viewName = 'dashboard';
     }
 
+    if (viewName === 'admin-console' && !canAccessAdminConsole()) {
+        showNotification('Forbidden', 'warning');
+        viewName = 'dashboard';
+    }
+
     if (state.docPoller) {
         clearInterval(state.docPoller);
         state.docPoller = null;
@@ -4553,8 +5066,7 @@ async function handleChatSubmit() {
             payload.top_k = state.retrievalTopK;
         }
 
-        // ── Stream via SSE (fetch + ReadableStream) ──
-        const response = await fetchWithApiRecovery(`/projects/${projectId}/query/stream`, {
+        const response = await fetchWithApiRecovery(`/projects/${projectId}/query`, {
             method: 'POST',
             headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(payload),
@@ -4567,64 +5079,20 @@ async function handleChatSubmit() {
         }
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullAnswer = '';
-        let sources = null;
-
-        // Remove typing indicator as soon as first token arrives
-        let indicatorRemoved = false;
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // keep incomplete line in buffer
-
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const dataStr = line.slice(6).trim();
-                if (dataStr === '[DONE]') continue;
-
-                try {
-                    const evt = JSON.parse(dataStr);
-
-                    if (evt.type === 'sources') {
-                        sources = evt.sources;
-                    } else if (evt.type === 'token') {
-                        if (!indicatorRemoved) {
-                            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-                            if (ind) ind.remove();
-                            indicatorRemoved = true;
-                        }
-                        fullAnswer += evt.token;
-                        // Live-render the accumulated text
-                        const textEl = document.querySelector(`#msg-${thinkingId} .msg-text`);
-                        if (textEl) {
-                            textEl.classList.add('streaming');
-                            textEl.innerHTML = formatAnswerHtml(fullAnswer) || escapeHtml(fullAnswer);
-                            textEl.dir = detectTextDirection(fullAnswer);
-                        }
-                        // Auto-scroll
-                        const container = document.getElementById('chat-messages');
-                        container.scrollTop = container.scrollHeight;
-                    } else if (evt.type === 'error') {
-                        fullAnswer = evt.message || i18n[state.lang].error_generic;
-                    }
-                } catch (_) { /* skip malformed JSON */ }
+            let errorData = {};
+            try {
+                errorData = await response.json();
+            } catch (_) {
+                errorData = {};
             }
+            throw new Error(errorData.detail || `HTTP ${response.status}`);
         }
 
-        // Finalize: attach sources + copy button
-        finalizeBotMessage(thinkingId, fullAnswer, sources);
+        const result = await response.json();
+        const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+        if (ind) ind.remove();
+        finalizeBotMessage(thinkingId, result.answer, result.sources);
         state.chatThinkingMessageId = null;
-
     } catch (error) {
         if (error && error.message === 'Unauthorized') {
             return;
@@ -4634,56 +5102,10 @@ async function handleChatSubmit() {
             return;
         }
 
-        // Fallback: try non-streaming endpoint
-        console.warn('Stream failed, falling back to non-streaming:', error.message);
-        try {
-            const payload = { query, language };
-            if (Number.isInteger(state.retrievalTopK)) {
-                payload.top_k = state.retrievalTopK;
-            }
-
-            const response = await fetchWithApiRecovery(`/projects/${projectId}/query`, {
-                method: 'POST',
-                headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify(payload),
-                signal: controller.signal,
-            });
-
-            if (response.status === 401) {
-                clearAuthAndRedirect('expired');
-                throw new Error('Unauthorized');
-            }
-
-            if (!response.ok) {
-                let errorData = {};
-                try {
-                    errorData = await response.json();
-                } catch (_) {
-                    errorData = {};
-                }
-                throw new Error(errorData.detail || `HTTP ${response.status}`);
-            }
-
-            const result = await response.json();
-            // Remove indicator
-            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-            if (ind) ind.remove();
-            finalizeBotMessage(thinkingId, result.answer, result.sources);
-            state.chatThinkingMessageId = null;
-        } catch (fallbackErr) {
-            if (fallbackErr && fallbackErr.message === 'Unauthorized') {
-                return;
-            }
-
-            if (isAbortError(fallbackErr) || controller.signal.aborted) {
-                return;
-            }
-
-            const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
-            if (ind) ind.remove();
-            finalizeBotMessage(thinkingId, i18n[state.lang].error_generic, null);
-            state.chatThinkingMessageId = null;
-        }
+        const ind = document.querySelector(`#msg-${thinkingId} .typing-indicator-pro`);
+        if (ind) ind.remove();
+        finalizeBotMessage(thinkingId, i18n[state.lang].error_generic, null);
+        state.chatThinkingMessageId = null;
     } finally {
         if (state.chatAbortController === controller) {
             state.chatAbortController = null;
@@ -4932,70 +5354,6 @@ function closeMobileSidebar() {
     const overlay = document.getElementById('sidebar-overlay');
     overlay.classList.remove('active');
     setTimeout(() => { overlay.style.display = 'none'; }, 300);
-}
-
-function escapeHtml(value) {
-    if (value == null) return '';
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function detectTextDirection(text) {
-    if (!text) return 'auto';
-    // Check for Arabic/Hebrew/Persian characters
-    const rtlChars = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0590-\u05FF]/;
-    const firstChars = text.trim().substring(0, 50);
-    return rtlChars.test(firstChars) ? 'rtl' : 'ltr';
-}
-
-function formatAnswerHtml(text) {
-    if (!text) return '';
-
-    let cleaned = String(text).replace(/\r\n/g, '\n').trim();
-    cleaned = cleaned.replace(/\s*(Source|Sources|المصدر|المصادر)\s*:.*/gi, '').trim();
-    cleaned = cleaned.replace(/\s+\*\s+/g, '\n* ');
-    cleaned = cleaned.replace(/\s+-\s+/g, '\n- ');
-
-    const lines = cleaned.split('\n').map(line => line.trim()).filter(Boolean);
-    if (lines.length === 0) return '';
-
-    const parts = [];
-    let listBuffer = [];
-
-    const flushList = () => {
-        if (listBuffer.length === 0) return;
-        const items = listBuffer
-            .map(item => `<li>${formatInlineMarkdown(item)}</li>`)
-            .join('');
-        parts.push(`<ul class="answer-list">${items}</ul>`);
-        listBuffer = [];
-    };
-
-    lines.forEach(line => {
-        if (/^[*-]\s+/.test(line)) {
-            listBuffer.push(line.replace(/^[*-]\s+/, ''));
-            return;
-        }
-        flushList();
-        parts.push(`<p class="answer-paragraph">${formatInlineMarkdown(line)}</p>`);
-    });
-
-    flushList();
-    return parts.join('');
-}
-
-function formatInlineMarkdown(value) {
-    const escaped = escapeHtml(value);
-    return escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-}
-
-function autoResizeTextarea(textarea) {
-    textarea.style.height = 'auto';
-    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
 }
 
 function setupUploadZone(projectId) {

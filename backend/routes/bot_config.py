@@ -51,10 +51,19 @@ def _save_config(config_path: Path, config: dict[str, Any]) -> None:
         json.dump(config, handle, indent=2)
 
 
+_LEGACY_BOT_CONFIG_WARNING = (
+    "Deprecated legacy demo configuration. Production Telegram support uses "
+    "database-backed /bot-integrations and /telegram/webhook routes."
+)
+
+
 @router.get("/config")
 async def get_bot_config():
-    """Get current bot configuration."""
-    return _load_config(get_bot_config_path())
+    """Get deprecated legacy bot configuration."""
+    config = _load_config(get_bot_config_path())
+    config["legacy"] = True
+    config["warning"] = _LEGACY_BOT_CONFIG_WARNING
+    return config
 
 
 @router.post("/config")
@@ -63,7 +72,7 @@ async def update_bot_config(
     current_user: User = Depends(get_current_db_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update bot configuration (active project)."""
+    """Update deprecated legacy bot configuration (active project)."""
     if config.active_project_id is None:
         raise HTTPException(status_code=400, detail="active_project_id is required")
 
@@ -99,6 +108,8 @@ async def update_bot_config(
     config_path = get_bot_config_path()
     current_config = _load_config(config_path)
     current_config["active_project_id"] = config.active_project_id
+    current_config["legacy"] = True
+    current_config["warning"] = _LEGACY_BOT_CONFIG_WARNING
     _save_config(config_path, current_config)
     return current_config
 

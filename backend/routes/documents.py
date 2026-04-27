@@ -20,6 +20,7 @@ from backend.security.auth import get_current_db_user
 from backend.security.event_service import log_event
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 from backend.security.sanitization import sanitize_filename
+from backend.config import settings
 from backend.utils.idempotency_manager import IdempotencyManager
 from backend.utils.task_tracking import (
     get_tracked_task_record,
@@ -188,6 +189,12 @@ def _is_malicious_upload_error(error_message: str) -> bool:
     return any(pattern in normalized for pattern in suspicious_patterns)
 
 
+async def _read_upload_with_size_limit(file: UploadFile, *, max_size_bytes: int) -> tuple[bytes, int]:
+    """Read at most max_size + 1 bytes so oversized uploads are capped in memory."""
+    file_content = await file.read(max_size_bytes + 1)
+    return file_content, len(file_content)
+
+
 # Routes
 @router.post("/projects/{project_id}/documents", response_model=AssetResponse, status_code=201)
 async def upload_document(
@@ -216,10 +223,35 @@ async def upload_document(
         )
 
         incoming_name = sanitize_filename(file.filename or "upload.bin")
+        max_size_bytes = settings.max_file_size_mb * 1024 * 1024
 
-        # Read file
-        file_content = await file.read()
-        file_size = len(file_content)
+        file_content, file_size = await _read_upload_with_size_limit(
+            file,
+            max_size_bytes=max_size_bytes,
+        )
+
+        if file_size > max_size_bytes:
+            log_event(
+                {
+                    "event_type": SecurityEventType.FILE_UPLOAD_BLOCKED,
+                    "severity": SecuritySeverity.HIGH,
+                    "user_id": current_user.id,
+                    "ip_address": client_ip,
+                    "message": "Blocked malicious file upload",
+                    "metadata": {
+                        "project_id": project_id,
+                        "filename": incoming_name,
+                        "reason": "file_too_large",
+                        "file_size": file_size,
+                        "max_size_bytes": max_size_bytes,
+                    },
+                }
+            )
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File too large. Maximum size is {settings.max_file_size_mb}MB",
+            )
+
         if file_size <= 0:
             log_event(
                 {

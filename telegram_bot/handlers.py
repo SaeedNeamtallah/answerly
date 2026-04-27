@@ -1,6 +1,10 @@
 """
 Telegram Bot Handlers.
 Command and message handlers for the bot using pyTelegramBotAPI.
+
+Legacy/demo path only: production multi-company Telegram support is handled by
+backend webhooks backed by `bot_integrations`, not by this global active-project
+polling flow.
 """
 import base64
 import logging
