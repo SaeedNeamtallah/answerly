@@ -2,7 +2,13 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
+  # مراقبة الـ Backend بتاعك (زي ما كان عندك)
   - job_name: 'ragmind-backend'
     metrics_path: '/metrics'
     static_configs:
       - targets: ['host.docker.internal:8001']
+
+  # الجزء الجديد عشان يقرأ من الـ Exporter اللي ضفناه في الدوكر
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']

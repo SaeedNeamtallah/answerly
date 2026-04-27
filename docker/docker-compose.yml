@@ -19,6 +19,18 @@ services:
       retries: 5
     restart: unless-stopped
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://ragmind:ragmind123@ragmind-postgres:5432/ragmind?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: ragmind-qdrant
@@ -83,8 +95,12 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin123
+      # السطرين دول عشان جرافانا تعرف إن فيه ملفات داتا سورس وداشبورد جاهزة
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     volumes:
       - grafana_data:/var/lib/grafana
+      # السطر ده بيربط الفولدر اللي فيه ملفات الـ JSON اللي نزلتها بماكينة جرافانا
+      - ../backend/monitoring/grafana_data/dashboards:/var/lib/grafana/dashboards
     restart: unless-stopped
     depends_on:
       - prometheus
