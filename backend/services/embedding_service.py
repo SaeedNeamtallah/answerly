@@ -39,12 +39,14 @@ class EmbeddingService:
             if not texts:
                 return []
             
-            effective_batch = batch_size or settings.embedding_batch_size
-            # Cohere trial keys have strict rate limits; cap concurrency to 1
+            # تم تعديل السطر هنا ليكون ثابت بـ 100 لتجنب مشاكل الـ Config
+            effective_batch = batch_size or 100 
+            
             provider_name = getattr(self.llm_provider, 'embed_model', '') or ''
             is_cohere = hasattr(self.llm_provider, 'client') and isinstance(
                 getattr(self.llm_provider, 'client', None), type(None)
             ) is False and 'cohere' in type(self.llm_provider).__module__
+            
             default_concurrency = 1 if is_cohere else max(1, int(getattr(settings, "embedding_concurrency", 2)))
             concurrency = default_concurrency
             total_texts = len(texts)
@@ -63,8 +65,7 @@ class EmbeddingService:
                 async with semaphore:
                     result = await self.llm_provider.generate_embeddings(
                         texts=batch,
-                        batch_size=len(batch),
-                        max_batch_tokens=settings.voyage_max_batch_tokens
+                        
                     )
                 if on_batch:
                     async with lock:
@@ -86,23 +87,10 @@ class EmbeddingService:
             raise
     
     async def generate_single_embedding(self, text: str) -> List[float]:
-        """
-        Generate embedding for single text.
-        
-        Args:
-            text: Text string
-            
-        Returns:
-            Embedding vector
-        """
+        """Generate embedding for single text."""
         embeddings = await self.generate_embeddings([text])
         return embeddings[0] if embeddings else []
     
     def get_embedding_dimension(self) -> int:
-        """
-        Get the embedding vector dimension.
-        
-        Returns:
-            Dimension size
-        """
+        """Get the embedding vector dimension."""
         return self.llm_provider.get_embedding_dimension()

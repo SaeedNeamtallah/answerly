@@ -73,6 +73,11 @@ graph TD
         Qdrant[(Qdrant Vector DB)]
     end
 
+    subgraph Monitoring ["Monitoring Stack"]
+        Prom[Prometheus]
+        Graf[Grafana]
+    end
+
     UI -->|HTTP/REST| API
     TG -->|Webhook| API
     
@@ -87,6 +92,9 @@ graph TD
     Retriever <-->|Semantic Search| Qdrant
     
     GenAI <-->|Inference| Gemini[Google Gemini API]
+
+    API -->|/metrics| Prom
+    Prom -->|Data Source| Graf
 ```
 
 ---
@@ -159,6 +167,66 @@ sequenceDiagram
 | **ORM** | **SQLAlchemy** | Async ORM for database interactions. |
 | **Task Queue** | **AsyncIO** | Python's native async/await for non-blocking operations. |
 | **Frontend** | **Vanilla JS/CSS** | Lightweight, clean UI without complex build steps. |
+| **Monitoring** | **Prometheus + Grafana** | Real-time metrics collection and visualization. |
+
+---
+
+## 📊 Monitoring & Observability
+
+RAGMind includes a full monitoring stack powered by **Prometheus** and **Grafana** that tracks the health and performance of the entire system in real-time.
+
+### Services
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | admin / admin123 |
+
+### Metrics Collected
+
+| Category | Metrics |
+|----------|---------|
+| **API** | Request count, latency, error rate per endpoint |
+| **Database** | Table counts, row counts per table |
+| **Qdrant** | Vector collections count, vectors per collection |
+| **System** | CPU usage %, RAM usage %, Disk usage % |
+| **RAG** | LLM latency, Qdrant search latency, token usage |
+
+### Grafana Dashboards
+
+| Dashboard | Description |
+|-----------|-------------|
+| **FastAPI Observability** | Request rate, average duration, PR99 latency, error % |
+| **Node Exporter Full** | System CPU, RAM, Disk, Network |
+| **PostgreSQL Exporter** | DB connections, transactions, query performance |
+
+### How It Works
+
+```mermaid
+graph LR
+    A[FastAPI Backend] -->|exposes /metrics| B[Prometheus]
+    B -->|scrapes every 5s| B
+    B -->|data source| C[Grafana]
+    C -->|visualizes| D[Dashboards]
+```
+
+1. The FastAPI backend exposes a `/metrics` endpoint using `prometheus-fastapi-instrumentator`.
+2. A custom middleware tracks every request — method, endpoint, status code, and duration.
+3. Background tasks collect DB, Qdrant, and system metrics every 5 seconds.
+4. Prometheus scrapes the `/metrics` endpoint automatically.
+5. Grafana reads from Prometheus and displays real-time dashboards.
+
+### Quick Start Monitoring
+
+```powershell
+# Start all services including Prometheus and Grafana
+.\start_docker.bat
+
+# Start the backend
+.\start_backend.bat
+```
+
+Then open **http://localhost:3000** → Login → Go to Dashboards.
 
 ---
 
@@ -167,6 +235,7 @@ sequenceDiagram
 ### Prerequisites
 *   Python 3.8+
 *   PostgreSQL 14+ (with `vector` extension installed)
+*   Docker Desktop
 *   A Google Cloud API Key (for Gemini)
 
 ### Quick Start (Windows)
@@ -194,10 +263,12 @@ The project includes automated scripts for instant setup.
 
 4.  **Run**:
     ```powershell
+    .\start_docker.bat
     .\start_backend.bat
     ```
 
-Visit **http://localhost:8000** to use the application.
+Visit **http://localhost:8001** to use the application.
+Visit **http://localhost:3000** for Grafana dashboards.
 
 ---
 
@@ -206,13 +277,17 @@ Visit **http://localhost:8000** to use the application.
 ```bash
 RAGMind/
 ├── backend/
+│   ├── monitoring/        # Prometheus metrics (db, vector, system, llm)
 │   ├── services/          # Business logic (RAG, Chunking, Parsing)
 │   ├── providers/         # Interfaces for LLMs and VectorDBs
 │   ├── routes/            # API Endpoints
 │   ├── database/          # SQLAlchemy models and connection
 │   └── main.py            # App entry point
+├── docker/
+│   └── docker-compose.yml # PostgreSQL, Qdrant, RabbitMQ, Redis, Prometheus, Grafana
 ├── frontend/              # Web UI (HTML/JS/CSS)
 ├── telegram_bot/          # Telegram Bot integration code
+├── prometheus.yml         # Prometheus scrape configuration
 ├── uploads/               # Temporary storage for documents
 └── scripts/               # .bat helper scripts
 ```
@@ -222,6 +297,7 @@ RAGMind/
 ## 👥 Contributors
 
 *   **Abdulmoezz Elwakil** ([@ZozElwakil](https://github.com/ZozElwakil)) - Core Logic & Architecture
+*   **Fares Hakim** ([@fareshakim1](https://github.com/fareshakim1)) - Monitoring & Observability (Prometheus + Grafana)
 
 ## 📄 License
 This project is licensed under the **MIT License**.

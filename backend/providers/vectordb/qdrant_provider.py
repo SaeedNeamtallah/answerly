@@ -139,7 +139,7 @@ class QdrantProvider(VectorDBInterface):
                     )
                 )
             
-            batch_size = max(1, int(settings.qdrant_upsert_batch_size))
+            batch_size = 100
             for start in range(0, len(points), batch_size):
                 batch = points[start:start + batch_size]
                 for attempt in range(3):

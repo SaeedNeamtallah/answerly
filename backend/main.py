@@ -1,90 +1,187 @@
 """
 Main FastAPI Application.
-Entry point for the RAGMind backend API.
+RAGMind Backend with Monitoring (Enhanced Version)
 """
-from fastapi import FastAPI
+
+import asyncio
+import logging
+import time
+import traceback
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import PlainTextResponse
 from contextlib import asynccontextmanager
 
-try:
-    from fastapi.responses import ORJSONResponse
-    _default_response = ORJSONResponse
-except ImportError:
-    _default_response = None
-# Configure logging
-from backend.config import settings
-import logging
+from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
+from prometheus_fastapi_instrumentator import Instrumentator
 
+from backend.config import settings
+from backend.database.connection import init_db, close_db, async_session_maker
+from backend.monitoring import db_metrics, vector_metrics, system_metrics
+from backend.monitoring import db_metrics, vector_metrics, system_metrics
+# ------------------------
+# 🧠 RAG Specific Metrics
+# ------------------------
+LLM_LATENCY = Gauge('rag_llm_latency_seconds', 'Time spent in LLM API call')
+VECTOR_DB_LATENCY = Gauge('rag_qdrant_search_seconds', 'Time spent in Vector DB search')
+TOKEN_USAGE = Gauge('rag_token_usage_total', 'Total tokens consumed')
+
+from backend.routes import (
+    projects,
+    documents,
+    query,
+    health,
+    stats,
+    bot_config,
+    app_config
+)
+
+# ------------------------
+# Logging
+# ------------------------
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-from backend.database import init_db, close_db
-from backend.routes import projects, documents, query, health, stats, bot_config, app_config
+# ------------------------
+# Prometheus General Metrics
+# ------------------------
+REQUEST_COUNT = Counter(
+    "request_count_total",
+    "Total API Requests",
+    ["method", "endpoint", "http_status"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "request_latency_seconds",
+    "Request latency in seconds",
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
+)
+
+ERROR_COUNT = Counter(
+    "error_count_total",
+    "Total API Errors",
+    ["method", "endpoint"]
+)
+
+# ------------------------
+# Middleware
+# ------------------------
+async def monitoring_middleware(request: Request, call_next):
+    start_time = time.time()
+    method = request.method
+    path = request.url.path
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        REQUEST_COUNT.labels(method=method, endpoint=path, http_status=status_code).inc()
+        if status_code >= 400:
+            ERROR_COUNT.labels(method=method, endpoint=path).inc()
+        return response
+    except Exception as e:
+        ERROR_COUNT.labels(method=method, endpoint=path).inc()
+        raise e
+    finally:
+        REQUEST_LATENCY.observe(time.time() - start_time)
 
 
+# ------------------------
+# Background Tasks (Metrics Updaters)
+# ------------------------
+async def db_metrics_updater():
+    while True:
+        try:
+            await db_metrics.update_db_metrics(async_session_maker)
+        except Exception as e:
+            logger.warning(f"DB metrics update failed: {e}")
+        await asyncio.sleep(5)
+
+async def vector_metrics_updater():
+    while True:
+        try:
+            await vector_metrics.update_vector_metrics()
+        except Exception as e:
+            logger.warning(f"Vector metrics update failed: {e}")
+        await asyncio.sleep(10)
+
+async def system_metrics_updater():
+    while True:
+        try:
+            await system_metrics.update_system_metrics()
+        except Exception as e:
+            logger.warning(f"System metrics error: {e}")
+        await asyncio.sleep(5)
+
+
+# ------------------------
+# Lifespan (Startup/Shutdown)
+# ------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler."""
-    # Startup
-    logger.info("Starting RAGMind API...")
-    try:
-        await init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {str(e)}")
-        raise
-    
+    logger.info("🚀 Starting RAGMind API with Enhanced Monitoring...")
+    await init_db()
+
+    # تشغيل مهام جمع الميتريكس في الخلفية
+    db_task = asyncio.create_task(db_metrics_updater())
+    vector_task = asyncio.create_task(vector_metrics_updater())
+    system_task = asyncio.create_task(system_metrics_updater())
+
     yield
-    
-    # Shutdown
-    logger.info("Shutting down RAGMind API...")
+
+    logger.info("🛑 Shutting down...")
+    db_task.cancel()
+    vector_task.cancel()
+    system_task.cancel()
     await close_db()
-    logger.info("Database connections closed")
 
 
-# Create FastAPI app
-_app_kwargs = dict(
+# ------------------------
+# App Initialization
+# ------------------------
+app = FastAPI(
     title=settings.api_title,
     version=settings.api_version,
-    description="""
-    RAGMind - Retrieval Augmented Generation System
-    
-    A powerful document processing and question-answering API using:
-    - Google Gemini 2.5 Flash for LLM capabilities
-    - PostgreSQL with pgvector for vector storage
-    - LangChain for document processing
-    
-    ## Features
-    - Project-based document organization
-    - Multi-format document support (PDF, TXT, DOCX)
-    - Automatic text chunking and embedding
-    - Vector similarity search
-    - AI-powered question answering
-    - Multi-language support (Arabic/English)
-    """,
+    description="RAGMind Backend with Advanced RAG Monitoring",
     lifespan=lifespan
 )
-if _default_response:
-    _app_kwargs['default_response_class'] = _default_response
-app = FastAPI(**_app_kwargs)
 
-# Configure CORS
+# --- تفعيل الـ Instrumentator للمراقبة التلقائية ---
+Instrumentator().instrument(app).expose(app)
+
+# ------------------------
+# Exception Handler
+# ------------------------
+@app.exception_handler(Exception)
+async def global_error_handler(request: Request, exc: Exception):
+    logger.error(f"🔥 ERROR: {traceback.format_exc()}")
+    ERROR_COUNT.labels(method=request.method, endpoint=request.url.path).inc()
+    return PlainTextResponse("Internal Server Error", status_code=500)
+
+# ------------------------
+# Middleware Configuration
+# ------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
-# GZip compression for responses
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# تفعيل الميدل وير اليدوي
+app.middleware("http")(monitoring_middleware)
 
-# Include routers
+# ------------------------
+# Routes
+# ------------------------
+@app.get("/test")
+def test():
+    return {"message": "Server is alive and monitored!"}
+
 app.include_router(health.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
@@ -93,12 +190,6 @@ app.include_router(stats.router)
 app.include_router(bot_config.router)
 app.include_router(app_config.router)
 
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "backend.main:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        reload=True
-    )
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)

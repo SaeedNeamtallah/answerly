@@ -2,15 +2,12 @@
 Database models using SQLAlchemy async ORM.
 Defines tables for projects, assets, and chunks with vector embeddings.
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from pgvector.sqlalchemy import Vector
-from datetime import datetime
 
 Base = declarative_base()
-
 
 class Project(Base):
     """Project model for organizing documents."""
@@ -20,14 +17,15 @@ class Project(Base):
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
     
     # Metadata (renamed to avoid conflict with SQLAlchemy metadata)
-    extra_metadata = Column("metadata", JSON, default={})
+    # Changed default to dict for better SQLAlchemy compatibility
+    extra_metadata = Column("metadata", JSON, default=dict)
     
     # Relationships
-    assets = relationship("Asset", back_populates="project", cascade="all, delete-orphan")
-    chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan")
+    assets = relationship("Asset", back_populates="project", cascade="all, delete-orphan", lazy="selectin")
+    chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan", lazy="selectin")
     
     def __repr__(self):
         return f"<Project(id={self.id}, name='{self.name}')>"
@@ -55,12 +53,12 @@ class Asset(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     processed_at = Column(DateTime(timezone=True), nullable=True)
     
-    # Metadata (renamed to avoid conflict)
-    extra_metadata = Column("metadata", JSON, default={})
+    # Metadata
+    extra_metadata = Column("metadata", JSON, default=dict)
     
     # Relationships
     project = relationship("Project", back_populates="assets")
-    chunks = relationship("Chunk", back_populates="asset", cascade="all, delete-orphan")
+    chunks = relationship("Chunk", back_populates="asset", cascade="all, delete-orphan", lazy="selectin")
 
     __table_args__ = (
         Index('ix_assets_project_status', 'project_id', 'status'),
@@ -82,12 +80,11 @@ class Chunk(Base):
     content = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)  # Position in document
     
-    # Vector embedding (stored as JSON/List for compatibility if pgvector is missing)
-    # Vector search is handled by Qdrant if pgvector is not available
+    # Vector embedding (stored as JSON for compatibility)
     embedding = Column(JSON, nullable=True)
     
-    # Metadata (renamed to avoid conflict)
-    extra_metadata = Column("metadata", JSON, default={})  # page_number, section, etc.
+    # Metadata (page_number, section, etc.)
+    extra_metadata = Column("metadata", JSON, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

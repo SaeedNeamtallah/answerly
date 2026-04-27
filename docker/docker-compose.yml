@@ -29,9 +29,6 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
-
-
-
   rabbitmq:
     image: rabbitmq:4.1.2-management-alpine
     container_name: rabbitmq
@@ -65,13 +62,37 @@ services:
       retries: 5
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-minirag_redis_2222}"]
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ragmind-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    restart: unless-stopped
 
-
-    
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ragmind-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
 
 volumes:
   postgres_data:
   qdrant_data:
-
   rabbitmq_data:
-  redis_data: 
+  redis_data:
+  prometheus_data:
+  grafana_data:

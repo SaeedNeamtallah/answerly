@@ -14,7 +14,6 @@ from backend.celery_app import celery_app
 
 router = APIRouter(tags=["Documents"])
 
-
 # Response Models
 class AssetResponse(BaseModel):
     id: int
@@ -32,26 +31,21 @@ class AssetResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# --- الأوامر الأساسية ---
 
-# Routes
-@router.post("/projects/{project_id}/documents", response_model=AssetResponse, status_code=201)
+@router.post("/{project_id}/documents", status_code=201)
 async def upload_document(
     project_id: int,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
     document_controller: DocumentController = Depends(DocumentController)
 ):
-    """
-    Upload document to project.
-    Document will be processed in background via Celery.
-    """
     try:
-        # Read file
+        # 1. قراءة الملف
         file_content = await file.read()
         file_size = len(file_content)
 
-        # Upload document
+        # 2. حفظ في قاعدة البيانات (يرجع Asset Object)
         asset = await document_controller.upload_document(
             db=db,
             project_id=project_id,
@@ -60,111 +54,68 @@ async def upload_document(
             file_size=file_size
         )
 
-        # Dispatch processing to Celery worker
-        process_document_task.delay(asset_id=asset.id)
+        # 3. استخراج الـ ID بأمان سواء كان Object أو Dict
+        # جربنا الطريقتين عشان نضمن إن الـ Task تتبعت فعلاً
+        asset_id = asset.id if hasattr(asset, 'id') else asset.get('id')
+        
+        print(f"🚀 [DEBUG] Sending Asset ID {asset_id} to Celery Worker...")
+
+        # 4. إرسال المهمة لـ Celery
+        process_document_task.delay(asset_id=asset_id)
 
         return asset
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print(f"❌ [ERROR] Upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/projects/{project_id}/documents", response_model=List[AssetResponse])
 async def list_project_documents(
     project_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
     document_controller: DocumentController = Depends(DocumentController)
 ):
-    """List all documents in project."""
-    try:
-        documents = await document_controller.list_project_documents(
-            db=db,
-            project_id=project_id
-        )
-        return documents
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    return await document_controller.list_project_documents(db=db, project_id=project_id)
 
 @router.get("/documents/{asset_id}", response_model=AssetResponse)
 async def get_document(
     asset_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
     document_controller: DocumentController = Depends(DocumentController)
 ):
-    """Get document by ID."""
-    try:
-        document = await document_controller.get_document(db=db, asset_id=asset_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        return document
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    document = await document_controller.get_document(db=db, asset_id=asset_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
 
 @router.post("/documents/{asset_id}/process")
 async def process_document(
     asset_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
     document_controller: DocumentController = Depends(DocumentController)
 ):
-    """Manually trigger document processing via Celery."""
-    try:
-        # Verify asset exists
-        document = await document_controller.get_document(db=db, asset_id=asset_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
+    document = await document_controller.get_document(db=db, asset_id=asset_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
 
-        # Dispatch to Celery
-        task = process_document_task.delay(asset_id=asset_id)
-
-        return {"task_id": task.id, "status": "queued", "asset_id": asset_id}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    task = process_document_task.delay(asset_id=asset_id)
+    return {"task_id": task.id, "status": "queued", "asset_id": asset_id}
 
 @router.delete("/documents/{asset_id}", status_code=204)
 async def delete_document(
     asset_id: int,
-    db: AsyncSession = Depends(get_db)
-,
+    db: AsyncSession = Depends(get_db),
     document_controller: DocumentController = Depends(DocumentController)
 ):
-    """Delete document."""
-    try:
-        deleted = await document_controller.delete_document(db=db, asset_id=asset_id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="Document not found")
-        return None
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    deleted = await document_controller.delete_document(db=db, asset_id=asset_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return None
 
 @router.get("/tasks/{task_id}")
 async def get_task_status(task_id: str):
-    """Check the status of a Celery background task."""
     result = celery_app.AsyncResult(task_id)
-    response = {
-        "task_id": task_id,
-        "status": result.status,
-    }
+    response = {"task_id": task_id, "status": result.status}
     if result.ready():
-        if result.successful():
-            response["result"] = result.result
-        else:
-            response["error"] = str(result.result)
-    elif result.info:
-        response["meta"] = result.info
+        response["result"] = result.result if result.successful() else str(result.result)
     return response
