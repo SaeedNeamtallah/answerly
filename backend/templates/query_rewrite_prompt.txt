@@ -1,4 +1,0 @@
-Rewrite the user query to improve document retrieval. Keep the same language and meaning, remove filler words, and return only the rewritten query.
-
-Query: {query}
-Rewritten:

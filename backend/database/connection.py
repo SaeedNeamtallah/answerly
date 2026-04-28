@@ -4,7 +4,6 @@ Provides engine and session factory.
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-
 from backend.config import settings
 import logging
 
@@ -51,7 +50,8 @@ async def get_db() -> AsyncSession:
 # Initialize DB
 # ------------------------
 async def init_db():
-    """Initialize database extensions and apply Alembic migrations."""
+    """Initialize database - create tables if they don't exist."""
+    from backend.database.models import Base
     from sqlalchemy import text
 
     try:

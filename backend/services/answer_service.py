@@ -2,7 +2,7 @@
 Answer Generation Service.
 Handles generating AI-powered answers using LLM.
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncIterator
 from backend.providers.llm.factory import LLMProviderFactory
 import logging
 
@@ -11,12 +11,6 @@ logger = logging.getLogger(__name__)
 
 class AnswerService:
     """Service for generating answers from context."""
-
-    @staticmethod
-    def _fallback_answer(language: str) -> str:
-        if language == "ar":
-            return "تعذر توليد إجابة واضحة الآن. حاول إعادة صياغة السؤال بشكل أدق."
-        return "Could not generate a clear answer right now. Please try rephrasing your question."
     
     def __init__(self):
         """Initialize answer service."""
@@ -46,26 +40,19 @@ class AnswerService:
             # Build context from chunks
             context = self._build_context(context_chunks)
             
-            # Build system + user prompts
-            system_prompt = self._build_system_prompt(language)
+            # Build prompt
             prompt = self._build_prompt(query, context, language)
             
             # Generate answer
             answer = await self.llm_provider.generate_text(
                 prompt=prompt,
-                system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=25000
             )
-
-            answer = (answer or "").strip()
-            if not answer:
-                logger.warning("LLM returned empty answer, using fallback")
-                answer = self._fallback_answer(language)
             
             # Format response
             response = {
-                'answer': answer,
+                'answer': answer.strip(),
                 'context_used': len(context_chunks)
             }
             
@@ -77,6 +64,32 @@ class AnswerService:
             
         except Exception as e:
             logger.error(f"Error generating answer: {str(e)}")
+            raise
+
+    async def generate_answer_stream(
+        self,
+        query: str,
+        context_chunks: List[Dict[str, Any]],
+        language: str = "ar",
+    ) -> AsyncIterator[str]:
+        """
+        Stream answer tokens from LLM.
+
+        Yields raw text tokens as they arrive from the provider.
+        """
+        try:
+            context = self._build_context(context_chunks)
+            prompt = self._build_prompt(query, context, language)
+
+            async for token in self.llm_provider.generate_text_stream(
+                prompt=prompt,
+                temperature=0.7,
+                max_tokens=25000,
+            ):
+                yield token
+
+        except Exception as e:
+            logger.error(f"Error streaming answer: {str(e)}")
             raise
     
     def _build_context(self, chunks: List[Dict[str, Any]]) -> str:
@@ -112,18 +125,20 @@ class AnswerService:
         
         return "\n\n".join(context_parts)
     
-    def _build_system_prompt(self, language: str) -> str:
+    def _build_prompt(self, query: str, context: str, language: str) -> str:
         """
-        Build system instruction for LLM.
-
+        Build prompt for LLM.
+        
         Args:
+            query: User question
+            context: Context text
             language: Response language
-
+            
         Returns:
-            System instruction text
+            Formatted prompt
         """
         if language == "ar":
-            return """أنت مساعد احترافي على مستوى الشركات للإجابة بدقة اعتمادًا على سياق المستندات فقط.
+            system_prompt = """أنت مساعد احترافي على مستوى الشركات للإجابة بدقة اعتمادًا على سياق المستندات فقط.
 اتّبع القواعد التالية بدقة:
 1) اعتمد فقط على السياق المقدم. إذا لم تجد الإجابة في السياق، قل ذلك بوضوح.
 2) قدّم إجابة مباشرة ومختصرة أولاً، ثم أضف تفاصيل داعمة عند الحاجة.
@@ -136,7 +151,16 @@ class AnswerService:
 - فقرة إجابة واضحة.
 - عند اللزوم، قائمة نقاط موجزة مع الاستشهادات."""
 
-        return """You are an enterprise-grade assistant answering strictly from the provided document context.
+            prompt = f"""{system_prompt}
+
+السياق:
+{context}
+
+السؤال: {query}
+
+الإجابة:"""
+        else:
+            system_prompt = """You are an enterprise-grade assistant answering strictly from the provided document context.
 Follow these rules:
 1) Use only the given context. If the answer is not in the context, state that clearly.
 2) Provide a concise direct answer first, then add supporting detail if needed.
@@ -149,27 +173,9 @@ Output:
 - One clear answer paragraph.
 - If helpful, a short bullet list with citations."""
 
-    def _build_prompt(self, query: str, context: str, language: str) -> str:
-        """
-        Build user prompt for LLM.
-        
-        Args:
-            query: User question
-            context: Context text
-            language: Response language
-            
-        Returns:
-            Formatted user prompt
-        """
-        if language == "ar":
-            prompt = f"""السياق:
-{context}
+            prompt = f"""{system_prompt}
 
-السؤال: {query}
-
-الإجابة:"""
-        else:
-            prompt = f"""Context:
+Context:
 {context}
 
 Question: {query}
@@ -180,33 +186,22 @@ Answer:"""
     
     def _extract_sources(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Extract unique source information from chunks.
+        Extract source information from chunks.
         
         Args:
             chunks: List of chunk dictionaries
             
         Returns:
-            List of unique source information
+            List of source information
         """
-        seen = set()
         sources = []
-
         for chunk in chunks:
-            metadata = chunk.get('metadata', {}) or {}
-            asset_id = chunk.get('asset_id')
-            chunk_index = metadata.get('chunk_index', 0)
-
-            key = (asset_id, chunk_index)
-            if key in seen:
-                continue
-
-            seen.add(key)
-
+            metadata = chunk.get('metadata', {})
             sources.append({
                 'document_name': metadata.get('document_name', 'Unknown'),
-                'chunk_index': chunk_index,
+                'chunk_index': metadata.get('chunk_index', 0),
                 'similarity': chunk.get('similarity', 0.0),
-                'asset_id': asset_id
+                'asset_id': chunk.get('asset_id')
             })
         
         return sources

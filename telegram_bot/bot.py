@@ -1,9 +1,6 @@
 """
 RAGMind Telegram Bot.
 Main bot application using pyTelegramBotAPI.
-
-Legacy/demo runner only. Production Telegram receiving uses
-`POST /telegram/webhook/{integration_id}/{webhook_secret}` in the backend.
 """
 import telebot
 from telegram_bot.config import bot_settings

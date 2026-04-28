@@ -1,6 +1,6 @@
 """
 Database models using SQLAlchemy async ORM.
-Defines tables for users, projects, assets, and chunks with vector embeddings.
+Defines tables for projects, assets, and chunks with vector embeddings.
 """
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
@@ -14,7 +14,6 @@ class Project(Base):
     __tablename__ = "projects"
     
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -29,7 +28,7 @@ class Project(Base):
     chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan", lazy="selectin")
     
     def __repr__(self):
-        return f"<Project(id={self.id}, owner_id={self.owner_id}, name='{self.name}')>"
+        return f"<Project(id={self.id}, name='{self.name}')>"
 
 
 class Asset(Base):

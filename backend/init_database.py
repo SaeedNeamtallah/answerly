@@ -4,8 +4,8 @@ Creates database and tables with pgvector extension.
 """
 import asyncio
 import sys
+import os
 from pathlib import Path
-from sqlalchemy.engine import make_url
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,37 +21,36 @@ logger = logging.getLogger(__name__)
 async def create_database_if_not_exists():
     """Create the database if it doesn't exist."""
     import psycopg2
-    from psycopg2 import sql
     from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-
-    parsed_url = make_url(settings.database_url)
-    db_name = parsed_url.database
-    if not db_name:
-        raise ValueError("DATABASE_URL must include a database name")
-
-    connect_kwargs = {
-        "dbname": "postgres",
-        "host": parsed_url.host or "localhost",
-        "port": parsed_url.port or 5432,
-    }
-    if parsed_url.username:
-        connect_kwargs["user"] = parsed_url.username
-    if parsed_url.password:
-        connect_kwargs["password"] = parsed_url.password
+    
+    # Parse connection string to get credentials for default 'postgres' db
+    # Example: postgresql+asyncpg://postgres:Ezz123456@localhost:5432/ragmind
+    db_url = settings.database_url.replace("postgresql+asyncpg://", "")
+    auth, rest = db_url.split("@")
+    user, password = auth.split(":")
+    host_port, db_name = rest.split("/")
+    host = host_port.split(":")[0]
+    port = host_port.split(":")[1] if ":" in host_port else "5432"
     
     try:
         # Connect to default 'postgres' database
-        conn = psycopg2.connect(**connect_kwargs)
+        conn = psycopg2.connect(
+            dbname='postgres',
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
         
         # Check if database exists
-        cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s", (db_name,))
+        cur.execute(f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{db_name}'")
         exists = cur.fetchone()
         
         if not exists:
             logger.info(f"Creating database {db_name}...")
-            cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
+            cur.execute(f"CREATE DATABASE {db_name}")
             logger.info(f"Database {db_name} created successfully")
         else:
             logger.info(f"Database {db_name} already exists")
@@ -68,17 +67,14 @@ async def main():
     try:
         # Step 1: Create database if needed
         await create_database_if_not_exists()
-
-        parsed_url = make_url(settings.database_url)
-        target = f"{parsed_url.host or 'localhost'}:{parsed_url.port or 5432}/{parsed_url.database}"
-        logger.info("Connecting to database: %s", target)
+        
+        logger.info(f"Connecting to database: {settings.database_url.split('@')[1]}")
         
         # Step 2: Initialize tables and extensions
         await init_db()
         
         logger.info("✅ Database initialized successfully!")
         logger.info("Tables created:")
-        logger.info("  - users")
         logger.info("  - projects")
         logger.info("  - assets")
         logger.info("  - chunks (with vector embeddings)")

@@ -14,15 +14,12 @@ from backend.providers.vectordb.factory import VectorDBProviderFactory
 from datetime import datetime
 from fastapi import Depends
 import logging
-from backend.security.sanitization import sanitize_filename
 
 # إعداد الـ Logger
 logger = logging.getLogger(__name__)
 
 class DocumentController:
     """Controller for document operations."""
-
-    # SECURITY RULE: all user-facing document queries must be scoped by JWT owner_id.
     
     def __init__(self, file_service: FileService = Depends(FileService)):
         """Initialize document controller."""
@@ -56,7 +53,6 @@ class DocumentController:
     async def upload_document(
         self,
         db: AsyncSession,
-        owner_id: int,
         project_id: int,
         file_content: bytes,
         filename: str,
@@ -74,23 +70,23 @@ class DocumentController:
             project_result = await db.execute(project_stmt)
             project = project_result.scalar_one_or_none()
             if not project:
-                raise ValueError("Forbidden")
+                raise ValueError(f"Project not found: {project_id}")
             
             # حفظ الملف في الـ Storage
             unique_filename, file_path = await self.file_service.save_upload_file(
                 file_content=file_content,
-                filename=safe_filename,
-                project_id=project_id,
+                filename=filename,
+                project_id=project_id
             )
             
             from pathlib import Path
-            file_type = Path(safe_filename).suffix.lstrip('.')
+            file_type = Path(filename).suffix.lstrip('.')
             
             # إنشاء السجل
             asset = Asset(
                 project_id=project_id,
                 filename=unique_filename,
-                original_filename=safe_filename,
+                original_filename=filename,
                 file_path=file_path,
                 file_size=file_size,
                 file_type=file_type,
@@ -165,9 +161,6 @@ class DocumentController:
                 embeddings = await self.embedding_service.generate_embeddings(
                     texts, on_batch=on_embed_batch
                 )
-                if not embeddings:
-                    raise ValueError("No embeddings generated for processed document chunks")
-                embedding_dimension = len(embeddings[0]) if embeddings else 0
                 
                 # 4. Vector Storage (Qdrant)
                 chunk_ids = [c.id for c in chunk_records]

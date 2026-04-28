@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 
 class ProjectController:
     """Controller for project operations."""
-
-    # SECURITY RULE: all project queries must be scoped by owner_id derived from JWT.
     
     def __init__(self, file_service: FileService = Depends(FileService)):
         """Initialize project controller."""
@@ -26,7 +24,6 @@ class ProjectController:
     async def create_project(
         self,
         db: AsyncSession,
-        owner_id: int,
         name: str,
         description: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
@@ -36,7 +33,6 @@ class ProjectController:
         
         Args:
             db: Database session
-            owner_id: Owner user ID
             name: Project name
             description: Optional description
             metadata: Optional metadata
@@ -46,7 +42,6 @@ class ProjectController:
         """
         try:
             project = Project(
-                owner_id=owner_id,
                 name=name,
                 description=description,
                 extra_metadata=metadata or {}
@@ -67,8 +62,7 @@ class ProjectController:
     async def get_project(
         self,
         db: AsyncSession,
-        project_id: int,
-        owner_id: int,
+        project_id: int
     ) -> Optional[Project]:
         """
         Get project by ID.
@@ -76,16 +70,12 @@ class ProjectController:
         Args:
             db: Database session
             project_id: Project ID
-            owner_id: Owner user ID
             
         Returns:
             Project or None
         """
         try:
-            stmt = select(Project).where(
-                Project.id == project_id,
-                Project.owner_id == owner_id,
-            )
+            stmt = select(Project).where(Project.id == project_id)
             result = await db.execute(stmt)
             project = result.scalar_one_or_none()
             
@@ -98,7 +88,6 @@ class ProjectController:
     async def list_projects(
         self,
         db: AsyncSession,
-        owner_id: int,
         skip: int = 0,
         limit: int = 100
     ) -> List[Project]:
@@ -107,7 +96,6 @@ class ProjectController:
         
         Args:
             db: Database session
-            owner_id: Owner user ID
             skip: Number of projects to skip
             limit: Maximum number of projects to return
             
@@ -116,21 +104,11 @@ class ProjectController:
         """
         try:
             from sqlalchemy import func
-            count_stmt = (
-                select(func.count())
-                .select_from(Project)
-                .where(Project.owner_id == owner_id)
-            )
+            count_stmt = select(func.count()).select_from(Project)
             count_result = await db.execute(count_stmt)
             total_count = count_result.scalar()
             
-            stmt = (
-                select(Project)
-                .where(Project.owner_id == owner_id)
-                .offset(skip)
-                .limit(limit)
-                .order_by(Project.created_at.desc())
-            )
+            stmt = select(Project).offset(skip).limit(limit).order_by(Project.created_at.desc())
             result = await db.execute(stmt)
             projects = result.scalars().all()
             
@@ -144,7 +122,6 @@ class ProjectController:
         self,
         db: AsyncSession,
         project_id: int,
-        owner_id: int,
         name: Optional[str] = None,
         description: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
@@ -155,7 +132,6 @@ class ProjectController:
         Args:
             db: Database session
             project_id: Project ID
-            owner_id: Owner user ID
             name: Optional new name
             description: Optional new description
             metadata: Optional new metadata
@@ -164,7 +140,7 @@ class ProjectController:
             Updated project or None
         """
         try:
-            project = await self.get_project(db, project_id, owner_id)
+            project = await self.get_project(db, project_id)
             if not project:
                 return None
             
@@ -191,8 +167,7 @@ class ProjectController:
     async def delete_project(
         self,
         db: AsyncSession,
-        project_id: int,
-        owner_id: int,
+        project_id: int
     ) -> bool:
         """
         Delete project and all associated data.
@@ -200,24 +175,16 @@ class ProjectController:
         Args:
             db: Database session
             project_id: Project ID
-            owner_id: Owner user ID
             
         Returns:
             True if deleted successfully
         """
         try:
-            project = await self.get_project(db, project_id, owner_id)
-            if not project:
-                return False
-
             # Delete files from storage
             await self.file_service.delete_project_files(project_id)
             
             # Delete from database (cascade will handle assets and chunks)
-            stmt = delete(Project).where(
-                Project.id == project_id,
-                Project.owner_id == owner_id,
-            )
+            stmt = delete(Project).where(Project.id == project_id)
             result = await db.execute(stmt)
             await db.commit()
             
@@ -235,8 +202,7 @@ class ProjectController:
     async def get_project_stats(
         self,
         db: AsyncSession,
-        project_id: int,
-        owner_id: int,
+        project_id: int
     ) -> Dict[str, Any]:
         """
         Get project statistics.
@@ -244,33 +210,18 @@ class ProjectController:
         Args:
             db: Database session
             project_id: Project ID
-            owner_id: Owner user ID
             
         Returns:
             Statistics dictionary
         """
         try:
             # Get asset count
-            asset_stmt = (
-                select(Asset)
-                .join(Project, Asset.project_id == Project.id)
-                .where(
-                    Asset.project_id == project_id,
-                    Project.owner_id == owner_id,
-                )
-            )
+            asset_stmt = select(Asset).where(Asset.project_id == project_id)
             asset_result = await db.execute(asset_stmt)
             assets = asset_result.scalars().all()
             
             # Get chunk count
-            chunk_stmt = (
-                select(Chunk)
-                .join(Project, Chunk.project_id == Project.id)
-                .where(
-                    Chunk.project_id == project_id,
-                    Project.owner_id == owner_id,
-                )
-            )
+            chunk_stmt = select(Chunk).where(Chunk.project_id == project_id)
             chunk_result = await db.execute(chunk_stmt)
             chunks = chunk_result.scalars().all()
             

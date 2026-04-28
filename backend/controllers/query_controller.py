@@ -2,56 +2,16 @@
 Query Controller.
 Business logic for query processing and answer generation.
 """
-from typing import Dict, Any, Optional
-from sqlalchemy import func, select
+from typing import Dict, Any, Optional, AsyncIterator
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
 import logging
-
-from backend.database.models import Asset, Project
 
 logger = logging.getLogger(__name__)
 
 
-class QueryInfrastructureError(RuntimeError):
-    """Raised when query infrastructure dependencies are unavailable."""
-
-
 class QueryController:
     """Controller for query operations."""
-
-    # SECURITY RULE: retrieval must be scoped to owner_id from JWT.
-
-    @staticmethod
-    def _fallback_answer(language: str) -> str:
-        if language == "ar":
-            return "تعذر توليد إجابة واضحة الآن. حاول إعادة صياغة السؤال بشكل أدق."
-        return "Could not generate a clear answer right now. Please try rephrasing your question."
-
-    @staticmethod
-    def _no_context_answer(
-        language: str,
-        *,
-        total_docs: int,
-        completed_docs: int,
-        active_docs: int,
-        failed_docs: int,
-    ) -> str:
-        if language == "ar":
-            if total_docs <= 0:
-                return "لا توجد مستندات في هذا المشروع بعد. ارفع مستندًا أولًا ثم أعد المحاولة."
-            if completed_docs <= 0 and active_docs > 0:
-                return "المستندات ما زالت قيد المعالجة. انتظر حتى تكتمل المعالجة ثم جرّب مرة أخرى."
-            if completed_docs <= 0 and failed_docs > 0:
-                return "فشلت معالجة المستندات الحالية. ارفع ملفًا صالحًا (PDF/TXT/DOCX) ثم أعد المحاولة."
-            return "لم أتمكن من العثور على معلومات ذات صلة في المستندات."
-
-        if total_docs <= 0:
-            return "No documents were uploaded to this project yet. Upload a document first, then try again."
-        if completed_docs <= 0 and active_docs > 0:
-            return "Documents are still processing. Please wait for processing to complete, then try again."
-        if completed_docs <= 0 and failed_docs > 0:
-            return "Current documents failed to process. Upload a valid PDF/TXT/DOCX file, then try again."
-        return "Could not find relevant information in the documents."
     
     def __init__(self):
         """Initialize query controller."""
@@ -65,7 +25,6 @@ class QueryController:
     async def answer_query(
         self,
         db: AsyncSession,
-        owner_id: int,
         project_id: int,
         query: str,
         top_k: int = 5,
@@ -77,7 +36,6 @@ class QueryController:
         
         Args:
             db: Database session
-            owner_id: Owner user ID
             project_id: Project ID to search in
             query: User question
             top_k: Number of chunks to retrieve
@@ -93,59 +51,15 @@ class QueryController:
             
             similar_chunks = await self.query_service.search_similar_chunks(
                 query=query,
-                owner_id=owner_id,
                 project_id=project_id,
                 top_k=top_k,
                 asset_id=asset_id
             )
             
             if not similar_chunks:
-                total_docs = 0
-                completed_docs = 0
-                active_docs = 0
-                failed_docs = 0
-                try:
-                    base_scope = (
-                        select(Asset.id)
-                        .join(Project, Project.id == Asset.project_id)
-                        .where(
-                            Asset.project_id == project_id,
-                            Project.owner_id == owner_id,
-                        )
-                    )
-
-                    total_docs = int((await db.execute(
-                        select(func.count()).select_from(base_scope.subquery())
-                    )).scalar_one() or 0)
-
-                    completed_docs = int((await db.execute(
-                        select(func.count()).select_from(
-                            base_scope.where(Asset.status == "completed").subquery()
-                        )
-                    )).scalar_one() or 0)
-
-                    active_docs = int((await db.execute(
-                        select(func.count()).select_from(
-                            base_scope.where(Asset.status.in_(("uploaded", "queued", "pending", "processing"))).subquery()
-                        )
-                    )).scalar_one() or 0)
-
-                    failed_docs = int((await db.execute(
-                        select(func.count()).select_from(
-                            base_scope.where(Asset.status == "failed").subquery()
-                        )
-                    )).scalar_one() or 0)
-                except Exception:
-                    logger.debug("Could not derive document readiness stats for query fallback", exc_info=True)
-
                 return {
-                    'answer': self._no_context_answer(
-                        language,
-                        total_docs=total_docs,
-                        completed_docs=completed_docs,
-                        active_docs=active_docs,
-                        failed_docs=failed_docs,
-                    ),
+                    'answer': 'لم أتمكن من العثور على معلومات ذات صلة في المستندات.' if language == 'ar' 
+                             else 'Could not find relevant information in the documents.',
                     'sources': [],
                     'context_used': 0
                 }
@@ -162,5 +76,60 @@ class QueryController:
             return result
             
         except Exception as e:
-            logger.exception("Error processing query infrastructure")
-            raise QueryInfrastructureError("Query infrastructure failure") from e
+            logger.error(f"Error processing query: {str(e)}")
+            raise
+
+    async def answer_query_stream(
+        self,
+        db: AsyncSession,
+        project_id: int,
+        query: str,
+        top_k: int = 5,
+        language: str = "ar",
+        asset_id: Optional[int] = None,
+    ) -> AsyncIterator[str]:
+        """
+        Stream SSE events: first the sources, then token-by-token answer,
+        then a [DONE] sentinel.
+        """
+        try:
+            logger.info(
+                f"Processing streaming query for project {project_id}: {query[:50]}..."
+            )
+
+            similar_chunks = await self.query_service.search_similar_chunks(
+                query=query,
+                project_id=project_id,
+                top_k=top_k,
+                asset_id=asset_id,
+            )
+
+            if not similar_chunks:
+                no_info = (
+                    "لم أتمكن من العثور على معلومات ذات صلة في المستندات."
+                    if language == "ar"
+                    else "Could not find relevant information in the documents."
+                )
+                yield f"data: {json.dumps({'type': 'sources', 'sources': [], 'context_used': 0})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'token': no_info})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            # Emit sources first
+            sources = self.answer_service._extract_sources(similar_chunks)
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'context_used': len(similar_chunks)}, ensure_ascii=False)}\n\n"
+
+            # Stream answer tokens
+            async for token in self.answer_service.generate_answer_stream(
+                query=query,
+                context_chunks=similar_chunks,
+                language=language,
+            ):
+                yield f"data: {json.dumps({'type': 'token', 'token': token}, ensure_ascii=False)}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            logger.error(f"Error streaming query: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"

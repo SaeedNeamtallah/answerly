@@ -44,7 +44,6 @@ venv.bak/
 
 # Local history snapshots
 .history/
-.playwright-cli/
 
 # Database
 *.db
@@ -62,9 +61,6 @@ uploads/*
 
 # Logs
 *.log
-*.out
-*.err
-uploads/logs/
 logs/
 
 # OS Files
@@ -96,8 +92,8 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
-# Alembic (legacy root file)
-/alembic.ini
+# Alembic
+alembic.ini
 
 # Other
 *.bak
@@ -106,9 +102,6 @@ dmypy.json
 .codersinflow
 node_modules
 .codex
-.code-review-graph/
-.agents/
-.specify/
 out
 dist
 *.vsix
@@ -121,6 +114,3 @@ __pycache__
 # Generated output files
 all_project_code.txt
 server_output.txt
-project-graph.md
-newplan.md
-tmp/
