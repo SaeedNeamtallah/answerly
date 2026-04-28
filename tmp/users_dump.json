@@ -1,0 +1,362 @@
+[
+  {
+    "id": 1,
+    "username": "__migration_owner__",
+    "role": "company_admin",
+    "password_hash": "__disabled__"
+  },
+  {
+    "id": 23,
+    "username": "codex_smoke_20260420111749_95fcdfed",
+    "role": "company_admin",
+    "password_hash": "$2b$12$ip/0NCVldupi12P.HXJFoe4C3T35fmO0r2/W4GGLzlGVpk5NyyZHW"
+  },
+  {
+    "id": 24,
+    "username": "ownerprobe_20260420111846_da9fd7e9",
+    "role": "company_admin",
+    "password_hash": "$2b$12$nwgi0X3zWAV2/6mPuAOwwejuwTSYjlcScFK/VX07PSHrULQ4wv7eO"
+  },
+  {
+    "id": 25,
+    "username": "hfalias_20260420111849_a62459d6",
+    "role": "company_admin",
+    "password_hash": "$2b$12$w8iFqY8GXTdfL25kjE2P4eCkPOI2knu93ZMPyeOovZqS4M3U3xE3e"
+  },
+  {
+    "id": 26,
+    "username": "codex_smoke_20260420111908_a6733043",
+    "role": "company_admin",
+    "password_hash": "$2b$12$tQHoT/VH04nLtfAnSOayVe4Ung6DLijklDPGjrybHCw7gx6HMDG3i"
+  },
+  {
+    "id": 27,
+    "username": "codex_smoke_20260420111933_f3552664",
+    "role": "company_admin",
+    "password_hash": "$2b$12$NSZdTK353GJOsawIj2S9N.BsafYPdms3cNxagsVJb2IIFqfGlIYjO"
+  },
+  {
+    "id": 28,
+    "username": "codex_smoke_20260420113217_36653cb5",
+    "role": "company_admin",
+    "password_hash": "$2b$12$27kDsCjuVzYyUvTfazs.LOK/WHSMU.hr10AFWR.Ptj4Bo9HNhAOCS"
+  },
+  {
+    "id": 29,
+    "username": "codex_smoke_20260420113423_685b26a9",
+    "role": "company_admin",
+    "password_hash": "$2b$12$rvVe.9Mzwve7oo2Idpi3y.KFLar6UW84.W54IXEU7aqy7VGiFPD9O"
+  },
+  {
+    "id": 30,
+    "username": "codex_smoke_20260420123701_39762789",
+    "role": "company_admin",
+    "password_hash": "$2b$12$eCwhPrAJgIifdE6lnvb45.wqOCd51soBEU712qMIYGsOcWRberSPW"
+  },
+  {
+    "id": 31,
+    "username": "codex_smoke_20260420124724_48eb4872",
+    "role": "company_admin",
+    "password_hash": "$2b$12$.khD4vUuihP5gkrNnSwH5e/aAnDxWeG0luoqjkuevr943XuEZBrle"
+  },
+  {
+    "id": 32,
+    "username": "codex_smoke_20260420124832_38bf42ec",
+    "role": "company_admin",
+    "password_hash": "$2b$12$hhcraHLw5tKu7r8N88kJYO1deU8CY6nwyPO.t/Hy4vu8a96VfKUV6"
+  },
+  {
+    "id": 33,
+    "username": "codex_smoke_20260420125219_8ec4dabf",
+    "role": "company_admin",
+    "password_hash": "$2b$12$q3HuzSwTH0KcNAf8tj6K4Oi0KqLXqDME./coUZZzb/ypmqve8RDe6"
+  },
+  {
+    "id": 34,
+    "username": "codex_smoke_20260420125633_caffd640",
+    "role": "company_admin",
+    "password_hash": "$2b$12$O6kwcZX1s.GVitsx2KP0ougs4R.WsSNbHHd/Wp8.Ann.u1xYjv12O"
+  },
+  {
+    "id": 35,
+    "username": "codex_smoke_20260420130932_1bc29371",
+    "role": "company_admin",
+    "password_hash": "$2b$12$c44/wXjyyd9T1GpCuXB09egagS.Exgb6W5nLovG12f3rY2dPjs.9S"
+  },
+  {
+    "id": 36,
+    "username": "codex_smoke_20260420131016_810436ec",
+    "role": "company_admin",
+    "password_hash": "$2b$12$OtkVEavG3kunImpEzgI2H.Bkzot3aqCvk7cdwi1ppwMZPpS3ZyHUq"
+  },
+  {
+    "id": 37,
+    "username": "codex_smoke_20260420131127_0fc67e5e",
+    "role": "company_admin",
+    "password_hash": "$2b$12$fsEc2sTbwK2wSqSeNrHlluH1/o9Fq75jXijtXYrLOw/colJsfai.a"
+  },
+  {
+    "id": 116,
+    "username": "codex_smoke_20260427030024_40091eec",
+    "role": "company_admin",
+    "password_hash": "$2b$12$pJtv6kngAazlb9YYqzGuceADtIcNsS.lksaaCPdw67LJT/i3./ZVi"
+  },
+  {
+    "id": 118,
+    "username": "codex_smoke_20260427030405_35bccdc1",
+    "role": "company_admin",
+    "password_hash": "$2b$12$YvM5164pkTjmlugwDQttkeSa90nfKc.eHvK/Nz0i6agbjIk4QZD6C"
+  },
+  {
+    "id": 120,
+    "username": "codex_smoke_20260427030417_7584eafc",
+    "role": "company_admin",
+    "password_hash": "$2b$12$rsqLb2QoQqsdPgjvV2euruXZ1wTGjix8KOHyLi4HmqU4YgrzyOgQa"
+  },
+  {
+    "id": 122,
+    "username": "codex_smoke_20260427030436_bbe59c7b",
+    "role": "company_admin",
+    "password_hash": "$2b$12$DO0ILhShElnjviUsAKK3iujeeZeOqBQ5iwZvIOa/7aEROozelM54O"
+  },
+  {
+    "id": 2,
+    "username": "saeidnsaeid20",
+    "role": "company_admin",
+    "password_hash": "$2b$12$hYBUc.lkCx3kw75LrlBi.e6vZlkudJg0s6fNrS2j3lOtz8gMDcduu"
+  },
+  {
+    "id": 82,
+    "username": "codex_smoke_20260421130935_d5b530e1",
+    "role": "company_admin",
+    "password_hash": "$2b$12$qr4PpunK6hjv8EL..kmli.UkrXNGW0A7Ila.MKRSLvRigTXskx3Zi"
+  },
+  {
+    "id": 125,
+    "username": "codex_smoke_20260427033750_ca2f4b07",
+    "role": "company_admin",
+    "password_hash": "$2b$12$zDc1lfDl6NaKhwfx2ColouCgELEFS70UCwal9kxyxjuT4HJeU3DL."
+  },
+  {
+    "id": 124,
+    "username": "codex_platform_owner_t074",
+    "role": "platform_owner",
+    "password_hash": "$2b$12$7RMYkPC5oL2NYThHC8HRpeXZ6n9GzImlA3LOCsrAxpnyMBCDg8X/6"
+  },
+  {
+    "id": 126,
+    "username": "codex_smoke_other_20260427033750_ca2f4b07",
+    "role": "company_admin",
+    "password_hash": "$2b$12$3M4Q3JyvFht1nx.qzZqFreiE1W9MSPO3fnlQV7gHGTQHIaBmvkdVO"
+  },
+  {
+    "id": 127,
+    "username": "codex_smoke_20260427033832_f98cf5c8",
+    "role": "company_admin",
+    "password_hash": "$2b$12$xBw0Kazf.rycOYSInXjgDurKXiHBDIWWLegYu3ULN1Jd6Sc7iGjmW"
+  },
+  {
+    "id": 128,
+    "username": "codex_smoke_other_20260427033832_f98cf5c8",
+    "role": "company_admin",
+    "password_hash": "$2b$12$NyU97KrOShIS4eeThU8ePOHEphrSLBZZ.nLTnRlIZOApnKXzVOD2O"
+  },
+  {
+    "id": 10,
+    "username": "codex_smoke_20260420054200",
+    "role": "company_admin",
+    "password_hash": "$2b$12$vvPsdyoU83wS0Lo5f9e7c.lj.cBMGo0ZByonuAGNP/MAfwkMrv6N."
+  },
+  {
+    "id": 11,
+    "username": "codex_smoke_20260420054250",
+    "role": "company_admin",
+    "password_hash": "$2b$12$tcLZZKZRyxPFBc/7U6FC2.tpwRQ.bcGtGyThs8NFkRRUXnOYV3oRC"
+  },
+  {
+    "id": 12,
+    "username": "codex_smoke_20260420054758",
+    "role": "company_admin",
+    "password_hash": "$2b$12$y0rksSp3M4YRinR8jvPLuORMbcHNFJO26efNF65nkjYsVXZzwfQhi"
+  },
+  {
+    "id": 13,
+    "username": "codex_smoke_20260420054901",
+    "role": "company_admin",
+    "password_hash": "$2b$12$2g0KJ8jQ5DtUbEBSAjelOucLJucn8u/ESl/oPeVtGu49XrUBohhgy"
+  },
+  {
+    "id": 14,
+    "username": "codex_smoke_20260420054918_7cbd5f3e",
+    "role": "company_admin",
+    "password_hash": "$2b$12$RNZ8IsgSwjVf.QzKtoQHSu7BtyZZmEf/5ZBAHni66.yx92pL3gz3W"
+  },
+  {
+    "id": 15,
+    "username": "debug_f7557868",
+    "role": "company_admin",
+    "password_hash": "$2b$12$eXZuS98JRIK5apnmZ.VdIu2Wd/SyigD2Em3X2Lu4xYCxF0z1/Dlge"
+  },
+  {
+    "id": 16,
+    "username": "codex_smoke_20260420073814_47062bf5",
+    "role": "company_admin",
+    "password_hash": "$2b$12$8eUMCJd7mqdrU4yZEupxc.BQwhwOHmkLS0NlYmAGdid0DYfGxmBJq"
+  },
+  {
+    "id": 17,
+    "username": "codex_smoke_20260420094237_9898b498",
+    "role": "company_admin",
+    "password_hash": "$2b$12$iDWU6uDmc3oaUwx0ZqvTlumc3usYg4SBGs..6n6yIjUAYz8mZhXMm"
+  },
+  {
+    "id": 18,
+    "username": "intensive_20260420094619_0ad1cb0d",
+    "role": "company_admin",
+    "password_hash": "$2b$12$By8hkhyUUVonPiKbuJvDbeeXZXFRhY0ls2N5lUMibzbLZAxzTAEkG"
+  },
+  {
+    "id": 19,
+    "username": "hfalias_20260420094908_2fbb63fe",
+    "role": "company_admin",
+    "password_hash": "$2b$12$.QQpn9XcQaxe3f77aHSnxOWlY4n/.KyLYcYBajI1O82P4XqXzASdq"
+  },
+  {
+    "id": 20,
+    "username": "probe_20260420095205_3ef037be",
+    "role": "company_admin",
+    "password_hash": "$2b$12$Ib.K9iQAuPaKfZRFTuDNE.yX6hZ1lDp9EQbvK24pSUXe0YV6t2i6O"
+  },
+  {
+    "id": 21,
+    "username": "ownerprobe_20260420111743_f98def5f",
+    "role": "company_admin",
+    "password_hash": "$2b$12$43SjhVMGB44AbicOzyu.XOjzE3xhWBEU8D0OYu8aA3KPqmMtZp3We"
+  },
+  {
+    "id": 22,
+    "username": "hfalias_20260420111748_10ff5024",
+    "role": "company_admin",
+    "password_hash": "$2b$12$HHNllCXbjzBPb3TweCzilOTKzb/gqcic/etWiYAvK2Bez3JuRSebG"
+  },
+  {
+    "id": 115,
+    "username": "codex_smoke_20260421131321_22e12232",
+    "role": "company_admin",
+    "password_hash": "$2b$12$kL6dO91C4S1H421cfbDv0.tluIfsloybuQPyNLaYD6VpUiHsBycVK"
+  },
+  {
+    "id": 4,
+    "username": "admin",
+    "role": "company_admin",
+    "password_hash": "$2b$12$1WX8bhoZtIrVQOFjrmjHXOyl.niaC4jqhMO1ymE4APJfXFfbpuPa2"
+  },
+  {
+    "id": 8,
+    "username": "codexfixe7e90a05",
+    "role": "company_admin",
+    "password_hash": "$2b$12$Pq3mxECihSCDm4fEBBB8Z.LkwiQXW/wAw8FOSpQ2OnZg/zc4XvVCy"
+  },
+  {
+    "id": 9,
+    "username": "saeed",
+    "role": "company_admin",
+    "password_hash": "$2b$12$IRqJcu21mFS8Jazt9mdloeBc7RuDejaprXPidsuIBhY9LYgJIDkES"
+  },
+  {
+    "id": 38,
+    "username": "codex_smoke_20260420142453_970b8462",
+    "role": "company_admin",
+    "password_hash": "$2b$12$RgRY40oEQ97qzRudJ2czw.NW2.gyAxvU8goGBCPAZJ4Fn9VBXvvvi"
+  },
+  {
+    "id": 39,
+    "username": "codex_smoke_20260420150305_61c5b0e4",
+    "role": "company_admin",
+    "password_hash": "$2b$12$LCfbEF/QRJjajh.mmoJk/.hvk4kNqQYcnbvkNYLkUg2w7Uoq3lYM2"
+  },
+  {
+    "id": 40,
+    "username": "manual_smoke_03e9a209",
+    "role": "company_admin",
+    "password_hash": "$2b$12$GOPQlhM0h4Kz9D2jEihYfOMUfQHPR9atiNYj/gXELHeB3Cxn0QFq."
+  },
+  {
+    "id": 41,
+    "username": "codex_smoke_20260420150351_7cc8bf91",
+    "role": "company_admin",
+    "password_hash": "$2b$12$XM1bNqyl9T9rkCSeKu7Yh.ysCQ3DFaiMeYJv7J193BA0iE/EWUm7G"
+  },
+  {
+    "id": 42,
+    "username": "codex_smoke_20260420173619_a46b6282",
+    "role": "company_admin",
+    "password_hash": "$2b$12$LoRIIh5n/T6t65Z2rv0uquayVIRtyw4Ps6fHjn7HwFrSn/6/jClni"
+  },
+  {
+    "id": 117,
+    "username": "codex_smoke_20260427030134_18950ad1",
+    "role": "company_admin",
+    "password_hash": "$2b$12$WRCXndAvJpYly/1O007mi.ufFgB2zdJaW5pNNO9i69Ep8VJH5WJ5W"
+  },
+  {
+    "id": 119,
+    "username": "codex_smoke_other_20260427030405_35bccdc1",
+    "role": "company_admin",
+    "password_hash": "$2b$12$CRbGOM1yUSBfADWKVNPPSujnBZUnsvoD/ftbfmRX0OaIh36yo.J.S"
+  },
+  {
+    "id": 121,
+    "username": "codex_smoke_other_20260427030417_7584eafc",
+    "role": "company_admin",
+    "password_hash": "$2b$12$3dgcEs7nHiD3Bpc8hsRaDuYoeOAdBT/Qf9.JODUik5Rt7lqygqPCi"
+  },
+  {
+    "id": 123,
+    "username": "codex_smoke_other_20260427030436_bbe59c7b",
+    "role": "company_admin",
+    "password_hash": "$2b$12$cJYJ93VL.hu9l3uqy/usPOoNZuzsTzByLZQhXw5cqigkC0ZNrwvEW"
+  },
+  {
+    "id": 43,
+    "username": "codex_smoke_20260420173922_8cec4155",
+    "role": "company_admin",
+    "password_hash": "$2b$12$PpBwmYGDynAG.p4B5t1Tc.nX8UbYNB5VhAYzVWV4UwrtdMxrBaS5O"
+  },
+  {
+    "id": 44,
+    "username": "codex_smoke_20260420184751_962fa045",
+    "role": "company_admin",
+    "password_hash": "$2b$12$g1xNf0n/0o9ecsIGxEa/jeLdWWhKPc6ejuPSxfolIM4P3SMr2Z2t."
+  },
+  {
+    "id": 45,
+    "username": "codex_smoke_20260420184949_8e8d1718",
+    "role": "company_admin",
+    "password_hash": "$2b$12$qdN1sg4/OLdRTUnD1yNi4ePIlJFSu48juQp6wn7fq6tuq3u61fa4e"
+  },
+  {
+    "id": 46,
+    "username": "codex_smoke_20260420185035_74e897e1",
+    "role": "company_admin",
+    "password_hash": "$2b$12$CsiaE7EVfoSIi81EMdtwSu9QjCYs3zGMLl1g5Y9MnI.vN8OL.i0iy"
+  },
+  {
+    "id": 47,
+    "username": "codex_smoke_20260420185340_8db47d6f",
+    "role": "company_admin",
+    "password_hash": "$2b$12$2LeFij/pId2NbUJxNMeNg.x4lcaTD75LI51IxFobincFUnDMndlJC"
+  },
+  {
+    "id": 48,
+    "username": "codex_smoke_20260420185423_5ba3042f",
+    "role": "company_admin",
+    "password_hash": "$2b$12$DrHdkd1e1Rp6ecoJ/Opfqu/wsRlz5MzqO1Z22jwv/PVDUDvs0JkT2"
+  },
+  {
+    "id": 49,
+    "username": "codex_wf_20260421123556_3a049f",
+    "role": "company_admin",
+    "password_hash": "$2b$12$l0Gv3rlxFcsRaMFuk2N8S.C8vvBacjHLqo09LgPdolQjb3rQcjI/G"
+  }
+]
