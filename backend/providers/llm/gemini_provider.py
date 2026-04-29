@@ -2,10 +2,17 @@
 Google Gemini 2.5 Flash LLM Provider Implementation.
 Uses the Google GenAI SDK for text generation and embeddings.
 """
+import asyncio
 from typing import Any, List, Optional, AsyncIterator
 from google import genai
 from google.genai import types
 from backend.providers.llm.interface import LLMInterface
+from backend.providers.llm.exceptions import (
+    ProviderAuthError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from backend.config import settings
 import logging
 
@@ -107,6 +114,52 @@ class GeminiProvider(LLMInterface):
         if "text-embedding" in model_key:
             return 768
         return 3072
+
+    @staticmethod
+    def _classify_provider_exception(exc: BaseException, *, provider: str) -> BaseException:
+        text = str(exc).lower()
+        name = exc.__class__.__name__.lower()
+
+        if isinstance(exc, asyncio.TimeoutError) or "timeout" in text or "deadline" in text:
+            return ProviderTimeoutError(provider=provider)
+        if any(token in text for token in ("unauthorized", "forbidden", "api key", "permission", "401", "403")):
+            return ProviderAuthError(provider=provider)
+        if any(token in text for token in ("rate limit", "quota", "429", "resource exhausted")):
+            return ProviderRateLimitError(provider=provider)
+        if any(
+            token in text or token in name
+            for token in (
+                "cannot connect",
+                "connection",
+                "connecterror",
+                "network",
+                "service unavailable",
+                "temporarily unavailable",
+                "503",
+                "502",
+                "500",
+                "unavailable",
+            )
+        ):
+            return ProviderUnavailableError(provider=provider)
+        return exc
+
+    async def _run_with_retries(self, operation, *, provider: str, max_attempts: int = 3):
+        last_error: BaseException | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return await asyncio.wait_for(operation(), timeout=30)
+            except Exception as exc:
+                classified = self._classify_provider_exception(exc, provider=provider)
+                if isinstance(classified, (ProviderUnavailableError, ProviderTimeoutError, ProviderRateLimitError)):
+                    last_error = classified
+                    if attempt < max_attempts:
+                        await asyncio.sleep(min(2 ** (attempt - 1), 4))
+                        continue
+                raise classified from exc
+        if last_error:
+            raise last_error
+        raise ProviderUnavailableError(provider=provider)
     
     async def generate_text(
         self,
@@ -217,10 +270,13 @@ class GeminiProvider(LLMInterface):
             List of embedding vectors
         """
         try:
-            response = await self.client.aio.models.embed_content(
-                model=self.embedding_model,
-                contents=texts,
-                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+            response = await self._run_with_retries(
+                lambda: self.client.aio.models.embed_content(
+                    model=self.embedding_model,
+                    contents=texts,
+                    config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                ),
+                provider="gemini",
             )
             embeddings = []
             for item in response.embeddings or []:
@@ -235,8 +291,14 @@ class GeminiProvider(LLMInterface):
             return list(embeddings)
             
         except Exception as e:
-            logger.error(f"Error generating embeddings with Gemini: {str(e)}")
-            raise
+            classified = self._classify_provider_exception(e, provider="gemini")
+            logger.warning("Gemini embedding request failed: %s", classified)
+            raise classified from e
+
+    async def health_check(self) -> bool:
+        """Run a minimal embedding request to verify active Gemini embedding access."""
+        embeddings = await self.generate_embeddings(["health check"], batch_size=1)
+        return bool(embeddings and embeddings[0])
     
     def get_model_name(self) -> str:
         """Get model name."""

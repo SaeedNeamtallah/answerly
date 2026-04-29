@@ -73,6 +73,10 @@ class LLMInterface(ABC):
             List of embedding vectors
         """
         pass
+
+    async def health_check(self) -> bool:
+        """Return True when the provider is reachable enough for new work."""
+        return True
     
     @abstractmethod
     def get_model_name(self) -> str:

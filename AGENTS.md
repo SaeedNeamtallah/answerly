@@ -47,6 +47,7 @@ Cross-cutting layers:
 
 - `backend/security/*`: auth, rate limiting, sanitization, event logging
 - `backend/tasks/*`: Celery background processing/indexing workflows
+- `backend/monitoring/*`: isolated Prometheus request metrics and `/metrics` registration
 - `backend/runtime_config.py`: runtime toggles persisted outside static env config via shared JSON under `uploads/config/`
 
 Top-level repo organization:
@@ -56,6 +57,7 @@ Top-level repo organization:
 - `.github/workflows/secret-scan.yml`: CI gitleaks secret scanning on pushes and pull requests
 - `scripts/dev/`: local Windows startup helpers
   - only three entry scripts should remain here: `setup.bat`, `start.bat`, `stop.bat`
+- `docker/`: Compose/build files plus local monitoring config (`docker/prometheus.yml`, Grafana provisioning, Grafana dashboards, postgres-exporter, and node-exporter)
 - `tools/`: maintenance and one-off repo utilities
   - includes `tools/test_all.py` as the authenticated smoke test entrypoint
 - `docs/`: notes and extra documentation
@@ -82,6 +84,7 @@ Main persistence model:
   - builds FastAPI app
   - registers routers
   - initializes and closes DB in `lifespan()`
+  - calls `backend.monitoring.metrics.register_metrics(app)` to expose unauthenticated Prometheus `/metrics` and request counters/latency without changing route auth behavior
 - `telegram_bot/bot.py`
   - bot startup
   - handler wiring
@@ -103,10 +106,10 @@ Main persistence model:
   - `scripts\dev\start.bat --build` (only when Docker image inputs changed)
 - `start.bat` behavior:
   - starts `docker/docker-compose.yml` services
-  - waits for backend readiness at `http://127.0.0.1:8000/health` until the JSON response reports `status == "healthy"`
-  - if host-side health probing is blocked, falls back to checking `/health` from inside `ragmind-backend` and logs a warning before continuing
-  - serves frontend on `http://localhost:8080`
-  - opens `http://localhost:8080/login.html?api=http://localhost:8000`
+  - waits for full stack readiness at `http://127.0.0.1:8000/health/full` until the JSON response reports `status == "healthy"`; this includes live worker and active embedding-provider preflight
+  - if host-side health probing is blocked, falls back to checking `/health/full` from inside `ragmind-backend` and logs a warning before continuing
+  - honors `FRONTEND_MODE=local` (default Python static frontend on `http://localhost:8080`) or `FRONTEND_MODE=docker` (compose `docker-frontend` profile on `http://localhost`)
+  - opens the URL matching the selected frontend mode
   - writes runtime logs into `uploads/logs/` (`start.log`, `docker_stack.log`, `frontend.log`, `docker_ps.log`)
 - Stop path: `scripts\dev\stop.bat`
 
@@ -116,6 +119,7 @@ Main persistence model:
   - `get_db()`
   - `init_db()`
   - `close_db()`
+  - if a local dev DB is stamped with an unknown Alembic revision from a discarded branch, startup logs a warning, stamps to current head, and retries migrations; do not use this as a substitute for real migration review in production
 - `backend/database/models.py`
   - `User`
   - `UserRole`
@@ -235,7 +239,9 @@ Schema management rules:
   - `security_events_stream()`
 - `backend/routes/health.py`
   - `health_check()`
-    - full readiness probe for database, Celery broker, result backend, live worker ping, shared config path readiness, and vector store connectivity
+    - fast readiness probe for database, Celery broker, result backend, shared config path readiness, and vector store connectivity
+  - `health_check_full()`
+    - full readiness probe for database, broker, result backend, live worker ping, shared config, vector store, and active embedding provider
   - `root()`
 - `backend/routes/stats.py`
   - `get_global_stats()`
@@ -247,6 +253,29 @@ Schema management rules:
   - `update_bot_config()`
   - `update_bot_profile()`
   - legacy/demo only; production Telegram flows use `bot_integrations.py` plus `telegram_webhook.py`
+- `backend/monitoring/metrics.py`
+  - `register_metrics()`
+  - `PrometheusMiddleware`
+  - exposes `GET /metrics` directly on the FastAPI app; tracks HTTP request latency/counts, document processing outcomes, embedding provider failures, query failures, Celery task duration/status, Telegram webhook failures, and incident creation counts
+- `backend/monitoring/celery_metrics.py`
+  - starts a Prometheus HTTP endpoint inside Celery workers on `CELERY_PROMETHEUS_PORT` (default `9108`)
+  - uses `PROMETHEUS_MULTIPROC_DIR` / `CELERY_PROMETHEUS_MULTIPROC_DIR` so metrics emitted by Celery child processes are scrapeable
+
+### Monitoring Stack
+
+- `docker/docker-compose.yml`
+  - `prometheus` scrapes the backend, Celery worker, postgres-exporter, node-exporter, Qdrant, and Prometheus itself.
+  - `grafana` provisions datasource UID/name `Prometheus` plus dashboards from `docker/grafana/dashboards/`.
+  - `postgres-exporter` exposes PostgreSQL metrics on local port `9187`.
+  - `node-exporter` exposes host/container-node metrics on local port `9100`.
+  - `worker` exposes Celery/document metrics on local port `9108`.
+- `docker/prometheus.yml`
+  - scrape jobs: `prometheus`, `ragmind-backend`, `postgres`, `node`, `qdrant`, `celery-worker`
+- `docker/grafana/dashboards/`
+  - `ragmind-overview.json`
+  - `postgres-exporter-12485.json`
+  - `node-exporter-full-1860.json`
+  - `fastapi-observability-18739.json`
 
 ### Controller Layer
 
@@ -293,6 +322,7 @@ Schema management rules:
   - `generate_embeddings()`
   - `generate_single_embedding()`
   - `get_embedding_dimension()`
+  - `health_check()`
 - `backend/services/query_service.py`
   - `search_similar_chunks()`
   - `_hydrate_chunk_payloads()`
@@ -356,9 +386,15 @@ LLM:
 
 - `backend/providers/llm/interface.py`
   - `LLMInterface`
+- `backend/providers/llm/exceptions.py`
+  - `ProviderUnavailableError`
+  - `ProviderAuthError`
+  - `ProviderRateLimitError`
+  - `ProviderTimeoutError`
 - `backend/providers/llm/factory.py`
   - `LLMProviderFactory.create_provider()`
   - `LLMProviderFactory.create_embedding_provider()`
+  - provider instances are created fresh from runtime config; do not reintroduce process-wide provider instance caches unless `/config/providers` also invalidates them
 - Implementations:
   - `GeminiProvider`
     - uses `google.genai` (`google-genai` package), not deprecated `google.generativeai`
@@ -371,6 +407,7 @@ Vector DB:
 - `backend/providers/vectordb/interface.py`
   - `VectorDBInterface`
   - `delete_vectors()` for targeted metadata-filtered cleanup
+  - `delete_vector_ids()` for exact-ID cleanup during atomic document replacement
 - `backend/providers/vectordb/factory.py`
   - `VectorDBProviderFactory.create_provider()`
 - Implementations:
@@ -406,7 +443,7 @@ Vector DB:
 - `backend/tasks/file_processing.py`
   - `process_document_task()`
   - `_process_document()`
-    - clears stale per-asset chunks/vectors before retry and on failure
+    - preserves old completed chunks/vectors during reprocessing; writes new chunks/vectors first, deletes only previous chunk IDs after successful vector write, and removes only the failed attempt's new chunks on failure
     - reconciles parent `process-and-index` workflow status after terminal child updates
   - `_update_progress()`
 - `backend/tasks/data_indexing.py`
@@ -445,6 +482,7 @@ Vector DB:
 - `tools/combine_code.py`
   - default mode still writes `tmp/all_project_code.txt`
   - `--profile database` writes focused storage/database snippets to `tmp/database_code.txt`
+  - `--profile runtime` writes a code-and-runtime bundle to `tmp/runtime_code.txt` with backend/frontend/telegram_bot/docker/start-script/prometheus/env coverage and skips markdown docs
   - database profile now includes Alembic config/templates and the current B2B Telegram SaaS route/service paths
 - `tools/test_all.py`
   - authenticated smoke test for `health -> signup/login -> project -> upload/process -> query -> cleanup`
@@ -460,7 +498,7 @@ Vector DB:
 - `telegram_bot/config.py`
   - `BotSettings`
   - `BOT_CONFIG_PATH`
-- `telegram_bot/handlers.py`
+  - `telegram_bot/handlers.py`
   - `start_command()`
   - `help_command()`
   - `handle_message()`
@@ -468,6 +506,7 @@ Vector DB:
     - obtains JWT via `/auth/login` using `BOT_API_USERNAME/BOT_API_PASSWORD` (fallback to `AUTH_ADMIN_*`), which now provisions or syncs a DB-backed service account row on successful login
     - on `403/404`, auto-selects first accessible project for bot user, persists it to shared bot config, and retries once
     - legacy/demo path only; do not use it for production multi-company Telegram behavior
+    - Compose keeps legacy polling disabled unless `ENABLE_LEGACY_TELEGRAM_BOT=1` to avoid Telegram `409` conflicts when production webhooks are active
 - `telegram_bot/bot.py`
   - `print_bot_link()`
   - `setup_handlers()`
@@ -605,6 +644,12 @@ Recently fixed:
   Bot integration readiness now validates decrypted token health, live Telegram token validation, real Telegram webhook alignment, and provider-stack readiness (LLM + embedding + vector backend) before reporting `ready=true`.
 33. `backend/routes/app_config.py`, `backend/main.py`, and `backend/tests/test_app_config.py`
   Runtime provider selections are now normalized/migrated when invalid legacy values are found (for example removed providers), both at startup and via `GET /config/providers`, preventing stale config from breaking query/indexing.
+34. `docker/docker-compose.yml`, `docker/prometheus.yml`, `docker/grafana/provisioning/*`, `docker/grafana/dashboards/ragmind-overview.json`, `backend/monitoring/metrics.py`, `backend/main.py`, and `backend/config.py`
+  Prometheus/Grafana monitoring was reapplied as isolated infrastructure: compose adds Prometheus, Grafana, and postgres-exporter; backend exposes minimal Prometheus metrics without touching existing API routers, auth, Celery, Telegram, retrieval, or provider behavior.
+35. `backend/database/connection.py`
+  Local startup now recovers from dev databases stamped with unknown discarded-branch Alembic revisions by stamping to the current head and retrying migrations, preserving the restored codebase while avoiding a startup crash on polluted local volumes.
+36. `docker/docker-compose.yml`
+  The legacy single Telegram polling bot now idles by default and only starts when `ENABLE_LEGACY_TELEGRAM_BOT=1`, preventing local logs from filling with Telegram `409` conflicts when a production webhook is registered for the same token.
 
 ## Known Drift Between Docs and Code
 
@@ -635,6 +680,15 @@ When updating:
 
 ## Practical Guidance For Future Agents
 
+- Use GitHub MCP for repo, PR, issue, and review context.
+- Use Context7 before answering framework or library version questions.
+- Use OpenAI Developer Docs MCP for OpenAI, Codex, and API questions.
+- Use Playwright MCP for UI, browser, and frontend verification.
+- Use filesystem MCP only within this repository root.
+- Do not add Postgres MCP unless a safe read-only `DATABASE_URL` or `POSTGRES_*` environment value already exists.
+- For Jira-backed feature work or structured planning, use the Squad workflow prompt in `.github/prompts/squad-workflow.prompt.md` before coding; the repo and user-level copies both follow `squad init` -> `squad new-story` -> `squad new-plan`.
+- The Squad MCP wrapper lives in `tools/squad_mcp_server.py` and exposes the same `init`, `new-story`, and `new-plan` workflow to MCP clients.
+
 - Before editing retrieval or indexing, inspect:
   - `backend/services/query_service.py`
   - `backend/tasks/data_indexing.py`
@@ -651,6 +705,28 @@ When updating:
   - `backend/services/file_service.py`
   - `backend/services/document_loader.py`
   - `backend/services/chunking_service.py`
+
+## MCP Usage Rules
+
+- Use GitHub MCP for repo, PR, issue, and review context.
+- Use Context7 before answering framework or library version questions.
+- Use OpenAI Developer Docs MCP for OpenAI, Codex, and API questions.
+- Use Playwright MCP for UI, browser, and frontend verification.
+- Use filesystem MCP only within this repository root.
+- Do not add Postgres MCP unless a safe read-only `DATABASE_URL` or `POSTGRES_*` environment value already exists.
+
+## MCP and AI Review Tooling
+
+- Use Serena MCP for semantic code navigation, symbols, references, and targeted edits.
+- Use Repomix MCP when the agent needs a compact AI-friendly package of the repo.
+- Use Sentry MCP only for debugging real Sentry issues/errors/traces after OAuth.
+- Use DeepWiki MCP for public GitHub repo documentation/context.
+- Use Sourcegraph MCP only if `SOURCEGRAPH_MCP_URL` is configured.
+- Use CodeRabbit for local VS Code review before opening PRs.
+- Use Graphite AI Reviews for PR review automation after GitHub App setup.
+- Use Continue AI Checks for repo-specific security/backend/frontend review gates.
+- Never hardcode secrets in MCP configs.
+- Never expose local infrastructure ports publicly unless intentionally deployed behind auth.
 
 ## Bottom Line
 

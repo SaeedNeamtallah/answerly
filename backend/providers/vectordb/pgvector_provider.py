@@ -157,7 +157,7 @@ class PGVectorProvider(VectorDBInterface):
 
         async with session_maker() as session:
             try:
-                await session.execute(text("SET LOCAL hnsw.ef_search = :ef_search"), {"ef_search": ef_search})
+                await session.execute(text(f"SET LOCAL hnsw.ef_search = {int(ef_search)}"))
             except Exception as config_error:
                 logger.debug("Could not set hnsw.ef_search=%s: %s", ef_search, config_error)
                 # Failed SET LOCAL leaves the transaction aborted; reset it before running the query.
@@ -326,7 +326,7 @@ class PGVectorProvider(VectorDBInterface):
         embedding_expr = cast(Chunk.embedding, Vector(query_dimension))
         async with session_maker() as session:
             try:
-                await session.execute(text("SET LOCAL hnsw.ef_search = :ef_search"), {"ef_search": ef_search})
+                await session.execute(text(f"SET LOCAL hnsw.ef_search = {int(ef_search)}"))
             except Exception as config_error:
                 # Keep queries working even if the current pgvector build does not expose this setting.
                 logger.debug("Could not set hnsw.ef_search=%s: %s", ef_search, config_error)
@@ -464,6 +464,27 @@ class PGVectorProvider(VectorDBInterface):
 
         except Exception as e:
             logger.error(f"Error deleting vectors: {str(e)}")
+            raise
+
+    async def delete_vector_ids(
+        self,
+        collection_name: str,
+        *,
+        ids: List[int],
+        **kwargs
+    ) -> bool:
+        """Delete pgvector-backed chunks by exact chunk IDs."""
+        if not ids:
+            return True
+        try:
+            session_maker = self._get_session_maker(kwargs.get("session_maker"))
+            async with session_maker() as session:
+                await session.execute(delete(Chunk).where(Chunk.id.in_([int(item) for item in ids])))
+                await session.commit()
+            logger.info("Deleted pgvector-backed chunk rows by id for '%s'", collection_name)
+            return True
+        except Exception as e:
+            logger.error("Error deleting vector ids: %s", e)
             raise
     
     async def collection_exists(

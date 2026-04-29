@@ -115,6 +115,22 @@ class VectorDBInterface(ABC):
             True if successful
         """
         pass
+
+    @abstractmethod
+    async def delete_vector_ids(
+        self,
+        collection_name: str,
+        *,
+        ids: List[int],
+        **kwargs
+    ) -> bool:
+        """
+        Delete vectors/chunks by exact vector IDs.
+
+        This is used for atomic document replacement: new vectors are written
+        first, then only the previous chunk IDs are removed.
+        """
+        pass
     
     @abstractmethod
     async def collection_exists(

@@ -16,6 +16,7 @@ except ImportError:
 from backend.config import settings
 import logging
 from backend.security.middleware import SecurityRateLimitMiddleware
+from backend.monitoring.metrics import register_metrics
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
@@ -113,6 +114,9 @@ app.add_middleware(SecurityRateLimitMiddleware)
 
 # GZip compression for responses
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# Prometheus metrics endpoint and request instrumentation
+register_metrics(app)
 
 # Include routers
 app.include_router(health.router)

@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 class LLMProviderFactory:
     """Factory for creating LLM and embedding provider instances."""
 
-    _llm_instances: Dict[str, LLMInterface] = {}
-    _embedding_instances: Dict[str, LLMInterface] = {}
     _llm_registry: Dict[str, Callable[[], LLMInterface]] = {}
     _embedding_registry: Dict[str, Callable[[], LLMInterface]] = {}
     _initialized = False
@@ -47,14 +45,12 @@ class LLMProviderFactory:
         """Register or override an LLM provider builder."""
         key = provider_name.lower()
         cls._llm_registry[key] = builder
-        cls._llm_instances.pop(key, None)
 
     @classmethod
     def register_embedding_provider(cls, provider_name: str, builder: Callable[[], LLMInterface]) -> None:
         """Register or override an embedding provider builder."""
         key = provider_name.lower()
         cls._embedding_registry[key] = builder
-        cls._embedding_instances.pop(key, None)
 
     @staticmethod
     def _build_openrouter_headers() -> Dict[str, str]:
@@ -147,18 +143,13 @@ class LLMProviderFactory:
         provider_name = provider_name or get_runtime_value("llm_provider", settings.llm_provider)
         provider_name = provider_name.lower()
 
-        if provider_name in cls._llm_instances:
-            return cls._llm_instances[provider_name]
-
         builder = cls._llm_registry.get(provider_name)
         if not builder:
             available = ", ".join(cls.get_available_providers())
             raise ValueError(f"Unsupported LLM provider: {provider_name}. Available: {available}")
 
         logger.info("Creating LLM provider: %s", provider_name)
-        instance = builder()
-        cls._llm_instances[provider_name] = instance
-        return instance
+        return builder()
 
     @classmethod
     def create_embedding_provider(cls, provider_name: str = None) -> LLMInterface:
@@ -177,18 +168,13 @@ class LLMProviderFactory:
         provider_name = provider_name or get_runtime_value("embedding_provider", settings.embedding_provider)
         provider_name = provider_name.lower()
 
-        if provider_name in cls._embedding_instances:
-            return cls._embedding_instances[provider_name]
-
         builder = cls._embedding_registry.get(provider_name)
         if not builder:
             available = ", ".join(cls.get_available_embedding_providers())
             raise ValueError(f"Unsupported embedding provider: {provider_name}. Available: {available}")
 
         logger.info("Creating embedding provider: %s", provider_name)
-        instance = builder()
-        cls._embedding_instances[provider_name] = instance
-        return instance
+        return builder()
 
     @classmethod
     def get_available_providers(cls) -> List[str]:

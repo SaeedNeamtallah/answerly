@@ -101,7 +101,10 @@ Default URLs:
 - Frontend login: [http://localhost:8080/login.html?api=http://localhost:8000](http://localhost:8080/login.html?api=http://localhost:8000)
 - Backend API: [http://localhost:8000](http://localhost:8000)
 - Health: [http://localhost:8000/health](http://localhost:8000/health)
+- Metrics: [http://localhost:8000/metrics](http://localhost:8000/metrics)
 - API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Prometheus: [http://localhost:9090](http://localhost:9090)
+- Grafana: [http://localhost:3000](http://localhost:3000) with `admin` / `admin123`
 
 ### 5. Stop
 
@@ -146,6 +149,33 @@ The scripts now print WSL-specific hints when this failure mode is detected.
 - rabbitmq management: 15672
 - redis: 6383
 - local frontend static server: 8080
+- Prometheus: 9090
+- Grafana: 3000
+- postgres-exporter: 9187
+- node-exporter: 9100
+- Celery worker metrics: 9108
+
+## Monitoring
+
+The local Docker stack includes Prometheus, Grafana, postgres-exporter, node-exporter, and a Celery worker metrics endpoint.
+
+- Backend metrics are exposed at `/metrics` through `backend/monitoring/metrics.py`.
+- Celery task/document metrics are exposed from the worker on `worker:9108/metrics`.
+- Prometheus config lives in `docker/prometheus.yml` and scrapes `backend:8000`, `postgres-exporter:9187`, `node-exporter:9100`, `worker:9108`, and Qdrant's built-in `qdrant:6333/metrics` endpoint.
+- Grafana provisioning lives in `docker/grafana/provisioning/`.
+- Bundled dashboards live in `docker/grafana/dashboards/` and load automatically:
+  - `RAGMind Overview`
+  - `PostgreSQL Exporter` (Grafana dashboard 12485)
+  - `Node Exporter Full` (Grafana dashboard 1860)
+  - `FastAPI Observability` (Grafana dashboard 18739, adapted to RAGMind's `endpoint` and `status_code` labels)
+
+Start normally with:
+
+```powershell
+scripts\dev\start.bat
+```
+
+Open Prometheus at [http://localhost:9090](http://localhost:9090). Open Grafana at [http://localhost:3000](http://localhost:3000).
 
 ## Database Migrations (Alembic)
 

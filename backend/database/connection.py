@@ -8,6 +8,9 @@ from typing import AsyncGenerator
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
+from alembic.util.exc import CommandError
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from backend.config import settings
@@ -61,7 +64,35 @@ async def init_db():
         project_root = Path(__file__).resolve().parents[2]
         alembic_cfg = Config(str(project_root / "backend" / "alembic" / "alembic.ini"))
         alembic_cfg.set_main_option("script_location", str(project_root / "backend" / "alembic"))
-        command.upgrade(alembic_cfg, "head")
+        try:
+            command.upgrade(alembic_cfg, "head")
+        except CommandError as exc:
+            if "Can't locate revision identified by" not in str(exc):
+                raise
+
+            logger.warning(
+                "Database is stamped with an unknown Alembic revision. "
+                "Stamping current schema to head before retrying migrations: %s",
+                exc,
+            )
+            script = ScriptDirectory.from_config(alembic_cfg)
+            current_head = script.get_current_head()
+            sync_database_url = settings.database_url.replace(
+                "postgresql+asyncpg://",
+                "postgresql+psycopg2://",
+                1,
+            )
+            sync_engine = create_engine(sync_database_url)
+            try:
+                with sync_engine.begin() as conn:
+                    conn.execute(text("DELETE FROM alembic_version"))
+                    conn.execute(
+                        text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"),
+                        {"version_num": current_head},
+                    )
+            finally:
+                sync_engine.dispose()
+            command.upgrade(alembic_cfg, "head")
 
     async def ensure_user_account_status_schema(conn):
         """Backfill user account status column for legacy user tables."""

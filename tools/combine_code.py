@@ -36,7 +36,7 @@ VALID_EXTENSIONS = {
     ".mako",
 }
 
-SPECIAL_FILES = {"Dockerfile", ".env.example", "README"}
+SPECIAL_FILES = {"Dockerfile", ".env", ".env.example", "README"}
 SKIP_FILES = {
     "combine_code.py",
     "combinecode.py",
@@ -54,6 +54,7 @@ class FocusProfile:
     patterns: tuple[str, ...]
     context_lines: int = 12
     max_matches_per_file: int = 8
+    excluded_extensions: tuple[str, ...] = ()
 
 
 DATABASE_PROFILE = FocusProfile(
@@ -141,8 +142,30 @@ DATABASE_PROFILE = FocusProfile(
     ),
 )
 
+RUNTIME_PROFILE = FocusProfile(
+    name="runtime",
+    description=(
+        "Extract application code plus Docker, environment, startup, Prometheus, "
+        "and Telegram bot files while skipping docs and generated artifacts."
+    ),
+    output_name="runtime_code.txt",
+    path_tokens=(
+        "backend/",
+        "frontend/",
+        "telegram_bot/",
+        "tools/",
+        "docker/",
+        "scripts/dev/start.bat",
+        "start_backend.bat",
+        ".env",
+    ),
+    patterns=(),
+    excluded_extensions=(".md",),
+)
+
 PROFILES = {
     DATABASE_PROFILE.name: DATABASE_PROFILE,
+    RUNTIME_PROFILE.name: RUNTIME_PROFILE,
 }
 
 
@@ -324,6 +347,8 @@ def combine_focus_code(
         for filepath in iter_source_files(root_dir):
             rel_path = filepath.relative_to(root_dir)
             if not path_matches_profile(rel_path, profile):
+                continue
+            if filepath.suffix.lower() in profile.excluded_extensions:
                 continue
 
             try:

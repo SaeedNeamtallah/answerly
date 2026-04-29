@@ -25,6 +25,7 @@ TEST_LLM_PROVIDER = (os.getenv("RAGMIND_TEST_LLM_PROVIDER") or "").strip().lower
 TEST_EMBEDDING_PROVIDER = (os.getenv("RAGMIND_TEST_EMBEDDING_PROVIDER") or "").strip().lower()
 TEST_TELEGRAM_BOT_TOKEN = (os.getenv("RAGMIND_TEST_TELEGRAM_BOT_TOKEN") or "").strip()
 PLATFORM_OWNER_TOKEN = (os.getenv("RAGMIND_PLATFORM_OWNER_TOKEN") or "").strip()
+SECURITY_TOKEN = (os.getenv("RAGMIND_SECURITY_TOKEN") or "").strip()
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -129,6 +130,104 @@ def assert_product_telegram_flow_excludes_legacy() -> None:
         for term in legacy_terms:
             if term in text:
                 fail(f"Production Telegram flow references legacy term '{term}' in {path}")
+
+
+def login_security_session() -> requests.Session | None:
+    """Return an admin/security session for incident smoke checks when credentials are available."""
+    session = requests.Session()
+    if SECURITY_TOKEN:
+        session.headers.update({"Authorization": f"Bearer {SECURITY_TOKEN}"})
+        return session
+
+    from backend.config import settings
+
+    username = str(getattr(settings, "auth_admin_username", "") or "").strip()
+    password = str(getattr(settings, "auth_admin_password", "") or "").strip()
+    if not username or not password:
+        username = os.getenv("RAGMIND_SECURITY_USERNAME", "codex_security_smoke").strip()
+        password = os.getenv("RAGMIND_SECURITY_PASSWORD", "CodexSecuritySmoke_2026!")
+        signup_response = requests.Session().post(
+            f"{BASE_URL}/auth/signup",
+            timeout=REQUEST_TIMEOUT,
+            json={"username": username, "password": password},
+        )
+        print(f"POST /auth/signup (security smoke) -> {signup_response.status_code}")
+        if signup_response.status_code not in {201, 400, 409}:
+            warn(f"Security smoke signup returned unexpected status: {signup_response.status_code}")
+
+    try:
+        _, login = request_json(
+            requests.Session(),
+            "POST",
+            "/auth/login",
+            expected_status=200,
+            json={"username": username, "password": password},
+        )
+    except SystemExit:
+        warn("Skipping incident smoke; admin login was not available. Set RAGMIND_SECURITY_TOKEN to enable it.")
+        return None
+
+    token = login.get("access_token")
+    if not token:
+        warn("Skipping incident smoke; admin login response did not include a token.")
+        return None
+    session.headers.update({"Authorization": f"Bearer {token}"})
+    return session
+
+
+def run_incident_smoke() -> None:
+    """Exercise security simulation and incident lifecycle endpoints against the live API."""
+    security_session = login_security_session()
+    if security_session is None:
+        return
+
+    request_json(security_session, "POST", "/security/simulate?escalate_to_block=false", expected_status=200)
+    incidents = []
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        _, incidents = request_json(security_session, "GET", "/incidents", expected_status=200)
+        if incidents:
+            break
+        time.sleep(0.5)
+    if not isinstance(incidents, list):
+        fail(f"/incidents should return a list: {incidents}")
+    if not incidents:
+        fail("Security simulation did not create any incidents")
+
+    incident_id = incidents[0].get("id")
+    if not incident_id:
+        fail(f"Incident list item missing id: {incidents[0]}")
+
+    request_json(security_session, "GET", f"/incidents/{incident_id}", expected_status=200)
+    request_json(
+        security_session,
+        "PATCH",
+        f"/incidents/{incident_id}",
+        expected_status=200,
+        json={"status": "INVESTIGATING", "metadata": {"source": "tools/test_all.py"}},
+    )
+    request_json(
+        security_session,
+        "POST",
+        f"/incidents/{incident_id}/assign",
+        expected_status=200,
+        json={"metadata": {"source": "tools/test_all.py"}},
+    )
+    request_json(
+        security_session,
+        "POST",
+        f"/incidents/{incident_id}/action",
+        expected_status=200,
+        json={"action_type": "ignore", "metadata": {"reason": "smoke test no-op"}},
+    )
+    request_json(
+        security_session,
+        "PATCH",
+        f"/incidents/{incident_id}/notes",
+        expected_status=200,
+        json={"notes": "Smoke test verified incident endpoints.", "metadata": {"source": "tools/test_all.py"}},
+    )
+    print(f"[OK] Incident smoke completed for incident {incident_id}")
 
 
 async def run_mocked_bot_webhook_smoke(
@@ -353,6 +452,8 @@ def main() -> None:
                 fail(f"Platform owner /admin/companies should return a list: {admin_companies}")
         else:
             warn("Skipping platform-owner positive admin smoke; set RAGMIND_PLATFORM_OWNER_TOKEN to enable it.")
+
+        run_incident_smoke()
 
         # Configure providers with a compatibility-aware embedding choice.
         _, providers_config = request_json(

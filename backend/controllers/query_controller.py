@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from backend.database.models import Asset, Project
+from backend.monitoring.metrics import QUERY_FAILURES_TOTAL
 
 logger = logging.getLogger(__name__)
 
@@ -163,4 +164,5 @@ class QueryController:
             
         except Exception as e:
             logger.exception("Error processing query infrastructure")
+            QUERY_FAILURES_TOTAL.labels(stage="query_controller").inc()
             raise QueryInfrastructureError("Query infrastructure failure") from e

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.controllers.query_controller import QueryInfrastructureError
 from backend.database.models import BotIntegration
+from backend.monitoring.metrics import TELEGRAM_WEBHOOK_FAILURES_TOTAL
 from backend.services.bot_integration_service import BotIntegrationService
 from backend.services.conversation_service import ConversationService
 from backend.services.customer_bot_query_service import CustomerBotQueryService
@@ -217,6 +218,7 @@ class TelegramWebhookService:
             await db.commit()
             return {"ok": True, "conversation_id": conversation.id}
         except QueryInfrastructureError:
+            TELEGRAM_WEBHOOK_FAILURES_TOTAL.labels(reason="query_infrastructure").inc()
             fallback = integration.fallback_message or "Support is temporarily unavailable. Please try again later."
             return await self._handle_failure(
                 db,
@@ -227,6 +229,7 @@ class TelegramWebhookService:
                 error="Query service unavailable",
             )
         except Exception:
+            TELEGRAM_WEBHOOK_FAILURES_TOTAL.labels(reason="processing").inc()
             fallback = integration.fallback_message or "Support is temporarily unavailable. Please try again later."
             return await self._handle_failure(
                 db,

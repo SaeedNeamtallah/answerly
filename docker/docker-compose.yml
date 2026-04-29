@@ -5,6 +5,7 @@ x-app-environment: &app-environment
   CELERY_RESULT_BACKEND: redis://:minirag_redis_2222@redis:6379/0
   CORS_ORIGINS: '["http://52.188.226.80","http://localhost:8080","http://localhost:3000"]'
   RAGMIND_SHARED_CONFIG_DIR: /app/uploads/config
+  SECURITY_ENGINEER_USERNAMES: ${SECURITY_ENGINEER_USERNAMES:-codex_security_smoke}
 
 x-app-depends-on: &app-depends-on
   postgres:
@@ -26,7 +27,7 @@ services:
       POSTGRES_PASSWORD: ragmind123 # نفس اللي في الـ .env
       POSTGRES_DB: ragmind
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../backend/alembic/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -37,12 +38,28 @@ services:
       retries: 5
     restart: unless-stopped
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: ragmind-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://ragmind:ragmind123@postgres:5432/ragmind?sslmode=disable
+    command:
+      - --config.file=/etc/postgres_exporter/postgres_exporter.yml
+    ports:
+      - "127.0.0.1:9187:9187"
+    volumes:
+      - ./postgres_exporter.yml:/etc/postgres_exporter/postgres_exporter.yml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   # 2. Vector Database (Qdrant)
   qdrant:
     image: qdrant/qdrant:latest
     container_name: ragmind-qdrant
     ports:
-      - "6381:6333"
+      - "127.0.0.1:6381:6333"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
@@ -56,8 +73,8 @@ services:
       RABBITMQ_DEFAULT_PASS: minirag_rabbitmq_2222
       RABBITMQ_DEFAULT_VHOST: minirag_vhost
     ports:
-      - "5729:5672"
-      - "15672:15672"
+      - "127.0.0.1:5729:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: always
@@ -71,11 +88,62 @@ services:
     image: redis:7-alpine # نسخة مستقرة للإنتاج
     container_name: redis
     ports:
-      - "6383:6379"
+      - "127.0.0.1:6383:6379"
     volumes:
       - redis_data:/data
     restart: always
     command: [ "redis-server", "--appendonly", "yes", "--requirepass", "minirag_redis_2222" ]
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: ragmind-node-exporter
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: ragmind-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    depends_on:
+      - backend
+      - postgres-exporter
+      - node-exporter
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    container_name: ragmind-grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
   # 5. الباكند (FastAPI) - إضافة مهمة
   backend:
@@ -100,7 +168,13 @@ services:
     # أمر تشغيل السلري الخاص بمشروعك
     command: celery -A backend.celery_app worker --loglevel=info -Q default,file_processing
     env_file: ../.env
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      PROMETHEUS_MULTIPROC_DIR: /app/uploads/prometheus_multiproc
+      CELERY_PROMETHEUS_MULTIPROC_DIR: /app/uploads/prometheus_multiproc
+      CELERY_PROMETHEUS_PORT: "9108"
+    ports:
+      - "127.0.0.1:9108:9108"
     depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads
@@ -109,7 +183,7 @@ services:
   scheduler:
     image: ragmind-app:local
     container_name: ragmind-scheduler
-    command: celery -A backend.celery_app beat --loglevel=info
+    command: celery -A backend.celery_app beat --loglevel=info --schedule=/app/uploads/celerybeat-schedule
     env_file: ../.env
     environment: *app-environment
     depends_on: *app-depends-on
@@ -125,10 +199,10 @@ services:
       - sh
       - -c
       - |
-        if [ -n "$${TELEGRAM_BOT_TOKEN}" ]; then
+        if [ "$${ENABLE_LEGACY_TELEGRAM_BOT:-0}" = "1" ] && [ -n "$${TELEGRAM_BOT_TOKEN}" ]; then
           exec python -m telegram_bot.bot
         fi
-        echo "TELEGRAM_BOT_TOKEN is empty; bot service is idle."
+        echo "Legacy Telegram polling bot is disabled; bot service is idle."
         exec sleep infinity
     env_file: ../.env
     environment:
@@ -144,12 +218,14 @@ services:
     #8 بالطبع الفرونت إند (React) - إضافة مهمة
 
   frontend:
+    profiles:
+      - docker-frontend
     build:
       context: .. # المسار لفولدر الفرونت إند بالنسبة لفولدر الدوكر
       dockerfile: docker/front.Dockerfile
     container_name: ragmind-frontend
     ports:
-      - "80:80"  # الموقع متاح على Azure IP بورت 80
+      - "127.0.0.1:80:80"
     depends_on:
       - backend
     restart: always
@@ -159,4 +235,5 @@ volumes:
   qdrant_data:
   rabbitmq_data:
   redis_data:
-
+  prometheus_data:
+  grafana_data:

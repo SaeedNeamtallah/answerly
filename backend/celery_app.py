@@ -3,7 +3,7 @@ Celery application configuration.
 Standalone entry point for Celery workers, separate from FastAPI main.py.
 """
 from celery import Celery
-from typing import Optional, Tuple
+from typing import Tuple
 
 from backend.config import settings
 
@@ -25,11 +25,8 @@ SetupUtils = Tuple[
     FileService,
 ]
 
-_setup_utils_cache: Optional[SetupUtils] = None
-
-
 def _build_setup_utils() -> SetupUtils:
-    """Create shared DB/session/service instances for the current Celery worker process."""
+    """Create fresh DB/session/service instances for one Celery task run."""
     db_engine = create_async_engine(
         settings.database_url,
         echo=False,
@@ -66,16 +63,16 @@ def _build_setup_utils() -> SetupUtils:
 
 async def get_setup_utils():
     """
-    Return shared DB engine, session, and service instances for the current worker.
-    Initialized lazily once per Celery worker process.
+    Return fresh DB engine, session, and service instances for the current task.
+
+    Provider-dependent services are intentionally not cached so runtime config
+    updates made through /config/providers affect uploads, indexing, and queries
+    without restarting Celery workers.
 
     Returns a tuple of (db_engine, async_session_maker, document_loader,
                         chunking_service, embedding_service, vector_db, file_service)
     """
-    global _setup_utils_cache
-    if _setup_utils_cache is None:
-        _setup_utils_cache = _build_setup_utils()
-    return _setup_utils_cache
+    return _build_setup_utils()
 
 
 # Create Celery application instance
@@ -84,6 +81,7 @@ celery_app = Celery(
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
     include=[
+        "backend.monitoring.celery_metrics",
         "backend.tasks.file_processing",
         "backend.tasks.data_indexing",
         "backend.tasks.process_workflow",

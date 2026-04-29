@@ -1,11 +1,14 @@
 import asyncio
 import logging
+import time
 
 from sqlalchemy import select
 
 from backend.celery_app import celery_app, get_setup_utils
 from backend.config import settings
 from backend.database.models import Project, Chunk
+from backend.monitoring.metrics import CELERY_TASK_DURATION_SECONDS
+from backend.providers.llm.exceptions import provider_error_payload
 from backend.utils.idempotency_manager import IdempotencyManager
 from backend.utils.task_tracking import reconcile_process_and_index_workflow
 
@@ -38,6 +41,8 @@ async def _reconcile_parent_workflow_if_needed(db, *, task_record) -> None:
 
 
 async def _index_project(task_instance, project_id: int, do_reset: bool):
+    task_start = time.perf_counter()
+    task_status = "failure"
     task_record = None
     session_maker = None
     try:
@@ -92,6 +97,7 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
                     },
                 )
                 await _reconcile_parent_workflow_if_needed(db, task_record=current_task)
+                task_status = "success"
                 return {
                     "status": "skipped",
                     "message": f"Task already exists with status: {existing_task.status}",
@@ -212,10 +218,11 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
                 result=final_result,
             )
             await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
+            task_status = "success"
             return final_result
 
     except Exception as e:
-        logger.error(f"Task failed for project_id={project_id}: {str(e)}")
+        logger.error("Task failed for project_id=%s: %s", project_id, provider_error_payload(e)["message"])
         if task_record is not None and session_maker is not None:
             try:
                 async with session_maker() as db:
@@ -224,9 +231,14 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
                         db=db,
                         execution_id=task_record.execution_id,
                         status="FAILURE",
-                        result={"error": str(e)},
+                        result=provider_error_payload(e),
                     )
                     await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
             except Exception as update_error:
                 logger.error(f"Failed to update index task status: {str(update_error)}")
         raise
+    finally:
+        CELERY_TASK_DURATION_SECONDS.labels(
+            task_name="index_project_task",
+            status=task_status,
+        ).observe(time.perf_counter() - task_start)

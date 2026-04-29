@@ -187,6 +187,8 @@ const i18n = {
         bot_rotate_btn: "تدوير التوكن",
         bot_view_conversations_btn: "المحادثات",
         bot_new_token_prompt: "أدخل توكن البوت الجديد",
+        bot_project_update_prompt: "أدخل رقم المشروع المرتبط الجديد:",
+        bot_project_invalid: "اختر مشروعاً صالحاً من مشاريعك",
         conversation_assign_btn: "تعيين لي",
         conversation_sources_label: "المصادر الداخلية",
         conversation_metadata_label: "بيانات الاسترجاع",
@@ -454,6 +456,8 @@ const i18n = {
         bot_rotate_btn: "Rotate Token",
         bot_view_conversations_btn: "Conversations",
         bot_new_token_prompt: "Enter the new bot token",
+        bot_project_update_prompt: "Enter the new linked project ID:",
+        bot_project_invalid: "Select a valid project from your projects",
         conversation_assign_btn: "Assign to me",
         conversation_sources_label: "Internal Sources",
         conversation_metadata_label: "Retrieval Metadata",
@@ -3395,6 +3399,45 @@ function setupIncidentBackToEventsFloatingButton() {
 
 // --- View Rendering ---
 
+function getProjectLabel(projectId) {
+    const project = Array.isArray(state.projects)
+        ? state.projects.find((item) => Number(item.id) === Number(projectId))
+        : null;
+
+    return project ? project.name : `project ${projectId}`;
+}
+
+function buildProjectSelectionPrompt(currentProjectId) {
+    const projectOptions = Array.isArray(state.projects)
+        ? state.projects.map((project) => `${project.id}: ${project.name}`).join('\n')
+        : '';
+    const promptTitle = i18n[state.lang].bot_project_update_prompt;
+
+    return projectOptions
+        ? `${promptTitle}\n\n${projectOptions}`
+        : promptTitle;
+}
+
+function parseOwnedProjectSelection(value, currentProjectId) {
+    const rawValue = String(value || '').trim();
+    const selectedProjectId = rawValue.match(/^\d+/)?.[0] || '';
+    if (rawValue && !selectedProjectId) {
+        return null;
+    }
+    const projectId = selectedProjectId ? Number(selectedProjectId) : Number(currentProjectId);
+    const userProjects = Array.isArray(state.projects) ? state.projects : [];
+
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+        return null;
+    }
+
+    if (userProjects.length > 0 && !userProjects.some((project) => Number(project.id) === projectId)) {
+        return null;
+    }
+
+    return projectId;
+}
+
 function renderBotIntegrationsList(integrations) {
     const list = document.getElementById('bot-integrations-list');
     if (!list) return;
@@ -3410,7 +3453,7 @@ function renderBotIntegrationsList(integrations) {
                 <div class="product-row-title">${escapeHtml(bot.name || bot.telegram_username || 'Telegram Bot')}</div>
                 <div class="product-row-meta">
                     <span>@${escapeHtml(bot.telegram_username || '-')}</span>
-                    <span>project ${escapeHtml(bot.project_id)}</span>
+                    <span>${escapeHtml(getProjectLabel(bot.project_id))}</span>
                     <span class="status-pill status-${escapeHtml(bot.status || 'unknown')}">${escapeHtml(bot.status || 'unknown')}</span>
                 </div>
                 ${bot.last_error ? `<div class="product-row-error">${escapeHtml(bot.last_error)}</div>` : ''}
@@ -3456,8 +3499,16 @@ function renderBotIntegrationsList(integrations) {
             if (name === null) return;
             const fallbackMessage = prompt(i18n[state.lang].bot_fallback_message, bot.fallback_message || '');
             if (fallbackMessage === null) return;
+            const projectSelection = prompt(buildProjectSelectionPrompt(bot.project_id), String(bot.project_id || ''));
+            if (projectSelection === null) return;
+            const projectId = parseOwnedProjectSelection(projectSelection, bot.project_id);
+            if (!projectId) {
+                showNotification(i18n[state.lang].bot_project_invalid, 'warning');
+                return;
+            }
             await api.patch(`/bot-integrations/${button.dataset.id}`, {
                 name: name.trim() || bot.name,
+                project_id: projectId,
                 fallback_message: fallbackMessage.trim() || null
             });
             showNotification(i18n[state.lang].success_saved, 'success');
@@ -3990,6 +4041,7 @@ const views = {
                 api.get('/bot-integrations/')
             ]);
 
+            state.projects = projects;
             state.botIntegrations = integrations;
             const select = document.getElementById('bot-integration-project');
             projects.forEach(p => {

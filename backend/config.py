@@ -164,7 +164,7 @@ class Settings(BaseSettings):
     )
     security_rate_limit_window_seconds: int = Field(default=60, alias="SECURITY_RATE_LIMIT_WINDOW_SECONDS")
     security_rate_limit_exempt_paths: str = Field(
-        default="/health,/docs,/openapi.json,/redoc",
+        default="/health,/metrics,/docs,/openapi.json,/redoc",
         alias="SECURITY_RATE_LIMIT_EXEMPT_PATHS"
     )
 
@@ -265,6 +265,11 @@ class Settings(BaseSettings):
     celery_task_time_limit: int = Field(default=600, alias="CELERY_TASK_TIME_LIMIT")
     celery_task_acks_late: bool = Field(default=True, alias="CELERY_TASK_ACKS_LATE")
     celery_worker_concurrency: int = Field(default=2, alias="CELERY_WORKER_CONCURRENCY")
+    celery_prometheus_port: int = Field(default=9108, alias="CELERY_PROMETHEUS_PORT")
+    celery_prometheus_multiproc_dir: str = Field(
+        default="/app/uploads/prometheus_multiproc",
+        alias="CELERY_PROMETHEUS_MULTIPROC_DIR",
+    )
     celery_flower_password: str = Field(default="", alias="CELERY_FLOWER_PASSWORD")
 
     # Logging

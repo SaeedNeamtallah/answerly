@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from backend.config import settings
 from backend.database.connection import async_session_maker
 from backend.database.models import Incident, IncidentLog, IncidentSeverity, IncidentStatus, User, UserAccountStatus
+from backend.monitoring.metrics import INCIDENTS_CREATED_TOTAL
 from backend.security.security_event import SecurityEvent, SecurityEventType
 
 logger = logging.getLogger(__name__)
@@ -176,6 +177,7 @@ class IncidentService:
                 )
 
             await session.commit()
+            INCIDENTS_CREATED_TOTAL.labels(severity=str(incident_severity.value)).inc()
             return incident.id
 
     def trigger_auto_creation(self, event: SecurityEvent) -> None:

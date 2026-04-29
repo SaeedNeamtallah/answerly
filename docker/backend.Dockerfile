@@ -8,12 +8,8 @@ ENV PYTHONUNBUFFERED 1
 # 3. تحديد مكان العمل جوه الحاوية
 WORKDIR /app
 
-# 4. تثبيت مكتبات النظام (مهمة جداً للـ PDF والمكتبات التقنية)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libmagic-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# 4. Keep the image independent from OS package mirrors.
+# Runtime dependencies are installed from Python wheels below.
 
 # 5. نسخ ملف المتطلبات وتثبيته
 # بنسخ الملف من مساره اللي شفناه في الـ .bat
@@ -26,7 +22,12 @@ COPY telegram_bot ./telegram_bot
 COPY app_config.json ./app_config.json
 COPY bot_config.json ./bot_config.json
 
-RUN mkdir -p /app/uploads
+RUN addgroup --system ragmind \
+    && adduser --system --ingroup ragmind --home /app ragmind \
+    && mkdir -p /app/uploads /app/tmp \
+    && chown -R ragmind:ragmind /app/uploads /app/tmp
+
+USER ragmind
 
 # 7. البورت اللي الباكند هيشتغل عليه
 EXPOSE 8000

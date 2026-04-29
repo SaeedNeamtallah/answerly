@@ -4,6 +4,7 @@ Extracts text, chunks, embeds, and stores vectors in the background.
 """
 import asyncio
 import logging
+import time
 from datetime import datetime
 
 from sqlalchemy import delete, select
@@ -12,6 +13,8 @@ from sqlalchemy.orm.attributes import flag_modified
 from backend.celery_app import celery_app, get_setup_utils
 from backend.config import settings
 from backend.database.models import Asset, Chunk, Project
+from backend.monitoring.metrics import CELERY_TASK_DURATION_SECONDS, DOCUMENT_PROCESSING_TOTAL
+from backend.providers.llm.exceptions import ProviderError, provider_error_payload
 from backend.runtime_config import get_runtime_value
 from backend.utils.idempotency_manager import IdempotencyManager
 from backend.utils.task_tracking import reconcile_process_and_index_workflow
@@ -27,32 +30,42 @@ def process_document_task(self, asset_id: int):
     return asyncio.run(_process_document(self, asset_id))
 
 
-async def _cleanup_stale_asset_vectors(
+async def _delete_chunk_ids(
     db,
     *,
     asset: Asset,
+    chunk_ids: list[int],
     vector_db,
     session_maker,
 ) -> None:
-    filter_dict = {
-        "asset_id": asset.id,
-        "project_id": asset.project_id,
-    }
+    """Delete a known set of chunk/vector IDs without touching current replacements."""
+    if not chunk_ids:
+        return
+    collection_name = f"project_{asset.project_id}"
     try:
-        await vector_db.delete_vectors(
-            collection_name=f"project_{asset.project_id}",
-            filter_dict=filter_dict,
+        await vector_db.delete_vector_ids(
+            collection_name=collection_name,
+            ids=chunk_ids,
             session_maker=session_maker,
         )
     except Exception as cleanup_error:
         logger.warning(
-            "Failed to delete stale vectors for asset %s: %s",
+            "Failed to delete vectors by id for asset %s: %s",
             asset.id,
             cleanup_error,
         )
 
-    await db.execute(delete(Chunk).where(Chunk.asset_id == asset.id))
+    await db.execute(delete(Chunk).where(Chunk.id.in_(chunk_ids)))
     await db.commit()
+
+
+def _safe_failure_result(exc: BaseException) -> dict:
+    if isinstance(exc, ProviderError):
+        return provider_error_payload(exc)
+    return {
+        "error": exc.__class__.__name__,
+        "message": "Document processing failed. Check server logs for details.",
+    }
 
 
 async def _reconcile_parent_workflow_if_needed(db, *, task_record) -> None:
@@ -70,6 +83,8 @@ async def _reconcile_parent_workflow_if_needed(db, *, task_record) -> None:
 
 
 async def _process_document(task_instance, asset_id: int):
+    task_start = time.perf_counter()
+    task_status = "failure"
     db_engine = None
     session_maker = None
     task_record = None
@@ -126,6 +141,7 @@ async def _process_document(task_instance, asset_id: int):
                     },
                 )
                 await _reconcile_parent_workflow_if_needed(db, task_record=current_task)
+                task_status = "success"
                 return {
                     "status": "skipped",
                     "message": f"Task already exists with status: {existing_task.status}",
@@ -198,14 +214,14 @@ async def _process_document(task_instance, asset_id: int):
                     result=final_result,
                 )
                 await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
+                task_status = "success"
                 return final_result
 
-            await _cleanup_stale_asset_vectors(
-                db,
-                asset=asset,
-                vector_db=vector_db,
-                session_maker=session_maker,
+            old_chunk_result = await db.execute(
+                select(Chunk.id).where(Chunk.asset_id == asset.id)
             )
+            old_chunk_ids = [int(item) for item in old_chunk_result.scalars().all()]
+            previous_status = asset.status
 
             # Mark as processing
 
@@ -213,7 +229,12 @@ async def _process_document(task_instance, asset_id: int):
             asset.error_message = None
             await db.commit()
 
+            new_chunk_ids: list[int] = []
+
             try:
+                await _update_progress(db, asset, "provider_check", 0, 0, 0)
+                await embedding_service.health_check()
+
                 logger.info(f"Extracting text from {asset.original_filename}")
                 text = await document_loader.load_document(asset.file_path)
 
@@ -259,6 +280,7 @@ async def _process_document(task_instance, asset_id: int):
 
                 db.add_all(chunk_records)
                 await db.flush()
+                new_chunk_ids = [int(c.id) for c in chunk_records if c.id is not None]
 
                 total_chunks = len(chunk_records)
                 await _update_progress(db, asset, "embedding", 0, total_chunks, 0)
@@ -297,6 +319,14 @@ async def _process_document(task_instance, asset_id: int):
                     session_maker=session_maker,
                 )
 
+                await _delete_chunk_ids(
+                    db,
+                    asset=asset,
+                    chunk_ids=old_chunk_ids,
+                    vector_db=vector_db,
+                    session_maker=session_maker,
+                )
+
                 asset.status = "completed"
                 asset.error_message = None
                 asset.processed_at = datetime.utcnow()
@@ -324,33 +354,46 @@ async def _process_document(task_instance, asset_id: int):
                 await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
 
                 logger.info(f"Completed processing document {asset.id}: {total_chunks} chunks created")
+                DOCUMENT_PROCESSING_TOTAL.labels(status="success").inc()
+                task_status = "success"
                 return final_result
 
             except Exception as e:
-                await _cleanup_stale_asset_vectors(
+                await _delete_chunk_ids(
                     db,
                     asset=asset,
+                    chunk_ids=new_chunk_ids,
                     vector_db=vector_db,
                     session_maker=session_maker,
                 )
-                asset.status = "failed"
-                asset.error_message = str(e)
+                if previous_status == "completed" and old_chunk_ids:
+                    asset.status = "completed"
+                    asset.error_message = "Latest reprocess attempt failed; previous completed chunks were preserved."
+                else:
+                    asset.status = "failed"
+                    asset.error_message = _safe_failure_result(e)["message"]
                 await db.commit()
 
+                failure_result = _safe_failure_result(e)
                 await idempotency_manager.update_task_status(
                     db=db,
                     execution_id=task_record.execution_id,
                     status="FAILURE",
-                    result={"error": str(e)},
+                    result=failure_result,
                 )
                 await _reconcile_parent_workflow_if_needed(db, task_record=task_record)
+                DOCUMENT_PROCESSING_TOTAL.labels(status="failure").inc()
                 raise
 
     except Exception as e:
-        logger.error(f"Task failed for asset_id={asset_id}: {str(e)}")
+        logger.error("Task failed for asset_id=%s: %s", asset_id, _safe_failure_result(e)["message"])
         raise
 
     finally:
+        CELERY_TASK_DURATION_SECONDS.labels(
+            task_name="process_document_task",
+            status=task_status,
+        ).observe(time.perf_counter() - task_start)
         try:
             if db_engine:
                 await db_engine.dispose()

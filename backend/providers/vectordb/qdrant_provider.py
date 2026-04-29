@@ -313,6 +313,29 @@ class QdrantProvider(VectorDBInterface):
         except Exception as e:
             logger.error(f"Error deleting vectors: {str(e)}")
             raise
+
+    async def delete_vector_ids(
+        self,
+        collection_name: str,
+        *,
+        ids: List[int],
+        **kwargs
+    ) -> bool:
+        """Delete Qdrant points by exact point IDs."""
+        if not ids:
+            return True
+        try:
+            await asyncio.to_thread(
+                self.client.delete,
+                collection_name=collection_name,
+                points_selector=[int(item) for item in ids],
+                wait=True,
+            )
+            logger.info("Deleted %s Qdrant vectors from '%s' by id", len(ids), collection_name)
+            return True
+        except Exception as e:
+            logger.error("Error deleting vector ids: %s", e)
+            raise
     
     async def collection_exists(
         self,

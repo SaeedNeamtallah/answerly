@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.celery_app import celery_app
 from backend.config import settings
 from backend.database import get_db
+from backend.runtime_config import get_runtime_value
+from backend.services.embedding_service import EmbeddingService
 from backend.shared_config_paths import get_app_config_path, get_bot_config_path
 
 router = APIRouter(tags=["Health"])
@@ -30,6 +32,8 @@ class HealthResponse(BaseModel):
     shared_config: str
     vector_store: str
     llm_provider: str
+    embedding_provider: str
+    embedding_provider_health: str
     vector_db_provider: str
 
 
@@ -111,6 +115,16 @@ async def _probe_vector_store(database_status: str) -> str:
     return "connected" if database_status == "connected" else "disconnected"
 
 
+async def _probe_embedding_provider() -> str:
+    try:
+        service = EmbeddingService()
+        ok = await asyncio.wait_for(service.health_check(), timeout=35)
+        return "connected" if ok else "disconnected"
+    except Exception as exc:
+        logger.warning("Embedding provider health probe failed: %s", exc)
+        return "disconnected"
+
+
 async def _build_health_response(db: AsyncSession, include_deep_checks: bool) -> dict:
     """Build a fast readiness response and optionally run the deeper Celery worker probe."""
     try:
@@ -129,10 +143,14 @@ async def _build_health_response(db: AsyncSession, include_deep_checks: bool) ->
         )
     )
     if include_deep_checks and broker_status == "connected":
-        celery_worker_status = await _probe_celery_worker_deep()
+        celery_worker_status, embedding_provider_health = await asyncio.gather(
+            _probe_celery_worker_deep(),
+            _probe_embedding_provider(),
+        )
     else:
         # Keep the default health path fast so UI discovery does not wait on worker inspection.
         celery_worker_status = "skipped"
+        embedding_provider_health = "skipped"
 
     overall_status = "healthy"
     if not all(
@@ -142,6 +160,7 @@ async def _build_health_response(db: AsyncSession, include_deep_checks: bool) ->
             result_backend_status == "connected",
             shared_config_status == "ready",
             vector_store_status == "connected",
+            embedding_provider_health in ("connected", "skipped"),
         )
     ):
         overall_status = "unhealthy"
@@ -154,8 +173,10 @@ async def _build_health_response(db: AsyncSession, include_deep_checks: bool) ->
         "celery_worker": celery_worker_status,
         "shared_config": shared_config_status,
         "vector_store": vector_store_status,
-        "llm_provider": settings.llm_provider,
-        "vector_db_provider": settings.vector_db_provider,
+        "llm_provider": get_runtime_value("llm_provider", settings.llm_provider),
+        "embedding_provider": get_runtime_value("embedding_provider", settings.embedding_provider),
+        "embedding_provider_health": embedding_provider_health,
+        "vector_db_provider": get_runtime_value("vector_db_provider", settings.vector_db_provider),
     }
 
 

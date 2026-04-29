@@ -4,6 +4,8 @@ Handles generating embeddings using LLM provider.
 """
 from typing import List, Callable, Awaitable, Optional
 from backend.providers.llm.factory import LLMProviderFactory
+from backend.providers.llm.exceptions import ProviderError, provider_error_payload
+from backend.monitoring.metrics import EMBEDDING_PROVIDER_ERRORS_TOTAL
 from backend.config import settings
 import logging
 import asyncio
@@ -18,6 +20,10 @@ class EmbeddingService:
         """Initialize embedding service with LLM provider."""
         self.llm_provider = LLMProviderFactory.create_embedding_provider()
         logger.info(f"Embedding service initialized with {self.llm_provider.get_model_name()}")
+
+    async def health_check(self) -> bool:
+        """Preflight the active embedding provider before accepting new work."""
+        return await self.llm_provider.health_check()
     
     async def generate_embeddings(
         self,
@@ -80,8 +86,21 @@ class EmbeddingService:
             logger.info(f"Generated {len(embeddings)} embeddings")
             return embeddings
             
+        except ProviderError as e:
+            payload = provider_error_payload(e)
+            logger.warning(
+                "Embedding provider failed: provider=%s error=%s message=%s",
+                payload["provider"],
+                payload["error"],
+                payload["message"],
+            )
+            EMBEDDING_PROVIDER_ERRORS_TOTAL.labels(
+                provider=payload["provider"],
+                error=payload["error"],
+            ).inc()
+            raise
         except Exception as e:
-            logger.error(f"Error generating embeddings: {str(e)}")
+            logger.error("Error generating embeddings", exc_info=True)
             raise
     
     async def generate_single_embedding(self, text: str) -> List[float]:

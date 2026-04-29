@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
-from functools import lru_cache
 from backend.config import settings
 from backend.runtime_config import get_runtime_value
 from backend.database import get_db
@@ -28,17 +27,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Query"], dependencies=[Depends(get_current_db_user)])
 
 
-@lru_cache(maxsize=1)
 def get_query_controller() -> QueryController:
     return QueryController()
 
 
-@lru_cache(maxsize=1)
 def get_project_controller() -> ProjectController:
     return ProjectController()
 
 
-@lru_cache(maxsize=1)
 def get_document_controller() -> DocumentController:
     return DocumentController()
 
