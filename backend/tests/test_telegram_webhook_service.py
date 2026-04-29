@@ -1,5 +1,6 @@
 """Telegram webhook service unit tests."""
 
+import inspect
 import unittest
 
 from backend.database.models import BotIntegration
@@ -12,6 +13,16 @@ class MissingIntegrationService:
 
 
 class TelegramWebhookServiceTests(unittest.IsolatedAsyncioTestCase):
+    def test_webhook_success_path_does_not_send_inline(self):
+        source = inspect.getsource(TelegramWebhookService._handle_update_for_integration)
+        self.assertNotIn("send_message", source)
+        self.assertIn("delivery_status=\"pending\"", source)
+
+    def test_webhook_failure_path_does_not_send_inline(self):
+        source = inspect.getsource(TelegramWebhookService._handle_failure)
+        self.assertNotIn("send_message", source)
+        self.assertIn("delivery_status=\"pending\"", source)
+
     async def test_invalid_secret_raises_sanitized_not_found_error(self):
         service = TelegramWebhookService(
             integration_service=MissingIntegrationService(),

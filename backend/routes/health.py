@@ -186,6 +186,11 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     return await _build_health_response(db, include_deep_checks=False)
 
 
+@router.get("/health/live")
+async def health_live():
+    return {"status": "alive"}
+
+
 @router.get("/health/full", response_model=HealthResponse)
 async def health_check_full(db: AsyncSession = Depends(get_db)):
     """Deeper health check for internal monitoring and diagnostics."""

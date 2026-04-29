@@ -7,15 +7,23 @@ from typing import Iterable, Sequence
 
 EXCLUDE_DIRS = {
     "venv",
+    ".venv",
     ".git",
+    ".agents",
     "__pycache__",
     "node_modules",
     ".idea",
     "qdrant_data",
     "qdrant_data_test",
+    "assets",
+    "docs",
+    "specs",
     "uploads",
     ".history",
     "tmp",
+    "grafana_data",
+    "dist",
+    "build",
 }
 
 VALID_EXTENSIONS = {
@@ -36,13 +44,15 @@ VALID_EXTENSIONS = {
     ".mako",
 }
 
-SPECIAL_FILES = {"Dockerfile", ".env", ".env.example", "README"}
+SPECIAL_FILES = {"Dockerfile", ".env.example", "README"}
 SKIP_FILES = {
     "combine_code.py",
     "combinecode.py",
     "all_project_code.txt",
     "database_code.txt",
 }
+
+MAX_FILE_BYTES = 512 * 1024
 
 
 @dataclass(frozen=True)
@@ -157,7 +167,7 @@ RUNTIME_PROFILE = FocusProfile(
         "docker/",
         "scripts/dev/start.bat",
         "start_backend.bat",
-        ".env",
+        ".env.example",
     ),
     patterns=(),
     excluded_extensions=(".md",),
@@ -217,12 +227,20 @@ def iter_source_files(root_dir: Path) -> Iterable[Path]:
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
 
         for filename in sorted(filenames):
+            if filename != ".env.example" and (filename == ".env" or filename.startswith(".env.")):
+                continue
             ext = Path(filename).suffix.lower()
             if ext not in VALID_EXTENSIONS and filename not in SPECIAL_FILES:
                 continue
             if filename in SKIP_FILES:
                 continue
-            yield Path(dirpath) / filename
+            path = Path(dirpath) / filename
+            try:
+                if path.stat().st_size > MAX_FILE_BYTES and filename not in SPECIAL_FILES:
+                    continue
+            except OSError:
+                continue
+            yield path
 
 
 def compile_patterns(patterns: Sequence[str]) -> list[re.Pattern[str]]:

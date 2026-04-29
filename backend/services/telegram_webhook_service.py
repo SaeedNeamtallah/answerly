@@ -195,8 +195,6 @@ class TelegramWebhookService:
                 if integration.fallback_message:
                     reply_text = integration.fallback_message
 
-            token = self.crypto_service.decrypt_token(integration.token_encrypted)
-            telegram_result = await self.telegram_api.send_message(token, customer.chat_id, reply_text)
             await self.conversation_service.save_message(
                 db,
                 integration=integration,
@@ -204,11 +202,8 @@ class TelegramWebhookService:
                 customer=customer,
                 sender_type="bot",
                 text=reply_text,
-                telegram_message_id=(
-                    str(telegram_result.get("message_id"))
-                    if telegram_result.get("message_id") is not None
-                    else None
-                ),
+                telegram_message_id=None,
+                delivery_status="pending",
                 answer_sources=answer_result.get("internal_sources") or [],
                 retrieval_metadata={"context_used": answer_result.get("context_used")},
             )
@@ -259,13 +254,6 @@ class TelegramWebhookService:
         db.add(integration)
         db.add(conversation)
 
-        try:
-            token = self.crypto_service.decrypt_token(integration.token_encrypted)
-            telegram_result = await self.telegram_api.send_message(token, customer.chat_id, fallback)
-            telegram_message_id = telegram_result.get("message_id")
-        except Exception:
-            telegram_message_id = None
-
         await self.conversation_service.save_message(
             db,
             integration=integration,
@@ -273,6 +261,7 @@ class TelegramWebhookService:
             customer=customer,
             sender_type="error",
             text=error,
+            delivery_status="none",
         )
         await self.conversation_service.save_message(
             db,
@@ -281,7 +270,8 @@ class TelegramWebhookService:
             customer=customer,
             sender_type="bot",
             text=fallback,
-            telegram_message_id=str(telegram_message_id) if telegram_message_id is not None else None,
+            telegram_message_id=None,
+            delivery_status="pending",
         )
         await db.commit()
         return {"ok": True, "conversation_id": conversation.id, "fallback": True}

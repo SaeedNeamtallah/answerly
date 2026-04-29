@@ -155,6 +155,7 @@ class ConversationService:
         conversation: Conversation,
         sender_type: str,
         text: str,
+        delivery_status: str = "none",
         customer: TelegramCustomer | None = None,
         agent_user_id: int | None = None,
         telegram_update_id: str | None = None,
@@ -191,6 +192,7 @@ class ConversationService:
             retrieval_metadata_json=retrieval_metadata,
             raw_payload_json=raw_payload,
             raw_payload_expires_at=self._raw_payload_expiry() if raw_payload is not None else None,
+            delivery_status=delivery_status,
         )
         conversation.last_message_at = self._now()
         if sender_type == "error":

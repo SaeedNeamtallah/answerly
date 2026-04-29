@@ -46,6 +46,13 @@ class SaaSModelMetadataTests(unittest.TestCase):
         self.assertIn("ix_telegram_customers_bot_chat", customer_indexes)
         self.assertIn("ix_conversation_messages_update_unique", message_indexes)
         self.assertIn("ix_conversation_messages_message_unique", message_indexes)
+        self.assertIn("ix_conversation_messages_delivery_status", message_indexes)
+
+    def test_conversation_message_has_outbox_delivery_columns(self):
+        columns = ConversationMessage.__table__.columns
+
+        self.assertIn("delivery_status", columns)
+        self.assertIn("delivery_attempts", columns)
 
     def test_conversation_status_supports_required_values_by_convention(self):
         columns = Conversation.__table__.columns

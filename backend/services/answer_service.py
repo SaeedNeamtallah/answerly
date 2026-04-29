@@ -4,6 +4,7 @@ Handles generating AI-powered answers using LLM.
 """
 from typing import List, Dict, Any, Optional
 from backend.providers.llm.factory import LLMProviderFactory
+from backend.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -89,8 +90,15 @@ class AnswerService:
         Returns:
             Formatted context string
         """
-        context_parts = []
+        def _estimate_tokens(text: str) -> int:
+            return max(1, len(text) // 4)
+
+        budget = max(500, int(settings.context_token_budget))
+        token_count = 0
+
+        context_parts: list[str] = []
         seen_parents = set()
+        seen_text_keys: set[str] = set()
 
         for chunk in chunks:
             metadata = chunk.get('metadata', {})
@@ -107,8 +115,29 @@ class AnswerService:
             else:
                 content = chunk.get('content', '')
 
+            clean_content = str(content or "").strip()
+            if not clean_content:
+                continue
+
+            text_key = clean_content[:500]
+            if text_key in seen_text_keys:
+                continue
+            seen_text_keys.add(text_key)
+
             source_index = len(context_parts) + 1
-            context_parts.append(f"[مصدر {source_index} - {doc_name}]\n{content}")
+            part = f"[مصدر {source_index} - {doc_name}]\n{clean_content}"
+            estimated = _estimate_tokens(part)
+
+            if estimated > budget and not context_parts:
+                truncated = clean_content[: budget * 4]
+                context_parts.append(f"[مصدر {source_index} - {doc_name}]\n{truncated}")
+                break
+
+            if token_count + estimated > budget:
+                break
+
+            context_parts.append(part)
+            token_count += estimated
         
         return "\n\n".join(context_parts)
     

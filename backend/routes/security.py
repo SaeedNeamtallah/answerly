@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.database.models import User, UserAccountStatus
-from backend.security.auth import require_security_center_access
+from backend.config import settings
+from backend.security.auth import ROLE_PLATFORM_OWNER, get_product_role_for_user, require_security_center_access
 from backend.services.security_dashboard_service import security_dashboard_service
 
 
@@ -230,7 +231,7 @@ async def security_users_events(
 async def simulate_security_attack(
     request: Request,
     target_user_id: Optional[int] = Query(default=None, gt=0),
-    escalate_to_block: bool = Query(default=True),
+    escalate_to_block: bool = Query(default=False),
     current_user: User = Depends(require_security_center_access),
     db: AsyncSession = Depends(get_db),
 ):
@@ -240,6 +241,18 @@ async def simulate_security_attack(
         current_user=current_user,
         requested_target_user_id=target_user_id,
     )
+
+    if escalate_to_block:
+        if not settings.security_simulation_destructive_enabled:
+            raise HTTPException(
+                status_code=403,
+                detail="Destructive simulation disabled by configuration",
+            )
+        if get_product_role_for_user(current_user) != ROLE_PLATFORM_OWNER:
+            raise HTTPException(
+                status_code=403,
+                detail="Only platform owners can run destructive simulations",
+            )
 
     simulation_result = await security_dashboard_service.simulate_attack_with_user_control(
         db=db,

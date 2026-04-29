@@ -11,6 +11,7 @@ from backend.config import settings
 from backend.main import app
 from backend.providers.vectordb.pgvector_provider import PGVectorProvider
 from backend.routes import app_config, documents, stats
+from backend.routes import security as security_routes
 from backend.security.auth import get_current_db_user
 
 
@@ -26,11 +27,22 @@ class SecurityRegressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(dependency, DependsParam)
         self.assertIs(dependency.dependency, get_current_db_user)
 
+    def test_provider_get_requires_authenticated_user_dependency(self):
+        signature = inspect.signature(app_config.get_providers)
+        dependency = signature.parameters["_current_user"].default
+        self.assertIsInstance(dependency, DependsParam)
+        self.assertIs(dependency.dependency, get_current_db_user)
+
     def test_stats_requires_authenticated_user_dependency(self):
         signature = inspect.signature(stats.get_global_stats)
         dependency = signature.parameters["_current_user"].default
         self.assertIsInstance(dependency, DependsParam)
         self.assertIs(dependency.dependency, get_current_db_user)
+
+    def test_security_simulation_is_non_destructive_by_default(self):
+        signature = inspect.signature(security_routes.simulate_security_attack)
+        default_param = signature.parameters["escalate_to_block"].default
+        self.assertEqual(getattr(default_param, "default", None), False)
 
     async def test_upload_read_is_bounded_by_size_limit(self):
         upload = UploadFile(filename="oversized.txt", file=io.BytesIO(b"a" * 64))

@@ -275,12 +275,50 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    # Environment / production hardening
+    environment: str = Field(default="development", alias="ENVIRONMENT")
+    context_token_budget: int = Field(default=6000, alias="CONTEXT_TOKEN_BUDGET")
+    security_simulation_destructive_enabled: bool = Field(
+        default=False,
+        alias="SECURITY_SIMULATION_DESTRUCTIVE_ENABLED",
+    )
+    telegram_outbox_poll_interval_seconds: int = Field(
+        default=2,
+        alias="TELEGRAM_OUTBOX_POLL_INTERVAL_SECONDS",
+    )
+    telegram_outbox_max_delivery_attempts: int = Field(
+        default=3,
+        alias="TELEGRAM_OUTBOX_MAX_DELIVERY_ATTEMPTS",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
     )
+
+
+def _validate_production_secrets(s: Settings) -> None:
+    if s.environment.lower() != "production":
+        return
+
+    reasons: list[str] = []
+
+    jwt_secret = (s.auth_jwt_secret_key or "").strip()
+    if jwt_secret == "change-me-in-env" or len(jwt_secret) < 32:
+        reasons.append("AUTH_JWT_SECRET_KEY must be a strong non-default value in production")
+
+    admin_password = (s.auth_admin_password or "").strip()
+    if admin_password == "admin123":
+        reasons.append("AUTH_ADMIN_PASSWORD must not use the default demo password in production")
+
+    bot_key = (s.bot_token_encryption_key or "").strip()
+    if not bot_key:
+        reasons.append("BOT_TOKEN_ENCRYPTION_KEY is required in production")
+
+    if reasons:
+        raise SystemExit("FATAL production configuration error: " + "; ".join(reasons))
 
 
 # Global settings instance - use default values if .env not found
@@ -297,3 +335,5 @@ except Exception as e:
     except:
         # Fallback to a very basic settings if even that fails
         settings = Settings()
+
+_validate_production_secrets(settings)

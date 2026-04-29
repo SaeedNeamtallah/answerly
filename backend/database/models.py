@@ -312,6 +312,19 @@ class ConversationMessage(Base):
     retrieval_metadata_json = Column(JSON, nullable=True)
     raw_payload_json = Column(JSON, nullable=True)
     raw_payload_expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    delivery_status = Column(
+        String(16),
+        nullable=False,
+        default="none",
+        server_default="none",
+        index=True,
+    )
+    delivery_attempts = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     owner = relationship("User", foreign_keys=[owner_id], back_populates="conversation_messages")

@@ -125,12 +125,11 @@ class DocumentController:
             raise
     
     async def process_document(self, asset_id: int, **_kw) -> bool:
-        """Process document with a dedicated DB session (background-task safe)."""
-        from backend.database.connection import async_session_maker
-        async with async_session_maker() as db:
-            return await self._process_document_impl(db, asset_id)
+        raise RuntimeError(
+            "Direct document processing is disabled. Use Celery process_document_task instead."
+        )
 
-    async def _process_document_impl(
+    async def _deprecated_process_document_impl(
         self,
         db: AsyncSession,
         asset_id: int

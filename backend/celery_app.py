@@ -86,6 +86,7 @@ celery_app = Celery(
         "backend.tasks.data_indexing",
         "backend.tasks.process_workflow",
         "backend.tasks.maintenance",
+        "backend.tasks.telegram_outbox",
     ],
 )
 
@@ -131,6 +132,9 @@ task_routes = {
     "backend.tasks.maintenance.clean_celery_executions_table": {
         "queue": "default"
     },
+    "backend.tasks.telegram_outbox.deliver_pending_messages": {
+        "queue": "default"
+    },
     
 },
 
@@ -140,7 +144,12 @@ task_routes = {
             "task": "backend.tasks.maintenance.clean_celery_executions_table",
             "schedule": 24*3600,  # every 24 hours
             "args": (),
-        }
+        },
+        "deliver-pending-telegram-messages": {
+            "task": "backend.tasks.telegram_outbox.deliver_pending_messages",
+            "schedule": settings.telegram_outbox_poll_interval_seconds,
+            "args": (),
+        },
     },
 
     timezone="UTC",

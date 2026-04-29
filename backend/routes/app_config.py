@@ -94,7 +94,9 @@ def normalize_provider_runtime_config() -> Dict[str, object]:
 
 
 @router.get("/providers")
-async def get_providers() -> Dict[str, object]:
+async def get_providers(
+    _current_user: User = Depends(get_current_db_user),
+) -> Dict[str, object]:
     """Return available providers and current selections."""
     provider_state = normalize_provider_runtime_config()
     llm_available = LLMProviderFactory.get_available_providers()
