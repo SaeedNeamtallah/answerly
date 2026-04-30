@@ -2,14 +2,14 @@
 
 RAGMind is a B2B SaaS Retrieval Augmented Generation (RAG) platform for turning uploaded company documents into searchable project knowledge bases and Telegram customer-support bots.
 
-It combines a FastAPI backend, background processing with Celery, vector search with pgvector or Qdrant, and a lightweight static frontend.
+It combines a FastAPI backend, background processing with Celery, vector search with pgvector or Qdrant, a lightweight static frontend, and a Next.js migration frontend in `frontend-next/`.
 
 ## Current Stack
 
 - Backend: FastAPI + SQLAlchemy (async)
 - Background jobs: Celery + RabbitMQ + Redis
 - Databases: PostgreSQL (with pgvector) and optional Qdrant
-- Frontend: static HTML/CSS/JS served locally on port 8080
+- Frontend: legacy static HTML/CSS/JS on port 8080 plus Next.js App Router frontend on port 3001
 - Product roles: `company_admin` and `platform_owner`
 - Telegram support: database-backed bot integrations plus durable conversations
 - Legacy bot: optional single-bot service kept for demo/backward compatibility
@@ -137,6 +137,7 @@ scripts\dev\start.bat --build
 Default URLs:
 
 - Frontend login: [http://localhost:8080/login.html?api=http://localhost:8000](http://localhost:8080/login.html?api=http://localhost:8000)
+- Next.js frontend: [http://localhost:3001/login](http://localhost:3001/login)
 - Backend API: [http://localhost:8000](http://localhost:8000)
 - Health: [http://localhost:8000/health](http://localhost:8000/health)
 - Metrics: [http://localhost:8000/metrics](http://localhost:8000/metrics)
@@ -158,7 +159,33 @@ All supported local scripts are under scripts/dev.
 | --- | --- | --- | --- |
 | scripts/dev/setup.bat | Prepare local environment | Creates venv, installs deps, initializes .env | uploads/logs/setup.log |
 | scripts/dev/start.bat | Start backend stack and frontend server | Uses docker compose up -d by default; supports --build | uploads/logs/start.log, uploads/logs/docker_stack.log, uploads/logs/docker_ps.log, uploads/logs/frontend.log |
+| scripts/dev/newstart.bat | Start backend stack and open the Next.js frontend | Calls `start.bat`, launches `frontend-next` on port 3001, then opens `/login` | uploads/logs/newstart.log, uploads/logs/frontend_next.log |
 | scripts/dev/stop.bat | Stop stack and close helper windows | Stops compose services and captures stack state | uploads/logs/stop.log, uploads/logs/docker_ps.log |
+
+## Next.js Frontend
+
+The new dashboard/frontend migration lives in `frontend-next/`.
+
+Run it with:
+
+```powershell
+cd frontend-next
+pnpm dev
+```
+
+Or use the helper script:
+
+```powershell
+scripts\dev\newstart.bat
+```
+
+Key details:
+
+- URL: `http://localhost:3001`
+- Env file: `frontend-next/.env.local`
+- Required public env: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`
+- Auth remains Bearer-token compatible in this migration round
+- The legacy `frontend/` remains in place during migration
 
 ## Docker And WSL Troubleshooting (Windows)
 
@@ -268,6 +295,7 @@ backend/        FastAPI app, routes, services, providers, tasks
 backend/templates/ Prompt templates used by answer and query services
 docker/         Dockerfile and docker-compose setup
 frontend/       Static dashboard/login UI
+frontend-next/  Next.js App Router dashboard migration
 telegram_bot/   Legacy single-bot integration
 scripts/dev/    setup/start/stop scripts for local Windows workflow
 backend/alembic/ Database migration revisions

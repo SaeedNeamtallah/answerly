@@ -26,6 +26,7 @@ Primary goal: reduce token waste by searching first, reading only the needed fil
   - `backend/routes/*.py`
   - `telegram_bot/bot.py`
   - `frontend/app.js`
+  - `frontend-next/src/app/*`
 - Find classes/functions:
   - `rg -n "^(class|def|async def) " backend telegram_bot`
 - Find ownership/auth flow:
@@ -57,12 +58,19 @@ Top-level repo organization:
 - `.github/workflows/secret-scan.yml`: CI gitleaks secret scanning on pushes and pull requests
 - `scripts/dev/`: local Windows startup helpers
   - only three entry scripts should remain here: `setup.bat`, `start.bat`, `stop.bat`
+  - current user-requested exception: `newstart.bat` also exists to launch the Next.js frontend after the base stack starts
 - `docker/`: Compose/build files plus local monitoring config (`docker/prometheus.yml`, Grafana provisioning, Grafana dashboards, postgres-exporter, and node-exporter)
 - `tools/`: maintenance and one-off repo utilities
   - includes `tools/test_all.py` as the authenticated smoke test entrypoint
+  - `tools/combine_code.py` writes repo bundles under `tmp/`; default output now prioritizes `AGENTS.md`, `README.md`, `.env.example`, Docker/runtime JSON, and `scripts/dev/*.bat`, includes `frontend-next/`, and excludes the legacy `frontend/`
 - `docs/`: notes and extra documentation
   - includes `docs/project-graph.md` as the current runtime/API/service/data/frontend graph
   - includes `docs/database.md` as the current storage/database map and sync verdict
+- `frontend-next/`: Next.js App Router migration frontend
+  - route entrypoints live under `frontend-next/src/app/`
+  - API modules live under `frontend-next/src/lib/api/`
+  - auth remains Bearer-token compatible in this round
+  - do not use legacy `/bot/config` or `active_project_id` here
 - `assets/`: static project assets
 - `uploads/config/`: shared runtime config for backend, worker, and telegram bot (`app_config.json`, `bot_config.json`)
 - `uploads/logs/`: runtime logs, probes, and local command output
@@ -273,6 +281,12 @@ Recently fixed:
   Local startup now recovers from dev databases stamped with unknown discarded-branch Alembic revisions by stamping to the current head and retrying migrations, preserving the restored codebase while avoiding a startup crash on polluted local volumes.
 36. `docker/docker-compose.yml`
   The legacy single Telegram polling bot now idles by default and only starts when `ENABLE_LEGACY_TELEGRAM_BOT=1`, preventing local logs from filling with Telegram `409` conflicts when a production webhook is registered for the same token.
+37. `frontend-next/src/app/*`, `frontend-next/src/lib/api/*`, `frontend-next/src/store/auth-store.ts`, and `.env.example`
+  New Next.js App Router frontend migration now lives in `frontend-next/`, runs on `http://localhost:3001`, uses `NEXT_PUBLIC_API_BASE_URL` for backend calls, keeps Bearer-token compatibility for this round, surfaces company/admin product routes without using legacy `/bot/config` or `active_project_id`, and adds build/typecheck/lint validation through the new frontend workspace.
+38. `scripts/dev/newstart.bat`, `README.md`, and `AGENTS.md`
+  `newstart.bat` is a user-requested helper that first calls `scripts/dev/start.bat`, then launches `frontend-next` with `pnpm dev` or `npm run dev`, waits for `http://localhost:3001/login`, and opens the Next.js frontend. This is an explicit exception to the normal three-script guidance in `scripts/dev/`.
+39. `frontend-next/src/lib/auth/session.ts`, `frontend-next/src/app/(auth)/login/page.tsx`, `frontend-next/src/components/layout/RoleGuard.tsx`, `docker/docker-compose.yml`, and `.env`
+  Next.js auth hydration now runs once via `useAuthStore.getState()` and auth consumers read store fields with separate selectors to avoid React 19 external-store infinite-update loops; local backend CORS now explicitly includes `http://localhost:3001` so the Next.js frontend can call `/health` and auth endpoints from the dev port.
 
 ## Known Drift Between Docs and Code
 

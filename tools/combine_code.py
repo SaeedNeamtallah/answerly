@@ -21,10 +21,17 @@ EXCLUDE_DIRS = {
     "uploads",
     ".history",
     "tmp",
+    ".next",
+    ".playwright-cli",
     "grafana_data",
     "dist",
     "build",
 }
+
+EXCLUDE_PATH_TOKENS = (
+    "frontend/",
+    "tmp/",
+)
 
 VALID_EXTENSIONS = {
     ".py",
@@ -44,12 +51,26 @@ VALID_EXTENSIONS = {
     ".mako",
 }
 
-SPECIAL_FILES = {"Dockerfile", ".env.example", "README"}
+SPECIAL_FILES = {"Dockerfile", ".env.example", "README", "README.md", "AGENTS.md"}
+DEFAULT_IMPORTANT_FILES = (
+    Path("AGENTS.md"),
+    Path("README.md"),
+    Path(".env.example"),
+    Path("docker/docker-compose.yml"),
+    Path("scripts/dev/setup.bat"),
+    Path("scripts/dev/start.bat"),
+    Path("scripts/dev/newstart.bat"),
+    Path("scripts/dev/stop.bat"),
+    Path("app_config.json"),
+    Path("bot_config.json"),
+)
 SKIP_FILES = {
     "combine_code.py",
     "combinecode.py",
     "all_project_code.txt",
     "database_code.txt",
+    "runtime_code.txt",
+    "tempCodeRunnerFile.bat",
 }
 
 MAX_FILE_BYTES = 512 * 1024
@@ -161,12 +182,16 @@ RUNTIME_PROFILE = FocusProfile(
     output_name="runtime_code.txt",
     path_tokens=(
         "backend/",
-        "frontend/",
+        "frontend-next/",
         "telegram_bot/",
         "tools/",
         "docker/",
+        "scripts/dev/setup.bat",
         "scripts/dev/start.bat",
-        "start_backend.bat",
+        "scripts/dev/newstart.bat",
+        "scripts/dev/stop.bat",
+        "AGENTS.md",
+        "README.md",
         ".env.example",
     ),
     patterns=(),
@@ -235,12 +260,35 @@ def iter_source_files(root_dir: Path) -> Iterable[Path]:
             if filename in SKIP_FILES:
                 continue
             path = Path(dirpath) / filename
+            rel_posix = path.relative_to(root_dir).as_posix()
+            if any(token in rel_posix for token in EXCLUDE_PATH_TOKENS):
+                continue
             try:
                 if path.stat().st_size > MAX_FILE_BYTES and filename not in SPECIAL_FILES:
                     continue
             except OSError:
                 continue
             yield path
+
+
+def get_default_bundle_files(root_dir: Path) -> list[Path]:
+    ordered: list[Path] = []
+    seen: set[Path] = set()
+
+    for rel_path in DEFAULT_IMPORTANT_FILES:
+        full_path = root_dir / rel_path
+        if full_path.exists() and full_path.is_file():
+            ordered.append(full_path)
+            seen.add(full_path.resolve())
+
+    for path in iter_source_files(root_dir):
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        ordered.append(path)
+        seen.add(resolved)
+
+    return ordered
 
 
 def compile_patterns(patterns: Sequence[str]) -> list[re.Pattern[str]]:
@@ -324,7 +372,13 @@ def combine_code(root_dir: Path, output_file: Path) -> int:
     combined_files = 0
 
     with output_file.open("w", encoding="utf-8") as outfile:
-        for filepath in iter_source_files(root_dir):
+        outfile.write("Bundle: default\n")
+        outfile.write("Notes:\n")
+        outfile.write("- Includes current repo code and runtime files.\n")
+        outfile.write("- Excludes legacy static frontend under frontend/.\n")
+        outfile.write("- Includes important project context files and Windows startup scripts first.\n\n")
+
+        for filepath in get_default_bundle_files(root_dir):
             rel_path = filepath.relative_to(root_dir)
 
             try:
