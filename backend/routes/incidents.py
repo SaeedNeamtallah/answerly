@@ -15,6 +15,7 @@ from backend.models.incident_models import (
     IncidentDetailsResponse,
     IncidentFalsePositiveUpdateRequest,
     IncidentNotesUpdateRequest,
+    IncidentReopenRequest,
     IncidentResponse,
     IncidentStatusUpdateRequest,
 )
@@ -133,6 +134,27 @@ async def update_false_positive_flag(
 ):
     """Mark or clear an incident false-positive flag."""
     return await controller.update_false_positive_flag(
+        db=db,
+        incident_id=incident_id,
+        payload=payload,
+        current_user=current_user,
+    )
+
+
+@router.post("/{incident_id}/reopen", response_model=IncidentResponse)
+async def reopen_incident(
+    incident_id: int,
+    payload: IncidentReopenRequest,
+    current_user: User = Depends(require_incident_access),
+    db: AsyncSession = Depends(get_db),
+    controller: IncidentController = Depends(IncidentController),
+):
+    """Reopen a CLOSED incident back to OPEN with a mandatory reason.
+
+    Used when new evidence surfaces or a closure was premature.
+    Creates a full audit trail entry for the reopen action.
+    """
+    return await controller.reopen_incident(
         db=db,
         incident_id=incident_id,
         payload=payload,

@@ -15,6 +15,12 @@ class IncidentStatusUpdateRequest(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class IncidentReopenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(..., min_length=3, max_length=255, description="Mandatory reason for reopening the incident")
+
+
 class IncidentAssignRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

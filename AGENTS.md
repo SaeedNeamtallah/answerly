@@ -465,6 +465,12 @@ Recently fixed:
   Startup readiness now reflects the actual stack: `/health` returns `healthy` only when database, broker, result backend, Celery worker, shared config, and vector store are reachable, and `start.bat` waits for that JSON-ready state instead of any HTTP 200.
 27. `frontend/app.js`
   Security Center simulation reset is intentionally scoped to transient event streams only (feed clear), while incidents and security overview metrics remain intact for investigation continuity.
+28. `frontend/app.js`, `frontend/login.html`, `frontend/signup.html`, and `frontend/index.html`
+  Frontend local defaults were re-aligned to `http://localhost:8000`, API base normalization now trims trailing slashes correctly, and network auto-retry is limited to idempotent requests to prevent duplicate `POST /projects/{id}/documents` uploads during transient failures.
+29. `frontend/app.js`
+  Simulation reset state is now persisted as a feed-only cutoff (`reset_at`) and honored across tab switches, API reloads, and stream updates so cleared simulated events do not reappear; incidents and overview metrics remain untouched.
+30. `frontend/app.js`, `frontend/index.html`, and `frontend/style.css`
+  Security incidents now separate real vs simulated at the UI layer: incidents are client-tagged (`is_simulated`/`incident_source`), a neutral simulated badge is rendered in the incidents table, incident source filtering is available, and overview counters keep real incidents as primary while exposing simulated count separately.
 
 ## Known Drift Between Docs and Code
 

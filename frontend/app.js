@@ -4,7 +4,22 @@
  */
 
 // Configuration
-let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || 'http://52.188.226.80:8000').replace(/\/+$/, '');
+const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+
+// Synchronously apply ?api= query param so the correct base URL is used
+// immediately on page load (e.g. after login redirects with ?api=...).
+// Without this, API_BASE_URL would stay stale from localStorage until the
+// background resolveApiBaseUrl() race completes, causing all requests to
+// hit the wrong host and triggering clearAuthAndRedirect() → login loop.
+(function _initApiBaseFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = (params.get('api') || '').trim().replace(/\/+$/, '');
+    if (fromQuery) {
+        localStorage.setItem('ragmind_api_base_url', fromQuery);
+    }
+})();
+
+let API_BASE_URL = (localStorage.getItem('ragmind_api_base_url') || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
 
 // Translations
 const i18n = {
@@ -28,6 +43,7 @@ const i18n = {
         security_brute_force_alerts: "Brute Force Alerts",
         security_open_incidents: "الحوادث المفتوحة",
         security_high_severity_incidents: "حوادث شدة عالية",
+        security_simulated_incidents: "الحوادث المحاكاة",
         security_active_users: "المستخدمون النشطون",
         security_suspended_users: "المستخدمون الموقوفون",
         security_blocked_users: "المستخدمون المحظورون",
@@ -57,7 +73,7 @@ const i18n = {
         security_simulate_running: "Running simulation...",
         security_simulate_success: "Simulation events generated",
         security_simulate_escalation_blocked: "Simulation escalated: user blocked",
-        security_simulation_reset_btn: "Reset Simulation View",
+        security_simulation_reset_btn: "Clear Simulation Feed",
         security_simulation_reset_running: "Clearing simulation feed...",
         security_simulation_reset_success: "Simulation feed cleared",
         security_simulation_reset_confirm: "This will clear simulated events from the feed.\nIncidents and system metrics will NOT be affected.\nContinue?",
@@ -73,6 +89,10 @@ const i18n = {
         incident_col_false_positive: "False Positive",
         incident_empty: "No incidents yet",
         incident_filter_all_status: "All Status",
+        incident_filter_source: "Source",
+        incident_filter_source_all: "Show All",
+        incident_filter_source_real: "Show Real Only",
+        incident_filter_source_simulated: "Show Simulated Only",
         incident_filter_all_severity: "All Severity",
         incident_filter_false_positive: "False Positive",
         incident_filter_fp_all: "All",
@@ -137,6 +157,11 @@ const i18n = {
         incident_status_investigating: "INVESTIGATING",
         incident_status_resolved: "RESOLVED",
         incident_status_closed: "CLOSED",
+        incident_status_closed_simulated: "Closed (Simulated)",
+        incident_simulated_badge: "Simulated",
+        incident_simulated_review_label: "Mark as Reviewed (Simulated)",
+        incident_simulated_bulk_review_btn: "Mark all simulated as reviewed",
+        incident_simulated_bulk_review_success: "Simulated incidents marked as reviewed",
         recent_projects: "المشاريع الأخيرة",
         view_all: "عرض الكل",
         your_projects: "مشاريعك",
@@ -260,6 +285,7 @@ const i18n = {
         security_brute_force_alerts: "Brute Force Alerts",
         security_open_incidents: "Open Incidents",
         security_high_severity_incidents: "High Severity Incidents",
+        security_simulated_incidents: "Simulated Incidents",
         security_active_users: "Active Users",
         security_suspended_users: "Suspended Users",
         security_blocked_users: "Blocked Users",
@@ -289,7 +315,7 @@ const i18n = {
         security_simulate_running: "Running simulation...",
         security_simulate_success: "Simulation events generated",
         security_simulate_escalation_blocked: "Simulation escalated: user blocked",
-        security_simulation_reset_btn: "Reset Simulation View",
+        security_simulation_reset_btn: "Clear Simulation Feed",
         security_simulation_reset_running: "Clearing simulation feed...",
         security_simulation_reset_success: "Simulation feed cleared",
         security_simulation_reset_confirm: "This will clear simulated events from the feed.\nIncidents and system metrics will NOT be affected.\nContinue?",
@@ -305,6 +331,10 @@ const i18n = {
         incident_col_false_positive: "False Positive",
         incident_empty: "No incidents yet",
         incident_filter_all_status: "All Status",
+        incident_filter_source: "Source",
+        incident_filter_source_all: "Show All",
+        incident_filter_source_real: "Show Real Only",
+        incident_filter_source_simulated: "Show Simulated Only",
         incident_filter_all_severity: "All Severity",
         incident_filter_false_positive: "False Positive",
         incident_filter_fp_all: "All",
@@ -369,6 +399,11 @@ const i18n = {
         incident_status_investigating: "INVESTIGATING",
         incident_status_resolved: "RESOLVED",
         incident_status_closed: "CLOSED",
+        incident_status_closed_simulated: "Closed (Simulated)",
+        incident_simulated_badge: "Simulated",
+        incident_simulated_review_label: "Mark as Reviewed (Simulated)",
+        incident_simulated_bulk_review_btn: "Mark all simulated as reviewed",
+        incident_simulated_bulk_review_success: "Simulated incidents marked as reviewed",
         recent_projects: "Recent Projects",
         view_all: "View All",
         your_projects: "Your Projects",
@@ -571,8 +606,8 @@ function isTokenExpired(token) {
 }
 
 function getSimulationResetState() {
-    // Design decision: "Reset Simulation View" no longer applies a global tombstone.
-    // Keep this helper as a safe no-op reader to avoid rebase regressions in shared paths.
+    // Single source of truth for simulation-feed reset state:
+    // prefer in-memory state, then fall back to persisted localStorage on re-render/reload.
     if (state && state.securitySimulationReset && typeof state.securitySimulationReset === 'object') {
         return state.securitySimulationReset;
     }
@@ -585,7 +620,7 @@ function getSimulationResetState() {
 
         const parsed = JSON.parse(raw);
         return {
-            active: false,
+            active: Boolean(parsed.active) && typeof parsed.reset_at === 'string',
             reset_at: typeof parsed.reset_at === 'string' ? parsed.reset_at : null,
             removed_event_ids: [],
             removed_incident_ids: [],
@@ -654,7 +689,6 @@ function normalizeBaseUrl(url) {
     if (!url) return '';
     return String(url)
         .trim()
-        .replace(/\^+$/, '')
         .replace(/\/+$/, '');
 }
 
@@ -665,7 +699,7 @@ function isDocumentActive(status) {
 function getApiBaseCandidates() {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = normalizeBaseUrl(params.get('api'));
-    const host = window.location.hostname || '52.188.226.80';
+    const host = window.location.hostname || 'localhost';
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 
     const candidates = [
@@ -718,7 +752,9 @@ function isAuthEndpoint(endpoint) {
 
 async function fetchWithApiRecovery(endpoint, options = {}, retries = 1) {
     let lastError = null;
-    const effectiveRetries = isAuthEndpoint(endpoint) ? 0 : retries;
+    const method = String((options && options.method) || 'GET').toUpperCase();
+    const isIdempotentMethod = method === 'GET' || method === 'HEAD';
+    const effectiveRetries = (isAuthEndpoint(endpoint) || !isIdempotentMethod) ? 0 : retries;
 
     for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
         try {
@@ -732,7 +768,7 @@ async function fetchWithApiRecovery(endpoint, options = {}, retries = 1) {
                 break;
             }
 
-            const recovered = await resolveApiBaseUrl(20);
+            const recovered = await resolveApiBaseUrl(2);
             if (!recovered) {
                 break;
             }
@@ -1553,6 +1589,27 @@ function isSimulatedIncident(incident) {
     });
 }
 
+function getIncidentSource(incident) {
+    const explicitSource = String(
+        incident && incident.source ? incident.source : (incident && incident.incident_source ? incident.incident_source : '')
+    ).trim().toLowerCase();
+    if (explicitSource === 'simulation' || explicitSource === 'simulated') {
+        return 'simulation';
+    }
+    if (explicitSource === 'real') {
+        return 'real';
+    }
+    return isSimulatedIncident(incident) ? 'simulation' : 'real';
+}
+
+function normalizeIncidentRecord(rawIncident) {
+    const incident = rawIncident && typeof rawIncident === 'object' ? { ...rawIncident } : {};
+    const incidentSource = getIncidentSource(incident);
+    incident.incident_source = incidentSource;
+    incident.is_simulated = incidentSource === 'simulation';
+    return incident;
+}
+
 function getSecurityEntryTimestampMs(entry) {
     const candidate = entry && (entry.timestamp || entry.created_at || entry.createdAt || entry.created);
     const parsed = Date.parse(candidate);
@@ -1596,7 +1653,6 @@ function summarizeSimulationIncidentDelta(incidents) {
 function filterSimulationPayload(events, incidents) {
     const resetState = getSimulationResetState();
     const removedEventIds = new Set((resetState.removed_event_ids || []).map((value) => String(value)));
-    const removedIncidentIds = new Set((resetState.removed_incident_ids || []).map((value) => String(value)));
     const resetCutoffMs = resetState.reset_at ? Date.parse(resetState.reset_at) : null;
 
     const safeEvents = Array.isArray(events) ? events : [];
@@ -1608,6 +1664,7 @@ function filterSimulationPayload(events, incidents) {
 
     // API and stream payloads must be filtered here so stale simulation rows
     // cannot rehydrate the UI after reset, tab switch, or refresh.
+    // Simulation reset is intentionally feed-only: incidents remain audit records.
     return {
         events: safeEvents.filter((event) => {
             const eventId = String(event && event.id ? event.id : '');
@@ -1622,38 +1679,15 @@ function filterSimulationPayload(events, incidents) {
 
             return true;
         }),
-        incidents: safeIncidents.filter((incident) => {
-            const incidentId = String(incident && incident.id ? incident.id : '');
-            if (incidentId && removedIncidentIds.has(incidentId)) {
-                return false;
-            }
-
-            const incidentTime = getSecurityEntryTimestampMs(incident);
-            if (Number.isFinite(resetCutoffMs) && Number.isFinite(incidentTime) && incidentTime <= resetCutoffMs && isSimulatedIncident(incident)) {
-                return false;
-            }
-
-            return true;
-        })
+        incidents: safeIncidents
     };
 }
 
 function applySimulationResetToStats(stats) {
-    const resetState = getSimulationResetState();
     const baseStats = normalizeSecurityStats(stats || {});
-    if (!resetState.active) {
-        return baseStats;
-    }
-
-    const delta = resetState.stats_delta || {};
-    const subtract = (value, removed) => Math.max(0, Number(value || 0) - Number(removed || 0));
-
-    return {
-        total_events: subtract(baseStats.total_events, delta.total_events),
-        login_failures: subtract(baseStats.login_failures, delta.login_failures),
-        brute_force_attempts: subtract(baseStats.brute_force_attempts, delta.brute_force_attempts),
-        blocked_uploads: subtract(baseStats.blocked_uploads, delta.blocked_uploads)
-    };
+    // Overview counters represent aggregated historical monitoring data.
+    // A simulation feed reset must not mutate these system-level metrics.
+    return baseStats;
 }
 
 function syncSecurityOverviewFromCurrentState() {
@@ -1702,13 +1736,23 @@ function clearSimulationFeedLocally() {
     // Simulation reset is intentionally scoped to transient event streams.
     // Incidents represent tracked security cases and must persist for investigation.
     // Security Overview reflects aggregated/historical metrics and is not cleared by simulation reset.
+    const resetAtIso = new Date().toISOString();
+    const removedEventIds = currentEvents
+        .filter((event) => isSimulatedSecurityEvent(event))
+        .map((event) => String(event && event.id ? event.id : ''))
+        .filter(Boolean);
+
+    // Persist reset cutoff before mutating view data so API/SSE/tab rehydration
+    // cannot bring back simulation rows that existed before this reset action.
+    setSimulationResetState({
+        active: true,
+        reset_at: resetAtIso,
+        removed_event_ids: removedEventIds,
+    });
+
     state.securityEvents = currentEvents.filter((event) => !isSimulatedSecurityEvent(event));
     renderSecurityEventViews(state.securityEvents, { preserveScroll: true });
     markSecurityEventsFeedUpdated();
-
-    // Clear any legacy tombstone from earlier full-reset behavior to prevent
-    // accidental cross-layer filtering after moving to feed-only reset.
-    setSimulationResetState(null);
 }
 
 async function refreshSecurityUserStatusPanel(options = {}) {
@@ -1890,20 +1934,26 @@ function calculateIncidentMetrics(incidents) {
     const items = Array.isArray(incidents) ? incidents : [];
 
     return items.reduce((acc, incident) => {
+        const normalizedIncident = normalizeIncidentRecord(incident);
         const status = normalizeIncidentStatus(incident && incident.status ? incident.status : 'OPEN');
         const severity = normalizeIncidentSeverity(incident && incident.severity ? incident.severity : 'MEDIUM');
+        const isSimulated = Boolean(normalizedIncident.is_simulated);
 
-        if (status === 'OPEN') {
+        if (!isSimulated && status === 'OPEN') {
             acc.open_incidents += 1;
         }
-        if (severity === 'HIGH') {
+        if (!isSimulated && severity === 'HIGH') {
             acc.high_severity_incidents += 1;
+        }
+        if (isSimulated) {
+            acc.simulated_incidents += 1;
         }
 
         return acc;
     }, {
         open_incidents: 0,
-        high_severity_incidents: 0
+        high_severity_incidents: 0,
+        simulated_incidents: 0
     });
 }
 
@@ -1914,6 +1964,9 @@ function renderIncidentCounters(metrics, shouldAnimate = false) {
         : 0;
     const highSeverity = Number.isFinite(Number(safeMetrics.high_severity_incidents))
         ? Number(safeMetrics.high_severity_incidents)
+        : 0;
+    const simulatedIncidents = Number.isFinite(Number(safeMetrics.simulated_incidents))
+        ? Number(safeMetrics.simulated_incidents)
         : 0;
 
     const setCounter = (id, value) => {
@@ -1931,6 +1984,10 @@ function renderIncidentCounters(metrics, shouldAnimate = false) {
 
     setCounter('security-stat-open-incidents', openIncidents);
     setCounter('security-stat-high-severity-incidents', highSeverity);
+    const simulatedCounter = document.getElementById('security-stat-simulated-incidents');
+    if (simulatedCounter) {
+        simulatedCounter.textContent = Number(simulatedIncidents || 0).toLocaleString();
+    }
 }
 
 function updateIncidentNewBadge() {
@@ -2016,20 +2073,26 @@ async function refreshIncidentOverview(options = {}) {
 
 function normalizeIncidentStatus(status) {
     const normalized = String(status || '').trim().toUpperCase();
-    if (normalized === 'INVESTIGATING' || normalized === 'RESOLVED' || normalized === 'CLOSED') {
+    if (normalized === 'INVESTIGATING' || normalized === 'RESOLVED' || normalized === 'CLOSED' || normalized === 'CLOSED_SIMULATED') {
         return normalized;
     }
     return 'OPEN';
 }
 
-function getIncidentStatusLabel(status) {
+function getIncidentStatusLabel(status, isSimulated) {
     const t = getSecurityCenterTranslations();
     const normalized = normalizeIncidentStatus(status);
+    // When a simulated incident is CLOSED, display "Closed (Simulated)" to
+    // distinguish it visually from a real closed incident.
+    if (normalized === 'CLOSED' && isSimulated) {
+        return t.incident_status_closed_simulated || 'Closed (Simulated)';
+    }
     const keyMap = {
         OPEN: 'incident_status_open',
         INVESTIGATING: 'incident_status_investigating',
         RESOLVED: 'incident_status_resolved',
-        CLOSED: 'incident_status_closed'
+        CLOSED: 'incident_status_closed',
+        CLOSED_SIMULATED: 'incident_status_closed_simulated'
     };
 
     return t[keyMap[normalized]] || normalized;
@@ -2037,7 +2100,8 @@ function getIncidentStatusLabel(status) {
 
 function getIncidentStatusClass(status) {
     const normalized = normalizeIncidentStatus(status).toLowerCase();
-    return `incident-status-${normalized}`;
+    // Map closed_simulated to its own CSS class
+    return `incident-status-${normalized.replace('_', '-')}`;
 }
 
 function isIncidentFalsePositive(value) {
@@ -2165,11 +2229,13 @@ function renderSecurityIncidentsTable(incidents) {
 
     if (items.length === 0) {
         tableBody.innerHTML = `<tr><td colspan="6" class="security-empty-row">${escapeHtml(t.incident_empty)}</td></tr>`;
-        scrollSecurityTableToTop(tableBody);
+        // Only scroll to top when no incident is selected (don't disrupt analyst's view)
+        if (!state.selectedIncident) scrollSecurityTableToTop(tableBody);
         return;
     }
 
     tableBody.innerHTML = items.map((incident) => {
+        const normalizedIncident = normalizeIncidentRecord(incident);
         const incidentId = Number(incident && incident.id);
         const typeLabel = String(incident && incident.type ? incident.type : '-');
         const severity = String(incident && incident.severity ? incident.severity : 'MEDIUM').toUpperCase();
@@ -2184,19 +2250,44 @@ function renderSecurityIncidentsTable(incidents) {
         const selectedIncidentId = Number(state.selectedIncident && state.selectedIncident.id);
         const selectedClass = incidentId === selectedIncidentId ? 'is-selected' : '';
 
+        const sourceBadge = normalizedIncident.is_simulated
+            ? `<span class="incident-source-badge incident-source-simulated">${escapeHtml(t.incident_simulated_badge || 'Simulated')}</span>`
+            : '';
+        const isSimulated = Boolean(normalizedIncident.is_simulated);
+
         return `
             <tr class="security-incident-row ${selectedClass}" data-incident-id="${incidentId}">
                 <td>#${escapeHtml(String(incidentId))}</td>
-                <td>${escapeHtml(typeLabel)}</td>
+                <td>${escapeHtml(typeLabel)} ${sourceBadge}</td>
                 <td><span class="security-severity ${severityClass}">${escapeHtml(severity)}</span></td>
-                <td><span class="incident-status-pill ${statusClass}">${escapeHtml(getIncidentStatusLabel(status))}</span></td>
+                <td><span class="incident-status-pill ${statusClass}">${escapeHtml(getIncidentStatusLabel(status, isSimulated))}</span></td>
                 <td>${renderIncidentFalsePositiveBadge(isFalsePositive)}</td>
                 <td class="security-col-time">${escapeHtml(createdAt)}</td>
             </tr>
         `;
     }).join('');
 
-    scrollSecurityTableToTop(tableBody);
+    // Only scroll to top when no incident is selected — preserve position while analyst is working
+    if (!state.selectedIncident) {
+        scrollSecurityTableToTop(tableBody);
+    } else {
+        // Scroll the selected row into view if it's out of viewport
+        const selectedRow = tableBody.querySelector('tr.is-selected');
+        if (selectedRow && typeof selectedRow.scrollIntoView === 'function') {
+            selectedRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    // Sync bulk-close button disabled state after every table render
+    const bulkCloseBtn = document.getElementById('incident-bulk-close-simulated');
+    if (bulkCloseBtn) {
+        const hasOpenSimulated = Array.isArray(incidents) &&
+            incidents.some(inc => {
+                const norm = normalizeIncidentRecord(inc);
+                return norm.is_simulated && normalizeIncidentStatus(inc.status) === 'OPEN';
+            });
+        bulkCloseBtn.disabled = !hasOpenSimulated;
+    }
 }
 
 function renderSecurityEventViews(events, options = {}) {
@@ -2299,43 +2390,161 @@ function syncIncidentActionButtons(incident) {
     const suspendBtn = document.getElementById('incident-suspend-user-btn');
     const reactivateBtn = document.getElementById('incident-reactivate-user-btn');
     const ignoreBtn = document.getElementById('incident-ignore-btn');
+    const closeBtnLabel = closeBtn ? closeBtn.querySelector('span') : null;
+
+    // Helper: set button state with contextual hint text
+    // Instead of silent disabled, we show WHY the button is unavailable
+    const setBtn = (btn, enabled, hintId, hintText) => {
+        if (!btn) return;
+        btn.disabled = !enabled;
+        btn.classList.toggle('soc-btn-unavailable', !enabled);
+        btn.classList.toggle('soc-btn-active', enabled);
+        const hint = hintId ? document.getElementById(hintId) : null;
+        if (hint) {
+            hint.textContent = enabled ? '' : (hintText || '');
+        }
+        // Native tooltip for accessibility
+        if (!enabled && hintText) {
+            btn.title = hintText;
+        } else {
+            btn.removeAttribute('title');
+        }
+    };
 
     const allButtons = [
-        assignBtn,
-        investigatingBtn,
-        resolveBtn,
-        closeBtn,
-        markFalsePositiveBtn,
-        clearFalsePositiveBtn,
-        saveNotesBtn,
-        blockBtn,
-        suspendBtn,
-        reactivateBtn,
-        ignoreBtn
+        assignBtn, investigatingBtn, resolveBtn, closeBtn,
+        markFalsePositiveBtn, clearFalsePositiveBtn, saveNotesBtn,
+        blockBtn, suspendBtn, reactivateBtn, ignoreBtn
     ].filter(Boolean);
 
     if (!incident) {
-        allButtons.forEach((button) => {
-            button.disabled = true;
+        allButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.classList.remove('soc-btn-active');
+            btn.classList.add('soc-btn-unavailable');
         });
+        if (closeBtnLabel) {
+            closeBtnLabel.textContent = getSecurityCenterTranslations().incident_close_btn || 'Close';
+        }
+        _syncLifecycleBar(null);
         return;
     }
 
     const currentStatus = normalizeIncidentStatus(incident.status);
     const hasActor = Number.isFinite(Number(incident.actor_id)) && Number(incident.actor_id) > 0;
     const falsePositive = isIncidentFalsePositive(incident.is_false_positive);
+    const isSimulated = Boolean(normalizeIncidentRecord(incident).is_simulated);
+    const isClosed = currentStatus === 'CLOSED' || currentStatus === 'RESOLVED';
 
-    if (assignBtn) assignBtn.disabled = false;
-    if (investigatingBtn) investigatingBtn.disabled = currentStatus !== 'OPEN';
-    if (resolveBtn) resolveBtn.disabled = currentStatus !== 'INVESTIGATING';
-    if (closeBtn) closeBtn.disabled = currentStatus !== 'RESOLVED';
-    if (markFalsePositiveBtn) markFalsePositiveBtn.disabled = falsePositive;
-    if (clearFalsePositiveBtn) clearFalsePositiveBtn.disabled = !falsePositive;
-    if (saveNotesBtn) saveNotesBtn.disabled = false;
-    if (blockBtn) blockBtn.disabled = !hasActor;
-    if (suspendBtn) suspendBtn.disabled = !hasActor;
-    if (reactivateBtn) reactivateBtn.disabled = !hasActor;
-    if (ignoreBtn) ignoreBtn.disabled = false;
+    // --- Investigation group ---
+    // Assign: always available (can reassign at any stage)
+    setBtn(assignBtn, true, 'hint-assign', '');
+
+    // Mark Investigating: only from OPEN
+    setBtn(investigatingBtn, currentStatus === 'OPEN',
+        'hint-investigating',
+        currentStatus === 'OPEN' ? '' :
+            currentStatus === 'INVESTIGATING' ? 'Already investigating' :
+                'Must be OPEN to start investigation');
+
+    // Resolve: only from INVESTIGATING
+    setBtn(resolveBtn, currentStatus === 'INVESTIGATING',
+        'hint-resolve',
+        currentStatus === 'RESOLVED' ? 'Already resolved' :
+            currentStatus === 'CLOSED' ? 'Incident is closed' :
+                'Requires status: INVESTIGATING first');
+
+    // Close: only from RESOLVED
+    setBtn(closeBtn, currentStatus === 'RESOLVED',
+        'hint-close',
+        currentStatus === 'CLOSED' ? 'Incident already closed' :
+            'Requires status: RESOLVED first');
+
+    if (closeBtnLabel) {
+        closeBtnLabel.textContent = isSimulated
+            ? (getSecurityCenterTranslations().incident_simulated_review_label || 'Mark as Reviewed (Simulated)')
+            : (getSecurityCenterTranslations().incident_close_btn || 'Close');
+    }
+
+    // --- Analysis group ---
+    // Mark FP: only if not already FP
+    setBtn(markFalsePositiveBtn, !falsePositive,
+        'hint-mark-fp',
+        falsePositive ? 'Already marked as false positive' : '');
+
+    // Clear FP: only if currently FP
+    setBtn(clearFalsePositiveBtn, falsePositive,
+        'hint-clear-fp',
+        !falsePositive ? 'Not marked as false positive' : '');
+
+    // Ignore: always available (idempotent)
+    setBtn(ignoreBtn, true, 'hint-ignore', '');
+
+    // Notes: always available
+    if (saveNotesBtn) {
+        saveNotesBtn.disabled = false;
+        saveNotesBtn.classList.add('soc-btn-active');
+        saveNotesBtn.classList.remove('soc-btn-unavailable');
+    }
+
+    // --- Containment group ---
+    // Suspend / Block: require an actor on the incident
+    setBtn(suspendBtn, hasActor,
+        'hint-suspend',
+        !hasActor ? 'No actor linked to this incident' : '');
+
+    setBtn(blockBtn, hasActor,
+        'hint-block',
+        !hasActor ? 'No actor linked to this incident' : '');
+
+    // Restore: require an actor
+    setBtn(reactivateBtn, hasActor,
+        'hint-reactivate',
+        !hasActor ? 'No actor linked to this incident' : '');
+
+    // Update the lifecycle progress bar
+    _syncLifecycleBar(currentStatus);
+
+    // Reopen: only available when CLOSED
+    const reopenBtn = document.getElementById('incident-reopen-btn');
+    const reopenWrap = document.getElementById('soc-reopen-wrap');
+    const reopenReason = document.getElementById('soc-reopen-reason');
+    if (reopenBtn) {
+        const canReopen = currentStatus === 'CLOSED';
+        setBtn(reopenBtn, canReopen, 'hint-reopen',
+            !canReopen ? 'Only available for CLOSED incidents' : '');
+        // Collapse the reason form whenever the incident changes
+        if (reopenReason) reopenReason.classList.remove('is-open');
+        if (reopenWrap) reopenWrap.style.display = canReopen ? '' : 'none';
+    }
+}
+
+// Update the SOC lifecycle progress bar to highlight current stage
+function _syncLifecycleBar(currentStatus) {
+    const bar = document.getElementById('soc-lifecycle-bar');
+    if (!bar) return;
+
+    const order = ['OPEN', 'INVESTIGATING', 'RESOLVED', 'CLOSED'];
+    const currentIndex = currentStatus ? order.indexOf(currentStatus) : -1;
+
+    bar.querySelectorAll('.soc-lifecycle-step').forEach((step) => {
+        const stepStatus = step.dataset.step;
+        const stepIndex = order.indexOf(stepStatus);
+        step.classList.remove('is-done', 'is-active', 'is-pending');
+        if (currentIndex < 0) {
+            step.classList.add('is-pending');
+        } else if (stepIndex < currentIndex) {
+            step.classList.add('is-done');
+        } else if (stepIndex === currentIndex) {
+            step.classList.add('is-active');
+        } else {
+            step.classList.add('is-pending');
+        }
+    });
+
+    bar.querySelectorAll('.soc-lifecycle-connector').forEach((conn, i) => {
+        conn.classList.toggle('is-done', i < currentIndex);
+    });
 }
 
 function getIncidentLogResult(entry) {
@@ -2389,44 +2598,71 @@ function renderIncidentTimeline(logs) {
 
     const items = Array.isArray(logs) ? logs : [];
     if (items.length === 0) {
-        timeline.innerHTML = `<li class="incident-timeline-empty">${escapeHtml(t.incident_timeline_empty)}</li>`;
+        timeline.innerHTML = `<li class="incident-timeline-empty"><i class="fas fa-clock-rotate-left" style="margin-right:6px;opacity:0.4;"></i>${escapeHtml(t.incident_timeline_empty)}</li>`;
         return;
     }
 
+    // Sort oldest → newest so the timeline reads top-to-bottom chronologically
     const orderedItems = [...items].sort((a, b) => {
         const left = Date.parse(a && a.created_at ? a.created_at : '');
         const right = Date.parse(b && b.created_at ? b.created_at : '');
-        const leftValue = Number.isFinite(left) ? left : 0;
-        const rightValue = Number.isFinite(right) ? right : 0;
-        return leftValue - rightValue;
+        return (Number.isFinite(left) ? left : 0) - (Number.isFinite(right) ? right : 0);
     });
 
-    timeline.innerHTML = orderedItems.map((entry) => {
+    timeline.innerHTML = orderedItems.map((entry, index) => {
         const action = String(entry && entry.event_type ? entry.event_type : 'LOG').toUpperCase();
         const timestamp = formatLocaleDateTime(entry && entry.created_at ? entry.created_at : null);
+        const actor = String(entry && entry.actor_username ? entry.actor_username : 'system');
+        const message = String(entry && entry.message ? entry.message : '');
         const result = getIncidentLogResult(entry);
         const resultClass = result === 'FAILED' ? 'failed' : 'success';
-        const resultLabel = getIncidentLogResultLabel(result);
-        const metadataText = formatIncidentLogMetadata(entry);
+        const resultIcon = result === 'FAILED' ? 'fa-circle-xmark' : 'fa-circle-check';
+        const resultLabel = getIncidentLogResultLabel(entry);
+
+        // Format metadata: pretty-print JSON, hide empty/trivial fields
+        const rawMeta = entry && typeof entry.extra_metadata === 'object' && entry.extra_metadata
+            ? { ...entry.extra_metadata }
+            : {};
+        // Remove internal result key — already shown in the Result badge
+        delete rawMeta.result;
+        const metaKeys = Object.keys(rawMeta);
+        const hasMetadata = metaKeys.length > 0;
+        const metadataText = hasMetadata
+            ? JSON.stringify(rawMeta, null, 2)
+            : null;
+
+        // Entry number badge (newest gets highest number)
+        const entryNum = index + 1;
 
         return `
-            <li class="incident-timeline-item">
+            <li class="incident-timeline-item" data-event-type="${escapeHtml(action)}">
                 <div class="incident-timeline-field">
-                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_timestamp || 'Timestamp')}</span>
+                    <span class="incident-timeline-label">&#35;${entryNum} &nbsp;Timestamp</span>
                     <span class="incident-timeline-value">${escapeHtml(timestamp)}</span>
                 </div>
                 <div class="incident-timeline-field">
-                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_action || 'Action')}</span>
+                    <span class="incident-timeline-label">Event</span>
                     <span class="incident-timeline-value incident-timeline-action">${escapeHtml(action)}</span>
                 </div>
                 <div class="incident-timeline-field">
-                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_result || 'Result')}</span>
-                    <span class="incident-log-result-badge ${resultClass}">${escapeHtml(resultLabel)}</span>
+                    <span class="incident-timeline-label">Result</span>
+                    <span class="incident-log-result-badge ${resultClass}">
+                        <i class="fas ${resultIcon}"></i>
+                        ${escapeHtml(resultLabel)}
+                    </span>
                 </div>
                 <div class="incident-timeline-field incident-timeline-field-wide">
-                    <span class="incident-timeline-label">${escapeHtml(t.incident_timeline_metadata || 'Metadata')}</span>
-                    <pre class="incident-timeline-metadata">${escapeHtml(metadataText)}</pre>
+                    <span class="incident-timeline-label">Actor &nbsp;/&nbsp; Message</span>
+                    <span class="incident-timeline-value">
+                        <span class="timeline-actor-chip">${escapeHtml(actor)}</span>
+                        ${message ? `<span class="timeline-message-text">${escapeHtml(message)}</span>` : ''}
+                    </span>
                 </div>
+                ${hasMetadata ? `
+                <div class="incident-timeline-field incident-timeline-field-wide">
+                    <span class="incident-timeline-label">Metadata</span>
+                    <pre class="incident-timeline-metadata">${escapeHtml(metadataText)}</pre>
+                </div>` : ''}
             </li>
         `;
     }).join('');
@@ -2461,7 +2697,8 @@ function renderIncidentDetails(incident) {
         detailsSeverity.innerHTML = `<span class="security-severity ${severityClass}">${escapeHtml(severity)}</span>`;
     }
     if (detailsStatus) {
-        detailsStatus.innerHTML = `<span class="incident-status-pill ${statusClass}">${escapeHtml(getIncidentStatusLabel(status))}</span>`;
+        const isSimulatedIncident = Boolean(normalizeIncidentRecord(incident).is_simulated);
+        detailsStatus.innerHTML = `<span class="incident-status-pill ${statusClass}">${escapeHtml(getIncidentStatusLabel(status, isSimulatedIncident))}</span>`;
     }
     if (detailsFalsePositive) {
         detailsFalsePositive.innerHTML = renderIncidentFalsePositiveBadge(falsePositive);
@@ -2539,6 +2776,7 @@ async function loadSecurityIncidents(options = {}) {
     const statusFilter = document.getElementById('incident-filter-status');
     const severityFilter = document.getElementById('incident-filter-severity');
     const falsePositiveFilter = document.getElementById('incident-filter-false-positive');
+    const sourceFilter = document.getElementById('incident-filter-source');
     const query = new URLSearchParams();
 
     if (statusFilter && statusFilter.value) {
@@ -2557,9 +2795,17 @@ async function loadSecurityIncidents(options = {}) {
     const queryString = query.toString();
     const endpoint = queryString ? `/incidents?${queryString}` : '/incidents';
     const incidents = await api.get(endpoint);
-    const filtered = filterSimulationPayload([], incidents);
+    const normalizedIncidents = (Array.isArray(incidents) ? incidents : []).map(normalizeIncidentRecord);
+    const filtered = filterSimulationPayload([], normalizedIncidents);
 
-    state.securityIncidents = Array.isArray(filtered.incidents) ? filtered.incidents : [];
+    const incidentsAfterReset = Array.isArray(filtered.incidents) ? filtered.incidents : [];
+    state.securityIncidents = incidentsAfterReset.filter((incident) => {
+        const source = getIncidentSource(incident);
+        if (!sourceFilter || sourceFilter.value === '') return true;
+        if (sourceFilter.value === 'real') return source === 'real';
+        if (sourceFilter.value === 'simulation') return source === 'simulation';
+        return true;
+    });
     renderSecurityIncidentsTable(state.securityIncidents);
 
     if (!keepSelected) {
@@ -2593,6 +2839,7 @@ function setupIncidentFilters() {
     const statusFilter = document.getElementById('incident-filter-status');
     const severityFilter = document.getElementById('incident-filter-severity');
     const falsePositiveFilter = document.getElementById('incident-filter-false-positive');
+    const sourceFilter = document.getElementById('incident-filter-source');
     const refreshBtn = document.getElementById('incident-filter-refresh');
     const refreshBtnIcon = refreshBtn ? refreshBtn.querySelector('i') : null;
     const defaultRefreshIconClass = refreshBtnIcon ? refreshBtnIcon.className : '';
@@ -2675,8 +2922,107 @@ function setupIncidentFilters() {
     if (falsePositiveFilter) {
         falsePositiveFilter.onchange = () => runLoad();
     }
+    if (sourceFilter) {
+        sourceFilter.onchange = () => runLoad();
+    }
     if (refreshBtn) {
         refreshBtn.onclick = () => runLoad({ triggeredByButton: true, forceRefresh: true });
+    }
+
+    // Bulk action: mark all open simulated incidents as reviewed (CLOSED)
+    const bulkCloseBtn = document.getElementById('incident-bulk-close-simulated');
+    if (bulkCloseBtn) {
+        const updateBulkBtnState = () => {
+            const hasOpenSimulated = Array.isArray(state.securityIncidents) &&
+                state.securityIncidents.some(inc => {
+                    const norm = normalizeIncidentRecord(inc);
+                    return norm.is_simulated && normalizeIncidentStatus(inc.status) === 'OPEN';
+                });
+            bulkCloseBtn.disabled = !hasOpenSimulated;
+        };
+
+        // Update button state whenever incidents change
+        const origRunLoad = runLoad;
+        // Patch runLoad to also refresh button state after load
+        const patchedRunLoad = async (options = {}) => {
+            await origRunLoad(options);
+            updateBulkBtnState();
+        };
+        if (statusFilter) statusFilter.onchange = () => patchedRunLoad();
+        if (severityFilter) severityFilter.onchange = () => patchedRunLoad();
+        if (falsePositiveFilter) falsePositiveFilter.onchange = () => patchedRunLoad();
+        if (sourceFilter) sourceFilter.onchange = () => patchedRunLoad();
+        if (refreshBtn) refreshBtn.onclick = () => patchedRunLoad({ triggeredByButton: true, forceRefresh: true });
+
+        updateBulkBtnState();
+
+        bulkCloseBtn.onclick = async () => {
+            const t = getSecurityCenterTranslations();
+            const confirmed = window.confirm(
+                'Mark all simulated incidents as reviewed? This will close all simulation-generated incidents.'
+            );
+            if (!confirmed) return;
+
+            const openSimulated = Array.isArray(state.securityIncidents)
+                ? state.securityIncidents.filter(inc => {
+                    const norm = normalizeIncidentRecord(inc);
+                    return norm.is_simulated && normalizeIncidentStatus(inc.status) === 'OPEN';
+                })
+                : [];
+
+            if (openSimulated.length === 0) {
+                bulkCloseBtn.disabled = true;
+                return;
+            }
+
+            // Add loading animation
+            bulkCloseBtn.disabled = true;
+            bulkCloseBtn.classList.add('is-loading');
+            const originalText = bulkCloseBtn.querySelector('span').textContent;
+            bulkCloseBtn.querySelector('span').textContent = 'Processing...';
+            const bulkIcon = bulkCloseBtn.querySelector('i');
+            const originalIconClass = bulkIcon ? bulkIcon.className : '';
+            if (bulkIcon) bulkIcon.className = 'fas fa-spinner';
+
+            try {
+                // Sequential transitions: OPEN → INVESTIGATING → RESOLVED → CLOSED
+                // Backend enforces strict lifecycle, so we must follow the chain
+                for (const inc of openSimulated) {
+                    try {
+                        // Step 1: OPEN → INVESTIGATING
+                        await api.patch(`/incidents/${inc.id}`, { status: 'INVESTIGATING' });
+                        // Step 2: INVESTIGATING → RESOLVED
+                        await api.patch(`/incidents/${inc.id}`, { status: 'RESOLVED' });
+                        // Step 3: RESOLVED → CLOSED
+                        await api.patch(`/incidents/${inc.id}`, { status: 'CLOSED' });
+                    } catch (error) {
+                        console.error(`Failed to close incident ${inc.id}:`, error);
+                        // Continue with remaining incidents even if one fails
+                    }
+                }
+
+                showNotification(
+                    t.incident_simulated_bulk_review_success || 'Simulated incidents marked as reviewed',
+                    'success'
+                );
+
+                // Reload incidents to reflect backend state
+                await loadSecurityIncidents({
+                    keepSelected: false,
+                    forceRefresh: true,
+                    refreshOverview: true,
+                    announceNew: false,
+                });
+            } catch (error) {
+                console.error('Bulk close simulated error:', error);
+                showNotification('Failed to close some incidents', 'error');
+            } finally {
+                bulkCloseBtn.classList.remove('is-loading');
+                bulkCloseBtn.querySelector('span').textContent = originalText;
+                if (bulkIcon) bulkIcon.className = originalIconClass;
+                updateBulkBtnState();
+            }
+        };
     }
 
     setupIncidentBackToEventsFloatingButton();
@@ -2867,10 +3213,18 @@ function setupIncidentActionHandlers() {
 
     if (closeBtn) {
         closeBtn.onclick = async () => {
+            const selectedIncidentId = getSelectedIncidentId();
+            const selectedIncident = Array.isArray(state.securityIncidents)
+                ? state.securityIncidents.find((item) => Number(item && item.id) === Number(selectedIncidentId))
+                : null;
+            const isSimulated = Boolean(selectedIncident && normalizeIncidentRecord(selectedIncident).is_simulated);
             await runAction(
                 (incidentId) => api.patch(`/incidents/${incidentId}`, { status: 'CLOSED' }),
                 t.incident_action_status_success
             );
+            if (isSimulated) {
+                console.info('Simulated incidents marked as reviewed');
+            }
         };
     }
 
@@ -2978,6 +3332,47 @@ function setupIncidentActionHandlers() {
                     metadata: { reason }
                 }),
                 t.incident_false_positive_marked
+            );
+        };
+    }
+
+    // Reopen: CLOSED → OPEN with mandatory reason via inline expand form
+    const reopenBtn = document.getElementById('incident-reopen-btn');
+    const reopenConfirmBtn = document.getElementById('incident-reopen-confirm-btn');
+    const reopenCancelBtn = document.getElementById('incident-reopen-cancel-btn');
+    const reopenReasonInput = document.getElementById('incident-reopen-reason-input');
+    const reopenReasonForm = document.getElementById('soc-reopen-reason');
+
+    if (reopenBtn && reopenReasonForm) {
+        // First click: expand the reason form
+        reopenBtn.onclick = () => {
+            reopenReasonForm.classList.add('is-open');
+            if (reopenReasonInput) {
+                reopenReasonInput.value = '';
+                reopenReasonInput.focus();
+            }
+        };
+    }
+
+    if (reopenCancelBtn && reopenReasonForm) {
+        reopenCancelBtn.onclick = () => {
+            reopenReasonForm.classList.remove('is-open');
+            if (reopenReasonInput) reopenReasonInput.value = '';
+        };
+    }
+
+    if (reopenConfirmBtn) {
+        reopenConfirmBtn.onclick = async () => {
+            const reason = String(reopenReasonInput ? reopenReasonInput.value : '').trim();
+            if (reason.length < 3) {
+                showNotification('Reason is required to reopen (min 3 characters)', 'warning');
+                if (reopenReasonInput) reopenReasonInput.focus();
+                return;
+            }
+            if (reopenReasonForm) reopenReasonForm.classList.remove('is-open');
+            await runAction(
+                (incidentId) => api.post(`/incidents/${incidentId}/reopen`, { reason }),
+                'Incident reopened successfully'
             );
         };
     }
@@ -3224,7 +3619,7 @@ function setupSecuritySimulationAction() {
                 resetIcon.className = defaultResetIconClass;
             }
             if (resetLabel) {
-                resetLabel.textContent = t.security_simulation_reset_btn || 'Reset Simulation View';
+                resetLabel.textContent = t.security_simulation_reset_btn || 'Clear Simulation Feed';
             }
         }
     };
@@ -4998,11 +5393,20 @@ function autoResizeTextarea(textarea) {
     textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
 }
 
+// Post-rebase fix: removed duplicate nested function definition and
+// moved handleFiles out to module scope so it's accessible everywhere.
 function setupUploadZone(projectId) {
     const zone = document.getElementById('upload-zone');
     const input = document.getElementById('file-input');
+    if (!zone || !input) return;
 
-    zone.onclick = () => input.click();
+    // Reset input value before opening picker so the same file can be re-selected
+    // (browser won't fire 'change' if the same file is chosen again without this reset)
+    zone.onclick = (e) => {
+        if (e.target === input) return; // avoid double-trigger when clicking the hidden input directly
+        input.value = '';
+        input.click();
+    };
 
     zone.ondragover = (e) => {
         e.preventDefault();
@@ -5017,140 +5421,190 @@ function setupUploadZone(projectId) {
         handleFiles(e.dataTransfer.files, projectId);
     };
 
-    input.onchange = () => handleFiles(input.files, projectId);
+    // 'change' always fires because we reset value='' before each open
+    input.onchange = () => {
+        if (!input.files || input.files.length === 0) return;
+        handleFiles(input.files, projectId);
+        input.value = ''; // reset so the same file can be re-uploaded later
+    };
 }
 
 async function handleFiles(files, projectId) {
+    // Guard: prevent concurrent upload sessions
+    if (state.isUploading) {
+        showNotification(
+            state.lang === 'ar'
+                ? 'يوجد رفع جارٍ بالفعل، انتظر حتى ينتهي'
+                : 'Upload already in progress, please wait',
+            'warning'
+        );
+        return;
+    }
+
+    const fileList = Array.from(files || []);
+    if (fileList.length === 0) return;
+
+    // Client-side type filter before hitting the server
+    const supported = ['.pdf', '.txt', '.docx'];
+    const validFiles = fileList.filter(file => {
+        const lower = file.name.toLowerCase();
+        const ok = supported.some(ext => lower.endsWith(ext));
+        if (!ok) {
+            showNotification(
+                state.lang === 'ar'
+                    ? `نوع الملف غير مدعوم: ${file.name}`
+                    : `Unsupported file type: ${file.name}`,
+                'warning'
+            );
+        }
+        return ok;
+    });
+
+    if (validFiles.length === 0) return;
+
+    // Non-blocking worker health warning
     try {
         const health = await api.get('/health');
         if (health && health.celery_worker !== 'connected') {
             showNotification(
                 state.lang === 'ar'
-                    ? 'تنبيه: خدمة المعالجة قد تكون غير متصلة حاليًا. سيتم رفع الملف، لكن قد تتأخر المعالجة.'
-                    : 'Warning: processing service may be offline. File upload will continue, but processing may be delayed.',
+                    ? 'تنبيه: خدمة المعالجة قد تكون غير متصلة. سيتم الرفع لكن قد تتأخر المعالجة.'
+                    : 'Warning: processing service may be offline. Upload will continue but processing may be delayed.',
                 'warning'
             );
         }
     } catch (_) {
-        // If health check fails, proceed and let upload endpoint report specific errors.
+        // Health check failure is non-fatal — proceed with upload
     }
 
-    for (const file of files) {
-        const lowerName = file.name.toLowerCase();
-        if (!lowerName.endsWith('.pdf') && !lowerName.endsWith('.txt') && !lowerName.endsWith('.docx')) {
-            showNotification(
-                state.lang === 'ar'
-                    ? 'نوع الملف غير مدعوم. الملفات المدعومة: PDF, TXT, DOCX'
-                    : 'Unsupported file type. Supported: PDF, TXT, DOCX',
-                'warning'
-            );
-            continue;
-        }
+    state.isUploading = true;
+
+    // Visual feedback on the upload zone while uploading
+    const zone = document.getElementById('upload-zone');
+    if (zone) zone.classList.add('is-uploading');
+
+    let successCount = 0;
+
+    for (const file of validFiles) {
         const formData = new FormData();
         formData.append('file', file);
 
-        showNotification(`${state.lang === 'ar' ? 'جاري رفع' : 'Uploading'} ${file.name}...`, 'info');
+        showNotification(
+            `${state.lang === 'ar' ? 'جاري رفع' : 'Uploading'} ${file.name}…`,
+            'info'
+        );
 
-        try {
-            await api.post(`/projects/${projectId}/documents`, formData, true);
-            showNotification(`${state.lang === 'ar' ? 'تم رفع' : 'Uploaded'} ${file.name}`, 'success');
-            switchView('projectDetail', projectId); // Refresh list
-        } catch (error) {
-            console.error('Upload Error:', error);
+        // One automatic retry on transient network failure
+        let lastError = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                await api.post(`/projects/${projectId}/documents`, formData, true);
+                showNotification(
+                    `${state.lang === 'ar' ? 'تم رفع' : 'Uploaded'} ${file.name}`,
+                    'success'
+                );
+                successCount++;
+                lastError = null;
+                break;
+            } catch (error) {
+                lastError = error;
+                const isNetwork = error instanceof TypeError ||
+                    String(error && error.message || '').toLowerCase().includes('failed to fetch');
+                if (isNetwork && attempt === 0) {
+                    // Brief pause then re-resolve API base URL before retry
+                    await new Promise(r => setTimeout(r, 1200));
+                    await resolveApiBaseUrl(1);
+                    continue;
+                }
+                break; // non-network error or second attempt — stop retrying
+            }
         }
+
+        if (lastError) {
+            console.error('Upload failed:', file.name, lastError);
+            // Error notification already shown by api.post — no duplicate needed
+        }
+    }
+
+    state.isUploading = false;
+    if (zone) zone.classList.remove('is-uploading');
+
+    // Refresh the document list once after all uploads complete
+    if (successCount > 0) {
+        switchView('projectDetail', projectId);
     }
 }
+        });
 
-// --- Initialization ---
+// New Project Click
+elements.newProjectBtn.onclick = handleNewProject;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    const authToken = getAccessToken();
-    if (!authToken) {
-        redirectToLogin();
-        return;
-    }
-    if (isTokenExpired(authToken)) {
-        clearAuthAndRedirect('expired');
-        return;
-    }
+// Close Modal
+elements.closeModalBtn.onclick = () => elements.modalOverlay.classList.add('hidden');
+elements.modalOverlay.onclick = (e) => {
+    if (e.target === elements.modalOverlay) elements.modalOverlay.classList.add('hidden');
+};
 
-    // Nav Clicks
-    elements.navItems.forEach(item => {
-        item.onclick = () => {
-            closeMobileSidebar();
-            switchView(item.dataset.view);
-        };
-    });
+// Theme & Lang
+elements.themeToggle.onclick = toggleTheme;
+elements.langToggle.onclick = toggleLang;
+if (elements.logoutBtn) {
+    elements.logoutBtn.onclick = logoutUser;
+}
 
-    // New Project Click
-    elements.newProjectBtn.onclick = handleNewProject;
-
-    // Close Modal
-    elements.closeModalBtn.onclick = () => elements.modalOverlay.classList.add('hidden');
-    elements.modalOverlay.onclick = (e) => {
-        if (e.target === elements.modalOverlay) elements.modalOverlay.classList.add('hidden');
+// Search Bar
+const searchInput = document.querySelector('.search-bar input');
+let searchTimeout;
+if (searchInput) {
+    searchInput.oninput = () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => handleSearch(searchInput.value), 300);
     };
+    searchInput.onkeydown = (e) => {
+        if (e.key === 'Escape') {
+            searchInput.value = '';
+            handleSearch('');
+            searchInput.blur();
+        }
+    };
+}
 
-    // Theme & Lang
-    elements.themeToggle.onclick = toggleTheme;
-    elements.langToggle.onclick = toggleLang;
-    if (elements.logoutBtn) {
-        elements.logoutBtn.onclick = logoutUser;
+// Mobile Hamburger
+const hamburger = document.getElementById('mobile-hamburger');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+if (hamburger) hamburger.onclick = openMobileSidebar;
+if (sidebarOverlay) sidebarOverlay.onclick = closeMobileSidebar;
+
+// Keyboard Shortcut: Ctrl+K to focus search
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (searchInput) searchInput.focus();
     }
-
-    // Search Bar
-    const searchInput = document.querySelector('.search-bar input');
-    let searchTimeout;
-    if (searchInput) {
-        searchInput.oninput = () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => handleSearch(searchInput.value), 300);
-        };
-        searchInput.onkeydown = (e) => {
-            if (e.key === 'Escape') {
-                searchInput.value = '';
-                handleSearch('');
-                searchInput.blur();
-            }
-        };
-    }
-
-    // Mobile Hamburger
-    const hamburger = document.getElementById('mobile-hamburger');
-    const sidebarOverlay = document.getElementById('sidebar-overlay');
-    if (hamburger) hamburger.onclick = openMobileSidebar;
-    if (sidebarOverlay) sidebarOverlay.onclick = closeMobileSidebar;
-
-    // Keyboard Shortcut: Ctrl+K to focus search
-    document.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            if (searchInput) searchInput.focus();
-        }
-    });
-
-    // Init State
-    applyTheme(state.theme);
-
-    // Initial View
-    applyTranslations();
-    // Render immediately; API discovery and user hydration continue in the background.
-    switchView('dashboard');
-
-    void (async () => {
-        const apiReady = await resolveApiBaseUrl(1);
-        if (!apiReady) {
-            showNotification(state.lang === 'ar' ? 'يجري الاتصال بالخادم في الخلفية...' : 'Connecting to backend in the background...', 'info');
-            const recovered = await resolveApiBaseUrl(1);
-            if (!recovered) {
-                return;
-            }
-        }
-
-        try {
-            await getCurrentUser();
-        } catch (error) {
-            console.error('Current user load error:', error);
-        }
-    })();
 });
+
+// Init State
+applyTheme(state.theme);
+
+// Initial View
+applyTranslations();
+// Render immediately; API discovery and user hydration continue in the background.
+switchView('dashboard');
+
+void (async () => {
+    const apiReady = await resolveApiBaseUrl(1);
+    if (!apiReady) {
+        showNotification(state.lang === 'ar' ? 'يجري الاتصال بالخادم في الخلفية...' : 'Connecting to backend in the background...', 'info');
+        const recovered = await resolveApiBaseUrl(1);
+        if (!recovered) {
+            return;
+        }
+    }
+
+    try {
+        await getCurrentUser();
+    } catch (error) {
+        console.error('Current user load error:', error);
+    }
+})();
+    });

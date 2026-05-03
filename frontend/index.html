@@ -173,15 +173,18 @@
                 <div class="security-header card">
                     <div class="card-body security-header-body">
                         <div class="security-header-left">
-                            <h1 class="view-title security-title" data-i18n="security_section_title">Security Center</h1>
+                            <h1 class="view-title security-title" data-i18n="security_section_title">Security Center
+                            </h1>
                         </div>
                         <div class="security-header-actions">
                             <div class="security-simulation-controls" role="group" aria-label="Simulation Controls">
-                                <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn" type="button">
+                                <button id="security-simulate-btn" class="btn btn-primary security-simulate-btn"
+                                    type="button">
                                     <i class="fas fa-radiation"></i>
                                     <span data-i18n="security_simulate_btn">Start Attack Simulation</span>
                                 </button>
-                                <button id="security-reset-sim-btn" class="btn security-header-btn security-reset-sim-btn" type="button">
+                                <button id="security-reset-sim-btn"
+                                    class="btn security-header-btn security-reset-sim-btn" type="button">
                                     <i class="fas fa-rotate-left"></i>
                                     <span data-i18n="security_simulation_reset_btn">Reset Simulation View</span>
                                 </button>
@@ -220,7 +223,8 @@
                             <div class="stat-card security-stat-card">
                                 <div class="icon"><i class="fas fa-bolt"></i></div>
                                 <div class="info">
-                                    <span class="label" data-i18n="security_brute_force_alerts">Brute Force Alerts</span>
+                                    <span class="label" data-i18n="security_brute_force_alerts">Brute Force
+                                        Alerts</span>
                                     <span class="value" id="security-stat-brute-force">0</span>
                                 </div>
                             </div>
@@ -234,8 +238,17 @@
                             <div class="stat-card security-stat-card">
                                 <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
                                 <div class="info">
-                                    <span class="label" data-i18n="security_high_severity_incidents">High Severity Incidents</span>
+                                    <span class="label" data-i18n="security_high_severity_incidents">High Severity
+                                        Incidents</span>
                                     <span class="value" id="security-stat-high-severity-incidents">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card security-stat-card">
+                                <div class="icon"><i class="fas fa-flask"></i></div>
+                                <div class="info">
+                                    <span class="label" data-i18n="security_simulated_incidents">Simulated
+                                        Incidents</span>
+                                    <span class="value" id="security-stat-simulated-incidents">0</span>
                                 </div>
                             </div>
                             <div class="stat-card security-stat-card">
@@ -284,20 +297,26 @@
                             <div class="card-body">
                                 <div class="events-feed-layout">
                                     <div class="events-feed-controls">
-                                        <button id="security-events-export-btn" class="btn security-header-btn" type="button">
+                                        <button id="security-events-export-btn" class="btn security-header-btn"
+                                            type="button">
                                             <i class="fas fa-file-arrow-down"></i>
                                             <span>Export Logs</span>
                                         </button>
-                                        <button id="security-events-refresh-btn" class="btn security-header-btn security-events-refresh-btn" type="button" aria-label="Refresh events feed" title="Refresh">
+                                        <button id="security-events-refresh-btn"
+                                            class="btn security-header-btn security-events-refresh-btn" type="button"
+                                            aria-label="Refresh events feed" title="Refresh">
                                             <i class="fas fa-arrows-rotate"></i>
                                         </button>
-                                        <span id="security-events-last-updated" class="security-refresh-meta">Last updated: just now</span>
+                                        <span id="security-events-last-updated" class="security-refresh-meta">Last
+                                            updated: just now</span>
                                     </div>
 
                                     <div class="security-live-feed" id="security-live-feed">
-                                        <div class="security-live-feed-title" data-i18n="security_live_feed_title">Live Feed</div>
+                                        <div class="security-live-feed-title" data-i18n="security_live_feed_title">Live
+                                            Feed</div>
                                         <ul id="security-live-feed-list">
-                                            <li class="security-live-feed-empty" data-i18n="security_live_feed_empty">No live events right now</li>
+                                            <li class="security-live-feed-empty" data-i18n="security_live_feed_empty">No
+                                                live events right now</li>
                                         </ul>
                                     </div>
 
@@ -314,7 +333,8 @@
                                             </thead>
                                             <tbody id="security-events-body">
                                                 <tr>
-                                                    <td colspan="5" class="security-empty-row" data-i18n="security_events_empty">No security events yet</td>
+                                                    <td colspan="5" class="security-empty-row"
+                                                        data-i18n="security_events_empty">No security events yet</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -329,49 +349,75 @@
                             <div class="card-header">
                                 <div class="section-header security-events-header">
                                     <h3 data-i18n="security_incidents_title">Incidents</h3>
-                                    <div id="incidents-filter-panel" class="security-incidents-filters incidents-filter-panel">
+                                    <div id="incidents-filter-panel"
+                                        class="security-incidents-filters incidents-filter-panel">
                                         <div class="filter-header-actions">
-                                            <button
-                                                id="incident-filter-toggle"
-                                                class="filter-toggle-header"
-                                                type="button"
-                                                aria-expanded="false"
-                                                aria-controls="incident-filter-content"
-                                            >
-                                                <span id="incident-filter-toggle-arrow" class="filter-toggle-arrow">&#9654;</span>
+                                            <button id="incident-filter-toggle" class="filter-toggle-header"
+                                                type="button" aria-expanded="false"
+                                                aria-controls="incident-filter-content">
+                                                <span id="incident-filter-toggle-arrow"
+                                                    class="filter-toggle-arrow">&#9654;</span>
                                                 <span class="filter-toggle-label">Filters</span>
                                             </button>
-                                            <button id="incident-filter-refresh" class="btn btn-primary security-filter-refresh" type="button">
+                                            <button id="incident-filter-refresh"
+                                                class="btn btn-primary security-filter-refresh" type="button">
                                                 <i class="fas fa-arrows-rotate"></i>
                                                 <span data-i18n="incident_refresh_btn">Refresh</span>
                                             </button>
                                         </div>
                                         <div id="incident-filter-content" class="filter-content is-collapsed">
                                             <div class="filter-row">
-                                                <label class="filter-row-label" for="incident-filter-status">Status:</label>
-                                                <select id="incident-filter-status" class="form-control security-filter-select">
-                                                    <option value="" data-i18n="incident_filter_all_status">All Status</option>
+                                                <label class="filter-row-label"
+                                                    for="incident-filter-status">Status:</label>
+                                                <select id="incident-filter-status"
+                                                    class="form-control security-filter-select">
+                                                    <option value="" data-i18n="incident_filter_all_status">All Status
+                                                    </option>
                                                     <option value="OPEN" data-i18n="incident_status_open">OPEN</option>
-                                                    <option value="INVESTIGATING" data-i18n="incident_status_investigating">INVESTIGATING</option>
-                                                    <option value="RESOLVED" data-i18n="incident_status_resolved">RESOLVED</option>
-                                                    <option value="CLOSED" data-i18n="incident_status_closed">CLOSED</option>
+                                                    <option value="INVESTIGATING"
+                                                        data-i18n="incident_status_investigating">INVESTIGATING</option>
+                                                    <option value="RESOLVED" data-i18n="incident_status_resolved">
+                                                        RESOLVED</option>
+                                                    <option value="CLOSED" data-i18n="incident_status_closed">CLOSED
+                                                    </option>
                                                 </select>
                                             </div>
                                             <div class="filter-row">
-                                                <label class="filter-row-label" for="incident-filter-severity">Severity:</label>
-                                                <select id="incident-filter-severity" class="form-control security-filter-select">
-                                                    <option value="" data-i18n="incident_filter_all_severity">All Severity</option>
+                                                <label class="filter-row-label"
+                                                    for="incident-filter-severity">Severity:</label>
+                                                <select id="incident-filter-severity"
+                                                    class="form-control security-filter-select">
+                                                    <option value="" data-i18n="incident_filter_all_severity">All
+                                                        Severity</option>
                                                     <option value="LOW">LOW</option>
                                                     <option value="MEDIUM">MEDIUM</option>
                                                     <option value="HIGH">HIGH</option>
                                                 </select>
                                             </div>
                                             <div class="filter-row">
-                                                <label class="filter-row-label" for="incident-filter-false-positive">Other:</label>
-                                                <select id="incident-filter-false-positive" class="form-control security-filter-select">
+                                                <label class="filter-row-label"
+                                                    for="incident-filter-source">Source:</label>
+                                                <select id="incident-filter-source"
+                                                    class="form-control security-filter-select">
+                                                    <option value="" data-i18n="incident_filter_source_all">Show All
+                                                    </option>
+                                                    <option value="real" data-i18n="incident_filter_source_real">Show
+                                                        Real Only</option>
+                                                    <option value="simulation"
+                                                        data-i18n="incident_filter_source_simulated">Show Simulated Only
+                                                    </option>
+                                                </select>
+                                            </div>
+                                            <div class="filter-row">
+                                                <label class="filter-row-label"
+                                                    for="incident-filter-false-positive">Other:</label>
+                                                <select id="incident-filter-false-positive"
+                                                    class="form-control security-filter-select">
                                                     <option value="" data-i18n="incident_filter_fp_all">All</option>
-                                                    <option value="false" data-i18n="incident_filter_fp_false">False</option>
-                                                    <option value="true" data-i18n="incident_filter_fp_true">True</option>
+                                                    <option value="false" data-i18n="incident_filter_fp_false">False
+                                                    </option>
+                                                    <option value="true" data-i18n="incident_filter_fp_true">True
+                                                    </option>
                                                 </select>
                                             </div>
                                         </div>
@@ -379,6 +425,15 @@
                                 </div>
                             </div>
                             <div class="card-body">
+                                <!-- Bulk action: close all open simulated incidents -->
+                                <div class="incidents-bulk-actions">
+                                    <button id="incident-bulk-close-simulated" type="button"
+                                        class="btn btn-secondary incidents-bulk-btn" disabled>
+                                        <i class="fas fa-check-double"></i>
+                                        <span data-i18n="incident_simulated_bulk_review_btn">Mark all simulated as
+                                            reviewed</span>
+                                    </button>
+                                </div>
                                 <div class="security-events-table-wrap">
                                     <table class="security-events-table security-incidents-table">
                                         <thead>
@@ -393,7 +448,8 @@
                                         </thead>
                                         <tbody id="security-incidents-body">
                                             <tr>
-                                                <td colspan="6" class="security-empty-row" data-i18n="incident_empty">No incidents yet</td>
+                                                <td colspan="6" class="security-empty-row" data-i18n="incident_empty">No
+                                                    incidents yet</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -404,129 +460,253 @@
                         <div id="incident-details-panel" class="incident-details-card hidden" aria-hidden="true">
                             <div class="section-header security-events-header incident-details-header">
                                 <h3 data-i18n="incident_details_title">Incident Details</h3>
-                                <button
-                                    id="incident-details-close-btn"
-                                    class="incident-details-close-btn"
-                                    type="button"
-                                    aria-label="Close incident details"
-                                    title="Close"
-                                >
+                                <button id="incident-details-close-btn" class="incident-details-close-btn" type="button"
+                                    aria-label="Close incident details" title="Close">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
 
-                                <div class="incident-detail-grid">
-                                    <div class="incident-detail-item">
-                                        <span class="incident-detail-label" data-i18n="incident_label_id">Incident ID</span>
-                                        <strong id="incident-details-id">-</strong>
+                            <div class="incident-detail-grid">
+                                <div class="incident-detail-item">
+                                    <span class="incident-detail-label" data-i18n="incident_label_id">Incident ID</span>
+                                    <strong id="incident-details-id">-</strong>
+                                </div>
+                                <div class="incident-detail-item">
+                                    <span class="incident-detail-label" data-i18n="incident_label_type">Type</span>
+                                    <strong id="incident-details-type">-</strong>
+                                </div>
+                                <div class="incident-detail-item">
+                                    <span class="incident-detail-label"
+                                        data-i18n="incident_label_severity">Severity</span>
+                                    <strong id="incident-details-severity">-</strong>
+                                </div>
+                                <div class="incident-detail-item">
+                                    <span class="incident-detail-label" data-i18n="incident_label_status">Status</span>
+                                    <strong id="incident-details-status">-</strong>
+                                </div>
+                                <div class="incident-detail-item">
+                                    <span class="incident-detail-label" data-i18n="incident_label_false_positive">False
+                                        Positive</span>
+                                    <strong id="incident-details-false-positive">-</strong>
+                                </div>
+                                <div class="incident-detail-item incident-detail-item-wide">
+                                    <span class="incident-detail-label" data-i18n="incident_label_created_at">Created
+                                        At</span>
+                                    <strong id="incident-details-created-at">-</strong>
+                                </div>
+                            </div>
+
+                            <div class="incident-actor-box">
+                                <h4 data-i18n="incident_actor_title">Actor Info</h4>
+                                <p id="incident-actor-info">-</p>
+                            </div>
+
+                            <div class="incident-notes-wrap">
+                                <h4 data-i18n="incident_notes_title">Investigation Notes</h4>
+                                <textarea id="incident-notes-input" class="incident-notes-input"
+                                    placeholder="Add investigation details, evidence, and conclusions..."></textarea>
+                                <div class="incident-notes-actions">
+                                    <button id="incident-save-notes-btn" type="button"
+                                        class="btn btn-primary incident-action-btn">
+                                        <i class="fas fa-note-sticky"></i>
+                                        <span data-i18n="incident_notes_save_btn">Save Notes</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- SOC Actions Panel: grouped by workflow stage -->
+                            <div class="incident-actions-wrap">
+                                <h4 data-i18n="incident_actions_title">Actions</h4>
+
+                                <!-- SOC Lifecycle Progress Bar — shows current stage -->
+                                <div class="soc-lifecycle-bar" id="soc-lifecycle-bar">
+                                    <div class="soc-lifecycle-step" data-step="OPEN">
+                                        <span class="soc-step-dot"></span>
+                                        <span class="soc-step-label">Detected</span>
                                     </div>
-                                    <div class="incident-detail-item">
-                                        <span class="incident-detail-label" data-i18n="incident_label_type">Type</span>
-                                        <strong id="incident-details-type">-</strong>
+                                    <div class="soc-lifecycle-connector"></div>
+                                    <div class="soc-lifecycle-step" data-step="INVESTIGATING">
+                                        <span class="soc-step-dot"></span>
+                                        <span class="soc-step-label">Investigating</span>
                                     </div>
-                                    <div class="incident-detail-item">
-                                        <span class="incident-detail-label" data-i18n="incident_label_severity">Severity</span>
-                                        <strong id="incident-details-severity">-</strong>
+                                    <div class="soc-lifecycle-connector"></div>
+                                    <div class="soc-lifecycle-step" data-step="RESOLVED">
+                                        <span class="soc-step-dot"></span>
+                                        <span class="soc-step-label">Resolved</span>
                                     </div>
-                                    <div class="incident-detail-item">
-                                        <span class="incident-detail-label" data-i18n="incident_label_status">Status</span>
-                                        <strong id="incident-details-status">-</strong>
-                                    </div>
-                                    <div class="incident-detail-item">
-                                        <span class="incident-detail-label" data-i18n="incident_label_false_positive">False Positive</span>
-                                        <strong id="incident-details-false-positive">-</strong>
-                                    </div>
-                                    <div class="incident-detail-item incident-detail-item-wide">
-                                        <span class="incident-detail-label" data-i18n="incident_label_created_at">Created At</span>
-                                        <strong id="incident-details-created-at">-</strong>
+                                    <div class="soc-lifecycle-connector"></div>
+                                    <div class="soc-lifecycle-step" data-step="CLOSED">
+                                        <span class="soc-step-dot"></span>
+                                        <span class="soc-step-label">Closed</span>
                                     </div>
                                 </div>
 
-                                <div class="incident-actor-box">
-                                    <h4 data-i18n="incident_actor_title">Actor Info</h4>
-                                    <p id="incident-actor-info">-</p>
-                                </div>
-
-                                <div class="incident-notes-wrap">
-                                    <h4 data-i18n="incident_notes_title">Investigation Notes</h4>
-                                    <textarea id="incident-notes-input" class="incident-notes-input" placeholder="Add investigation details, evidence, and conclusions..."></textarea>
-                                    <div class="incident-notes-actions">
-                                        <button id="incident-save-notes-btn" type="button" class="btn btn-primary incident-action-btn">
-                                            <i class="fas fa-note-sticky"></i>
-                                            <span data-i18n="incident_notes_save_btn">Save Notes</span>
-                                        </button>
+                                <!-- Shared input controls (reason + suspend duration) -->
+                                <div class="incident-action-controls">
+                                    <div class="form-group">
+                                        <label for="incident-action-reason-input"
+                                            data-i18n="incident_action_reason_label">Action Reason</label>
+                                        <input id="incident-action-reason-input" type="text" maxlength="255"
+                                            class="form-control" placeholder="Describe why this action is applied">
+                                    </div>
+                                    <div class="form-group incident-action-duration-group">
+                                        <label for="incident-suspend-minutes-input"
+                                            data-i18n="incident_action_suspend_minutes_label">Suspend Duration
+                                            (minutes)</label>
+                                        <input id="incident-suspend-minutes-input" type="number" min="1" max="10080"
+                                            step="1" value="30" class="form-control">
                                     </div>
                                 </div>
 
-                                <div class="incident-actions-wrap">
-                                    <h4 data-i18n="incident_actions_title">Actions</h4>
-                                    <div class="incident-action-controls">
-                                        <div class="form-group">
-                                            <label for="incident-action-reason-input" data-i18n="incident_action_reason_label">Action Reason</label>
-                                            <input id="incident-action-reason-input" type="text" maxlength="255" class="form-control" placeholder="Describe why this action is applied">
-                                        </div>
-                                        <div class="form-group incident-action-duration-group">
-                                            <label for="incident-suspend-minutes-input" data-i18n="incident_action_suspend_minutes_label">Suspend Duration (minutes)</label>
-                                            <input id="incident-suspend-minutes-input" type="number" min="1" max="10080" step="1" value="30" class="form-control">
-                                        </div>
+                                <!-- GROUP 1: Investigation — lifecycle progression buttons -->
+                                <div class="soc-action-group soc-group-normal">
+                                    <div class="soc-group-header">
+                                        <span class="soc-group-dot soc-dot-normal"></span>
+                                        <span class="soc-group-label">Investigation</span>
                                     </div>
                                     <div class="incident-actions-grid">
-                                        <button id="incident-assign-btn" type="button" class="btn btn-primary incident-action-btn">
-                                            <i class="fas fa-user-check"></i>
-                                            <span data-i18n="incident_assign_btn">Assign to me</span>
-                                        </button>
-                                        <button id="incident-mark-investigating-btn" type="button" class="btn btn-primary incident-action-btn">
-                                            <i class="fas fa-magnifying-glass"></i>
-                                            <span data-i18n="incident_mark_investigating_btn">Mark as Investigating</span>
-                                        </button>
-                                        <button id="incident-resolve-btn" type="button" class="btn btn-primary incident-action-btn">
-                                            <i class="fas fa-square-check"></i>
-                                            <span data-i18n="incident_resolve_btn">Resolve</span>
-                                        </button>
-                                        <button id="incident-close-btn" type="button" class="btn btn-primary incident-action-btn">
-                                            <i class="fas fa-lock"></i>
-                                            <span data-i18n="incident_close_btn">Close</span>
-                                        </button>
-                                        <button id="incident-mark-false-positive-btn" type="button" class="btn btn-primary incident-action-btn incident-action-warning">
-                                            <i class="fas fa-flag"></i>
-                                            <span data-i18n="incident_mark_false_positive_btn">Mark False Positive</span>
-                                        </button>
-                                        <button id="incident-clear-false-positive-btn" type="button" class="btn btn-primary incident-action-btn incident-action-muted">
-                                            <i class="fas fa-flag-checkered"></i>
-                                            <span data-i18n="incident_clear_false_positive_btn">Clear False Positive</span>
-                                        </button>
-                                        <button id="incident-block-user-btn" type="button" class="btn btn-primary incident-action-btn incident-action-danger">
-                                            <i class="fas fa-user-slash"></i>
-                                            <span data-i18n="incident_block_user_btn">Block User</span>
-                                        </button>
-                                        <button id="incident-suspend-user-btn" type="button" class="btn btn-primary incident-action-btn incident-action-danger">
-                                            <i class="fas fa-user-lock"></i>
-                                            <span data-i18n="incident_suspend_user_btn">Suspend User</span>
-                                        </button>
-                                        <button id="incident-reactivate-user-btn" type="button" class="btn btn-primary incident-action-btn incident-action-success">
-                                            <i class="fas fa-user-check"></i>
-                                            <span data-i18n="incident_reactivate_user_btn">Restore User</span>
-                                        </button>
-                                        <button id="incident-ignore-btn" type="button" class="btn btn-primary incident-action-btn incident-action-muted">
-                                            <i class="fas fa-ban"></i>
-                                            <span data-i18n="incident_ignore_btn">Ignore (false positive)</span>
-                                        </button>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-assign-btn" type="button"
+                                                class="btn btn-primary incident-action-btn">
+                                                <i class="fas fa-user-check"></i>
+                                                <span data-i18n="incident_assign_btn">Assign to me</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-assign"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-mark-investigating-btn" type="button"
+                                                class="btn btn-primary incident-action-btn">
+                                                <i class="fas fa-magnifying-glass"></i>
+                                                <span data-i18n="incident_mark_investigating_btn">Mark as
+                                                    Investigating</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-investigating"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-resolve-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-success">
+                                                <i class="fas fa-square-check"></i>
+                                                <span data-i18n="incident_resolve_btn">Resolve</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-resolve"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-close-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-muted">
+                                                <i class="fas fa-lock"></i>
+                                                <span data-i18n="incident_close_btn">Close</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-close"></span>
+                                        </div>
+                                        <!-- Reopen: reverse transition CLOSED → OPEN, requires reason -->
+                                        <div class="soc-btn-wrap soc-reopen-wrap" id="soc-reopen-wrap">
+                                            <button id="incident-reopen-btn" type="button"
+                                                class="btn incident-action-btn incident-action-reopen">
+                                                <i class="fas fa-rotate-left"></i>
+                                                <span>Reopen Incident</span>
+                                            </button>
+                                            <div class="soc-reopen-reason" id="soc-reopen-reason">
+                                                <input id="incident-reopen-reason-input" type="text" maxlength="255"
+                                                    class="form-control soc-reopen-input"
+                                                    placeholder="Reason for reopening (required)">
+                                                <button id="incident-reopen-confirm-btn" type="button"
+                                                    class="btn incident-action-btn incident-action-reopen soc-reopen-confirm-btn">
+                                                    <i class="fas fa-check"></i>
+                                                    <span>Confirm Reopen</span>
+                                                </button>
+                                                <button id="incident-reopen-cancel-btn" type="button"
+                                                    class="btn incident-action-btn incident-action-muted soc-reopen-cancel-btn">
+                                                    <i class="fas fa-xmark"></i>
+                                                    <span>Cancel</span>
+                                                </button>
+                                            </div>
+                                            <span class="soc-btn-hint" id="hint-reopen"></span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div class="incident-timeline-wrap">
-                                    <h4 data-i18n="incident_timeline_title">Timeline</h4>
-                                    <ul id="incident-timeline-list">
-                                        <li class="incident-timeline-empty" data-i18n="incident_timeline_empty">No logs yet</li>
-                                    </ul>
+                                <!-- GROUP 2: Analysis — classification and false-positive handling -->
+                                <div class="soc-action-group soc-group-analysis">
+                                    <div class="soc-group-header">
+                                        <span class="soc-group-dot soc-dot-analysis"></span>
+                                        <span class="soc-group-label">Analysis</span>
+                                    </div>
+                                    <div class="incident-actions-grid">
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-mark-false-positive-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-warning">
+                                                <i class="fas fa-flag"></i>
+                                                <span data-i18n="incident_mark_false_positive_btn">Mark False
+                                                    Positive</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-mark-fp"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-clear-false-positive-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-muted">
+                                                <i class="fas fa-flag-checkered"></i>
+                                                <span data-i18n="incident_clear_false_positive_btn">Clear False
+                                                    Positive</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-clear-fp"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-ignore-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-muted">
+                                                <i class="fas fa-ban"></i>
+                                                <span data-i18n="incident_ignore_btn">Ignore (false positive)</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-ignore"></span>
+                                        </div>
+                                    </div>
                                 </div>
+
+                                <!-- GROUP 3: Containment — actor-level response actions -->
+                                <div class="soc-action-group soc-group-response">
+                                    <div class="soc-group-header">
+                                        <span class="soc-group-dot soc-dot-response"></span>
+                                        <span class="soc-group-label">Containment</span>
+                                    </div>
+                                    <div class="incident-actions-grid">
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-suspend-user-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-danger">
+                                                <i class="fas fa-user-lock"></i>
+                                                <span data-i18n="incident_suspend_user_btn">Suspend User</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-suspend"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-block-user-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-danger">
+                                                <i class="fas fa-user-slash"></i>
+                                                <span data-i18n="incident_block_user_btn">Block User</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-block"></span>
+                                        </div>
+                                        <div class="soc-btn-wrap">
+                                            <button id="incident-reactivate-user-btn" type="button"
+                                                class="btn btn-primary incident-action-btn incident-action-success">
+                                                <i class="fas fa-user-check"></i>
+                                                <span data-i18n="incident_reactivate_user_btn">Restore User</span>
+                                            </button>
+                                            <span class="soc-btn-hint" id="hint-reactivate"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="incident-timeline-wrap">
+                                <h4 data-i18n="incident_timeline_title">Timeline</h4>
+                                <ul id="incident-timeline-list">
+                                    <li class="incident-timeline-empty" data-i18n="incident_timeline_empty">No logs yet
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
-                        <button
-                            id="incident-back-to-events-btn"
-                            class="btn security-filter-back security-back-to-events-floating"
-                            type="button"
-                            aria-hidden="true"
-                        >
+                        <button id="incident-back-to-events-btn"
+                            class="btn security-filter-back security-back-to-events-floating" type="button"
+                            aria-hidden="true">
                             <i class="fas fa-arrow-left"></i>
                             <span data-i18n="incident_back_to_events_btn">Back to Events Feed</span>
                         </button>
@@ -673,10 +853,12 @@
 
                 <!-- Providers Group -->
                 <div class="config-group">
-                    <div class="config-group-title"><i class="fas fa-server"></i> <span data-i18n="config_group_providers">المزودون</span></div>
+                    <div class="config-group-title"><i class="fas fa-server"></i> <span
+                            data-i18n="config_group_providers">المزودون</span></div>
 
                     <div class="config-section">
-                        <label for="ai-gen-provider" class="config-label" data-i18n="gen_provider_label">مزود التوليد</label>
+                        <label for="ai-gen-provider" class="config-label" data-i18n="gen_provider_label">مزود
+                            التوليد</label>
                         <select id="ai-gen-provider" class="form-control"></select>
                     </div>
 
@@ -703,12 +885,14 @@
 
                 <!-- Chunking Group -->
                 <div class="config-group">
-                    <div class="config-group-title"><i class="fas fa-puzzle-piece"></i> <span data-i18n="config_group_chunking">التجزئة</span></div>
+                    <div class="config-group-title"><i class="fas fa-puzzle-piece"></i> <span
+                            data-i18n="config_group_chunking">التجزئة</span></div>
 
                     <div class="config-section">
                         <label class="config-label" data-i18n="chunk_strategy_label">استراتيجية التجزئة</label>
                         <select id="chunk-strategy" class="form-control">
-                            <option value="parent_child" data-i18n="chunk_strategy_parent">أب/ابن (من الصغير للكبير)</option>
+                            <option value="parent_child" data-i18n="chunk_strategy_parent">أب/ابن (من الصغير للكبير)
+                            </option>
                             <option value="simple" data-i18n="chunk_strategy_simple">بسيطة</option>
                         </select>
                     </div>
@@ -736,7 +920,8 @@
 
                 <!-- Retrieval Group -->
                 <div class="config-group">
-                    <div class="config-group-title"><i class="fas fa-magnifying-glass"></i> <span data-i18n="config_group_retrieval">الاسترجاع</span></div>
+                    <div class="config-group-title"><i class="fas fa-magnifying-glass"></i> <span
+                            data-i18n="config_group_retrieval">الاسترجاع</span></div>
 
                     <div class="config-section">
                         <label class="config-label" data-i18n="retrieval_top_k_label">عدد المقاطع المسترجعة</label>
@@ -759,7 +944,8 @@
 
                     <div class="config-section mt-4">
                         <label class="config-label" data-i18n="hybrid_alpha_label">وزن الدلالي</label>
-                        <input id="retrieval-hybrid-alpha" type="number" step="0.05" min="0" max="1" class="form-control" />
+                        <input id="retrieval-hybrid-alpha" type="number" step="0.05" min="0" max="1"
+                            class="form-control" />
                     </div>
 
                     <div class="config-section mt-4 toggle-wrap">
@@ -818,7 +1004,8 @@
                             <strong id="account-created-value">-</strong>
                         </div>
                         <div class="account-profile-item">
-                            <span class="account-profile-label" data-i18n="account_session_expires_label">انتهاء الجلسة</span>
+                            <span class="account-profile-label" data-i18n="account_session_expires_label">انتهاء
+                                الجلسة</span>
                             <strong id="account-session-expiry-value">-</strong>
                         </div>
                     </div>
@@ -831,7 +1018,8 @@
                     </div>
 
                     <div class="config-section">
-                        <label for="account-language-select" class="config-label" data-i18n="account_language_label">لغة الواجهة</label>
+                        <label for="account-language-select" class="config-label" data-i18n="account_language_label">لغة
+                            الواجهة</label>
                         <select id="account-language-select" class="form-control">
                             <option value="ar" data-i18n="language_ar">العربية</option>
                             <option value="en" data-i18n="language_en">English</option>
@@ -839,7 +1027,8 @@
                     </div>
 
                     <div class="config-section mt-4">
-                        <label for="account-theme-select" class="config-label" data-i18n="account_theme_label">المظهر</label>
+                        <label for="account-theme-select" class="config-label"
+                            data-i18n="account_theme_label">المظهر</label>
                         <select id="account-theme-select" class="form-control">
                             <option value="dark" data-i18n="theme_dark">داكن</option>
                             <option value="light" data-i18n="theme_light">فاتح</option>
@@ -847,9 +1036,12 @@
                     </div>
 
                     <div class="config-section mt-4">
-                        <label for="account-api-base-input" class="config-label" data-i18n="account_api_base_label">رابط واجهة API</label>
-                        <input id="account-api-base-input" class="form-control" type="text" placeholder="http://52.188.226.80:8000" />
-                        <p class="config-desc" data-i18n="account_api_base_desc">استخدمه لتبديل البيئة بسهولة (Local/Staging/Production).</p>
+                        <label for="account-api-base-input" class="config-label" data-i18n="account_api_base_label">رابط
+                            واجهة API</label>
+                        <input id="account-api-base-input" class="form-control" type="text"
+                            placeholder="http://localhost:8000" />
+                        <p class="config-desc" data-i18n="account_api_base_desc">استخدمه لتبديل البيئة بسهولة
+                            (Local/Staging/Production).</p>
                     </div>
 
                     <button id="save-account-preferences-btn" class="btn btn-primary mt-4">
@@ -866,19 +1058,25 @@
                     <p class="config-desc" data-i18n="account_password_desc">حدّث كلمة مرورك بشكل دوري لحماية حسابك.</p>
 
                     <div class="config-section">
-                        <label for="account-current-password" class="config-label" data-i18n="account_current_password_label">كلمة المرور الحالية</label>
-                        <input id="account-current-password" type="password" class="form-control" autocomplete="current-password" />
+                        <label for="account-current-password" class="config-label"
+                            data-i18n="account_current_password_label">كلمة المرور الحالية</label>
+                        <input id="account-current-password" type="password" class="form-control"
+                            autocomplete="current-password" />
                     </div>
 
                     <div class="config-section mt-4">
-                        <label for="account-new-password" class="config-label" data-i18n="account_new_password_label">كلمة المرور الجديدة</label>
-                        <input id="account-new-password" type="password" class="form-control" autocomplete="new-password" />
+                        <label for="account-new-password" class="config-label"
+                            data-i18n="account_new_password_label">كلمة المرور الجديدة</label>
+                        <input id="account-new-password" type="password" class="form-control"
+                            autocomplete="new-password" />
                         <div class="password-strength-wrap" id="password-strength-wrap">
                             <div class="password-strength-header">
                                 <span data-i18n="account_password_strength_label">قوة كلمة المرور</span>
-                                <span id="password-strength-text" class="password-strength-text" data-strength="none" data-i18n="account_password_strength_empty">-</span>
+                                <span id="password-strength-text" class="password-strength-text" data-strength="none"
+                                    data-i18n="account_password_strength_empty">-</span>
                             </div>
-                            <div id="password-strength-meter" class="password-strength-meter" data-level="0" aria-hidden="true">
+                            <div id="password-strength-meter" class="password-strength-meter" data-level="0"
+                                aria-hidden="true">
                                 <span class="strength-segment"></span>
                                 <span class="strength-segment"></span>
                                 <span class="strength-segment"></span>
@@ -888,8 +1086,10 @@
                     </div>
 
                     <div class="config-section mt-4">
-                        <label for="account-confirm-password" class="config-label" data-i18n="account_confirm_password_label">تأكيد كلمة المرور الجديدة</label>
-                        <input id="account-confirm-password" type="password" class="form-control" autocomplete="new-password" />
+                        <label for="account-confirm-password" class="config-label"
+                            data-i18n="account_confirm_password_label">تأكيد كلمة المرور الجديدة</label>
+                        <input id="account-confirm-password" type="password" class="form-control"
+                            autocomplete="new-password" />
                     </div>
 
                     <div class="config-section mt-4">

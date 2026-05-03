@@ -44,6 +44,10 @@ _ALLOWED_STATUS_TRANSITIONS: Dict[IncidentStatus, IncidentStatus] = {
     IncidentStatus.RESOLVED: IncidentStatus.CLOSED,
 }
 
+# Reopen is a special reverse transition — only CLOSED → OPEN is allowed.
+# It bypasses the forward chain and is handled separately in reopen_incident().
+_REOPEN_ALLOWED_FROM: set = {IncidentStatus.CLOSED}
+
 
 _ACTION_LABELS: Dict[str, str] = {
     "block_user": "Block user",
@@ -998,3 +1002,94 @@ class IncidentManagementService:
         await db.commit()
         updated_incident = await self._get_incident_or_404(db, incident_id)
         return self._serialize_incident_details(updated_incident)
+
+        await db.commit()
+        updated_incident = await self._get_incident_or_404(db, incident_id)
+        return self._serialize_incident_details(updated_incident)
+
+    async def reopen_incident(
+        self,
+        db: AsyncSession,
+        *,
+        incident_id: int,
+        reason: str,
+        current_user: User,
+    ) -> IncidentResponse:
+        """Reopen a CLOSED incident back to OPEN with a mandatory reason.
+
+        This is a deliberate reverse transition used by SOC analysts when new
+        evidence surfaces or a closure was premature.  It bypasses the forward
+        lifecycle chain and is intentionally kept as a separate operation so the
+        audit trail clearly distinguishes a reopen from a normal status update.
+        """
+        incident = await self._get_incident_or_404(db, incident_id)
+
+        current_status = incident.status
+        if not isinstance(current_status, IncidentStatus):
+            try:
+                current_status = IncidentStatus(str(current_status))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Incident has invalid current status") from exc
+
+        if current_status not in _REOPEN_ALLOWED_FROM:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot reopen incident with status {self._enum_value(current_status)}. "
+                    "Only CLOSED incidents can be reopened."
+                ),
+            )
+
+        normalized_reason = self._normalize_status_reason(reason, fallback="manual reopen by analyst")
+        previous_status = self._enum_value(current_status)
+
+        incident.status = IncidentStatus.OPEN
+
+        await self._append_incident_log(
+            db=db,
+            incident=incident,
+            actor=current_user,
+            event_type="INCIDENT_REOPENED",
+            severity="MEDIUM",
+            message=f"Incident reopened from {previous_status} to OPEN",
+            metadata={
+                "from": previous_status,
+                "to": "OPEN",
+                "reason": normalized_reason,
+                "reopened_by": current_user.username,
+            },
+        )
+
+        self._append_audit_log(
+            db=db,
+            actor=current_user,
+            action="incident_reopened",
+            target_incident_id=incident.id,
+            metadata={
+                "incident_id": incident.id,
+                "from": previous_status,
+                "to": "OPEN",
+                "reason": normalized_reason,
+                "actor": current_user.username,
+            },
+        )
+
+        log_event(
+            {
+                "event_type": "INCIDENT_REOPENED",
+                "severity": "MEDIUM",
+                "user_id": current_user.id,
+                "username": current_user.username,
+                "message": "Incident reopened by analyst",
+                "metadata": {
+                    "incident_id": incident.id,
+                    "from": previous_status,
+                    "to": "OPEN",
+                    "reason": normalized_reason,
+                },
+            }
+        )
+
+        await db.commit()
+        await db.refresh(incident)
+        return self._serialize_incident(incident)

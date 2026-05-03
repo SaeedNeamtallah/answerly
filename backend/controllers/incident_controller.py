@@ -13,6 +13,7 @@ from backend.models.incident_models import (
     IncidentDetailsResponse,
     IncidentFalsePositiveUpdateRequest,
     IncidentNotesUpdateRequest,
+    IncidentReopenRequest,
     IncidentResponse,
     IncidentStatusUpdateRequest,
 )
@@ -122,5 +123,20 @@ class IncidentController:
             db,
             incident_id=incident_id,
             payload=payload,
+            current_user=current_user,
+        )
+
+    async def reopen_incident(
+        self,
+        db: AsyncSession,
+        *,
+        incident_id: int,
+        payload: IncidentReopenRequest,
+        current_user: User,
+    ) -> IncidentResponse:
+        return await self.incident_service.reopen_incident(
+            db,
+            incident_id=incident_id,
+            reason=payload.reason,
             current_user=current_user,
         )
