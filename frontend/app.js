@@ -2390,6 +2390,11 @@ function syncIncidentActionButtons(incident) {
     const suspendBtn = document.getElementById('incident-suspend-user-btn');
     const reactivateBtn = document.getElementById('incident-reactivate-user-btn');
     const ignoreBtn = document.getElementById('incident-ignore-btn');
+    const reopenBtn = document.getElementById('incident-reopen-btn');
+    const reopenConfirmBtn = document.getElementById('incident-reopen-confirm-btn');
+    const reopenCancelBtn = document.getElementById('incident-reopen-cancel-btn');
+    const reopenWrap = document.getElementById('soc-reopen-wrap');
+    const reopenReason = document.getElementById('soc-reopen-reason');
     const closeBtnLabel = closeBtn ? closeBtn.querySelector('span') : null;
 
     // Helper: set button state with contextual hint text
@@ -2426,6 +2431,8 @@ function syncIncidentActionButtons(incident) {
         if (closeBtnLabel) {
             closeBtnLabel.textContent = getSecurityCenterTranslations().incident_close_btn || 'Close';
         }
+        if (reopenReason) reopenReason.classList.remove('is-open');
+        if (reopenWrap) reopenWrap.style.display = 'none';
         _syncLifecycleBar(null);
         return;
     }
@@ -2506,13 +2513,12 @@ function syncIncidentActionButtons(incident) {
     _syncLifecycleBar(currentStatus);
 
     // Reopen: only available when CLOSED
-    const reopenBtn = document.getElementById('incident-reopen-btn');
-    const reopenWrap = document.getElementById('soc-reopen-wrap');
-    const reopenReason = document.getElementById('soc-reopen-reason');
     if (reopenBtn) {
         const canReopen = currentStatus === 'CLOSED';
         setBtn(reopenBtn, canReopen, 'hint-reopen',
             !canReopen ? 'Only available for CLOSED incidents' : '');
+        setBtn(reopenConfirmBtn, canReopen, null, '');
+        setBtn(reopenCancelBtn, canReopen, null, '');
         // Collapse the reason form whenever the incident changes
         if (reopenReason) reopenReason.classList.remove('is-open');
         if (reopenWrap) reopenWrap.style.display = canReopen ? '' : 'none';
@@ -5534,77 +5540,103 @@ async function handleFiles(files, projectId) {
         switchView('projectDetail', projectId);
     }
 }
-        });
 
-// New Project Click
-elements.newProjectBtn.onclick = handleNewProject;
-
-// Close Modal
-elements.closeModalBtn.onclick = () => elements.modalOverlay.classList.add('hidden');
-elements.modalOverlay.onclick = (e) => {
-    if (e.target === elements.modalOverlay) elements.modalOverlay.classList.add('hidden');
-};
-
-// Theme & Lang
-elements.themeToggle.onclick = toggleTheme;
-elements.langToggle.onclick = toggleLang;
-if (elements.logoutBtn) {
-    elements.logoutBtn.onclick = logoutUser;
-}
-
-// Search Bar
-const searchInput = document.querySelector('.search-bar input');
-let searchTimeout;
-if (searchInput) {
-    searchInput.oninput = () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => handleSearch(searchInput.value), 300);
-    };
-    searchInput.onkeydown = (e) => {
-        if (e.key === 'Escape') {
-            searchInput.value = '';
-            handleSearch('');
-            searchInput.blur();
-        }
-    };
-}
-
-// Mobile Hamburger
-const hamburger = document.getElementById('mobile-hamburger');
-const sidebarOverlay = document.getElementById('sidebar-overlay');
-if (hamburger) hamburger.onclick = openMobileSidebar;
-if (sidebarOverlay) sidebarOverlay.onclick = closeMobileSidebar;
-
-// Keyboard Shortcut: Ctrl+K to focus search
-document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        if (searchInput) searchInput.focus();
+// ─── App Initialization ────────────────────────────────────────────────────
+// Post-rebase fix: DOMContentLoaded wrapper was accidentally removed during
+// the upload-zone refactor. All DOM event wiring MUST live inside this handler
+// so elements exist before we try to attach listeners.
+document.addEventListener('DOMContentLoaded', async () => {
+    // Guard: require a valid, non-expired token before doing anything
+    const authToken = getAccessToken();
+    if (!authToken) {
+        redirectToLogin();
+        return;
     }
-});
-
-// Init State
-applyTheme(state.theme);
-
-// Initial View
-applyTranslations();
-// Render immediately; API discovery and user hydration continue in the background.
-switchView('dashboard');
-
-void (async () => {
-    const apiReady = await resolveApiBaseUrl(1);
-    if (!apiReady) {
-        showNotification(state.lang === 'ar' ? 'يجري الاتصال بالخادم في الخلفية...' : 'Connecting to backend in the background...', 'info');
-        const recovered = await resolveApiBaseUrl(1);
-        if (!recovered) {
-            return;
-        }
+    if (isTokenExpired(authToken)) {
+        clearAuthAndRedirect('expired');
+        return;
     }
 
-    try {
-        await getCurrentUser();
-    } catch (error) {
-        console.error('Current user load error:', error);
-    }
-})();
+    // Nav Clicks — sidebar navigation
+    elements.navItems.forEach(item => {
+        item.onclick = () => {
+            closeMobileSidebar();
+            switchView(item.dataset.view);
+        };
     });
+
+    // New Project Click
+    elements.newProjectBtn.onclick = handleNewProject;
+
+    // Close Modal
+    elements.closeModalBtn.onclick = () => elements.modalOverlay.classList.add('hidden');
+    elements.modalOverlay.onclick = (e) => {
+        if (e.target === elements.modalOverlay) elements.modalOverlay.classList.add('hidden');
+    };
+
+    // Theme & Lang toggles
+    elements.themeToggle.onclick = toggleTheme;
+    elements.langToggle.onclick = toggleLang;
+    if (elements.logoutBtn) {
+        elements.logoutBtn.onclick = logoutUser;
+    }
+
+    // Search Bar
+    const searchInput = document.querySelector('.search-bar input');
+    let searchTimeout;
+    if (searchInput) {
+        searchInput.oninput = () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => handleSearch(searchInput.value), 300);
+        };
+        searchInput.onkeydown = (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                handleSearch('');
+                searchInput.blur();
+            }
+        };
+    }
+
+    // Mobile Hamburger
+    const hamburger = document.getElementById('mobile-hamburger');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    if (hamburger) hamburger.onclick = openMobileSidebar;
+    if (sidebarOverlay) sidebarOverlay.onclick = closeMobileSidebar;
+
+    // Keyboard Shortcut: Ctrl+K to focus search
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            if (searchInput) searchInput.focus();
+        }
+    });
+
+    // Apply theme and translations immediately (before any API calls)
+    applyTheme(state.theme);
+    applyTranslations();
+
+    // Render dashboard shell immediately; API discovery runs in background
+    switchView('dashboard');
+
+    // Resolve API base URL, then hydrate user info in the background
+    void (async () => {
+        const apiReady = await resolveApiBaseUrl(1);
+        if (!apiReady) {
+            showNotification(
+                state.lang === 'ar'
+                    ? 'يجري الاتصال بالخادم في الخلفية...'
+                    : 'Connecting to backend in the background...',
+                'info'
+            );
+            const recovered = await resolveApiBaseUrl(1);
+            if (!recovered) return;
+        }
+
+        try {
+            await getCurrentUser();
+        } catch (error) {
+            console.error('Current user load error:', error);
+        }
+    })();
+});

@@ -45,39 +45,48 @@ class AnswerService:
         try:
             # Build context from chunks
             context = self._build_context(context_chunks)
-            
+
             # Build system + user prompts
             system_prompt = self._build_system_prompt(language)
             prompt = self._build_prompt(query, context, language)
-            
-            # Generate answer
+
+            # Generate answer via LLM
+            # Note: max_tokens capped at 8192 — 25000 caused failures with some Gemini models
             answer = await self.llm_provider.generate_text(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 temperature=0.7,
-                max_tokens=25000
+                max_tokens=8192
             )
 
             answer = (answer or "").strip()
             if not answer:
+                # LLM returned empty — use graceful fallback instead of raising
                 logger.warning("LLM returned empty answer, using fallback")
                 answer = self._fallback_answer(language)
-            
-            # Format response
+
             response = {
                 'answer': answer,
                 'context_used': len(context_chunks)
             }
-            
+
             if include_sources:
                 response['sources'] = self._extract_sources(context_chunks)
-            
+
             logger.info(f"Generated answer (length={len(answer)})")
             return response
-            
+
         except Exception as e:
+            # Post-rebase fix: catch LLM/provider exceptions and return a graceful
+            # fallback response instead of propagating the exception to the route.
+            # This prevents the query endpoint from returning a 500 when the LLM
+            # is temporarily unavailable or returns an unexpected response format.
             logger.error(f"Error generating answer: {str(e)}")
-            raise
+            return {
+                'answer': self._fallback_answer(language),
+                'sources': self._extract_sources(context_chunks) if include_sources else [],
+                'context_used': len(context_chunks),
+            }
     
     def _build_context(self, chunks: List[Dict[str, Any]]) -> str:
         """

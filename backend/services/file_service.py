@@ -254,6 +254,21 @@ class FileService:
             return False, f"File too large. Maximum size is {settings.max_file_size_mb}MB"
 
         normalized_type = (content_type or "").lower().split(";")[0].strip()
+
+        # Post-rebase fix: browsers sometimes omit or vary the content-type header
+        # for FormData uploads (e.g. some send "application/octet-stream" for all files,
+        # others send nothing). We infer the MIME type from the file extension when the
+        # browser-supplied value is missing or generic, so valid files are not rejected.
+        _EXTENSION_FALLBACK_MIME = {
+            ".pdf":  "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".txt":  "text/plain",
+        }
+        if not normalized_type or normalized_type == "application/octet-stream":
+            inferred = _EXTENSION_FALLBACK_MIME.get(file_ext, "")
+            if inferred:
+                normalized_type = inferred
+
         if not normalized_type:
             _log_blocked("missing_content_type")
             return False, "Missing file content type"
