@@ -3,7 +3,7 @@ x-app-environment: &app-environment
   QDRANT_URL: http://qdrant:6333
   CELERY_BROKER_URL: amqp://minirag_user:minirag_rabbitmq_2222@rabbitmq:5672/minirag_vhost
   CELERY_RESULT_BACKEND: redis://:minirag_redis_2222@redis:6379/0
-  CORS_ORIGINS: '["http://52.188.226.80","http://localhost:8080","http://localhost:3000","http://localhost:3001"]'
+  CORS_ORIGINS: '["http://127.0.0.1:8080","http://localhost:8080","http://127.0.0.1:3000","http://localhost:3000","http://127.0.0.1:3001","http://localhost:3001","http://127.0.0.1:8000","http://localhost:8000"]'
   RAGMIND_SHARED_CONFIG_DIR: /app/uploads/config
   SECURITY_ENGINEER_USERNAMES: ${SECURITY_ENGINEER_USERNAMES:-codex_security_smoke}
 
@@ -155,7 +155,7 @@ services:
     env_file: ../.env
     environment: *app-environment
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads

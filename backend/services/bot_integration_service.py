@@ -200,6 +200,7 @@ class BotIntegrationService:
         show_sources_to_customer: bool | None = None,
         human_handoff_enabled: bool | None = None,
         fallback_message: str | None = None,
+        fallback_message_provided: bool = False,
     ) -> BotIntegration:
         integration = await self.get_integration(db, owner_id=owner_id, integration_id=integration_id)
         if integration is None:
@@ -214,7 +215,7 @@ class BotIntegrationService:
             integration.show_sources_to_customer = bool(show_sources_to_customer)
         if human_handoff_enabled is not None:
             integration.human_handoff_enabled = bool(human_handoff_enabled)
-        if fallback_message is not None:
+        if fallback_message_provided:
             integration.fallback_message = sanitize_optional_text(fallback_message, 1000)
 
         integration.webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)

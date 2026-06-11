@@ -3,7 +3,7 @@ PGVector Provider Implementation.
 Uses PostgreSQL with pgvector extension for vector storage.
 """
 from typing import List, Dict, Any, Optional, Tuple
-from sqlalchemy import cast, delete, func, select, text
+from sqlalchemy import cast, delete, func, select, text, update as sa_update
 from pgvector.sqlalchemy import Vector
 from backend.providers.vectordb.interface import VectorDBInterface
 from backend.database.models import Chunk, Project
@@ -242,6 +242,8 @@ class PGVectorProvider(VectorDBInterface):
             if not vectors:
                 logger.info("No vectors to add for collection '%s'", collection_name)
                 return True
+            if len(ids) != len(vectors):
+                raise ValueError("ids and vectors must have the same length")
 
             expected_dimension = self._normalize_dimension(len(vectors[0]))
             for vector in vectors:
@@ -250,20 +252,39 @@ class PGVectorProvider(VectorDBInterface):
 
             await self._ensure_ann_index(expected_dimension, session_maker=kwargs.get("session_maker"))
 
-            from sqlalchemy import update as sa_update
-            session_maker = self._get_session_maker(kwargs.get("session_maker"))
-            async with session_maker() as session:
+            async def update_vectors_in_session(session, *, commit: bool) -> None:
+                missing_ids: list[Any] = []
                 for i, (chunk_id, vector) in enumerate(zip(ids, vectors)):
-                    await session.execute(
+                    result = await session.execute(
                         sa_update(Chunk)
                         .where(Chunk.id == chunk_id)
                         .values(embedding=vector)
                     )
+                    if result.rowcount != 1:
+                        missing_ids.append(chunk_id)
                     if (i + 1) % 500 == 0:
                         await session.flush()
-                await session.commit()
-                logger.info(f"Added {len(vectors)} vectors to collection '{collection_name}'")
-                return True
+
+                if missing_ids:
+                    raise RuntimeError(
+                        "Could not update embeddings for chunk ids: "
+                        + ", ".join(str(chunk_id) for chunk_id in missing_ids[:20])
+                    )
+
+                await session.flush()
+                if commit:
+                    await session.commit()
+
+            external_session = kwargs.get("session")
+            if external_session is not None:
+                await update_vectors_in_session(external_session, commit=False)
+            else:
+                session_maker = self._get_session_maker(kwargs.get("session_maker"))
+                async with session_maker() as session:
+                    await update_vectors_in_session(session, commit=True)
+
+            logger.info(f"Added {len(vectors)} vectors to collection '{collection_name}'")
+            return True
                 
         except Exception as e:
             logger.error(f"Error adding vectors: {str(e)}")

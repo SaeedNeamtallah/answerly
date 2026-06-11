@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.config import settings
+from backend.security.client_ip import get_client_ip
 from backend.security.jwt_utils import decode_jwt_access_token
 from backend.security.event_service import log_event
 from backend.security.rate_limit import InMemoryRateLimiter, RateLimitResult
@@ -119,12 +120,7 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _client_ip(request: Request) -> str:
-        forwarded_for = request.headers.get("x-forwarded-for", "")
-        if forwarded_for:
-            return forwarded_for.split(",")[0].strip()
-        if request.client and request.client.host:
-            return request.client.host
-        return "unknown"
+        return get_client_ip(request)
 
     @staticmethod
     def _identity_key(request: Request, fallback_ip: str) -> str:

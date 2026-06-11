@@ -48,6 +48,17 @@ class _FakeTelegramAPI:
         }
 
 
+class _FakeMutationDB:
+    def add(self, _obj):
+        return None
+
+    async def commit(self):
+        return None
+
+    async def refresh(self, _obj):
+        return None
+
+
 class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
     def test_serialized_integration_does_not_expose_tokens_or_hashes(self):
         integration = BotIntegration(
@@ -142,6 +153,39 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(checks["llm_provider_ready"])
         self.assertTrue(checks["embedding_provider_ready"])
         self.assertTrue(checks["vector_db_provider_ready"])
+
+    async def test_update_integration_can_clear_fallback_message(self):
+        integration = BotIntegration(
+            id=3,
+            owner_id=2,
+            project_id=3,
+            name="Support",
+            telegram_bot_id="123",
+            telegram_username="support_bot",
+            token_encrypted="encrypted",
+            token_hash="hash",
+            webhook_secret="secret",
+            webhook_url="https://example.test/webhook",
+            status="active",
+            show_sources_to_customer=False,
+            human_handoff_enabled=True,
+            fallback_message="Old fallback",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+        service = BotIntegrationService()
+        service.get_integration = AsyncMock(return_value=integration)
+
+        updated = await service.update_integration(
+            _FakeMutationDB(),
+            owner_id=2,
+            integration_id=3,
+            fallback_message=None,
+            fallback_message_provided=True,
+        )
+
+        self.assertIsNone(updated.fallback_message)
 
     async def test_readiness_detects_webhook_mismatch(self):
         integration = BotIntegration(

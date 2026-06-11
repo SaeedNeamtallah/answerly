@@ -1,0 +1,26 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e6]
+      - heading "Sign in to RAGMind" [level=1] [ref=e9]
+      - paragraph [ref=e10]: JWT bearer auth remains compatible with the existing backend.
+    - alert [ref=e11]:
+      - img [ref=e12]
+      - generic [ref=e19]: Backend unavailable
+      - generic [ref=e20]: The FastAPI backend is unreachable on the configured API base URL.
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - text: Username
+        - textbox [ref=e23]
+        - paragraph
+      - generic [ref=e24]:
+        - text: Password
+        - textbox [ref=e25]
+        - paragraph
+      - button "Login" [ref=e26]
+    - generic [ref=e27]:
+      - text: No account?
+      - link "Create one" [ref=e28] [cursor=pointer]:
+        - /url: /signup
+  - region "Notifications alt+T"
+  - alert [ref=e29]

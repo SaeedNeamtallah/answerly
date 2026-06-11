@@ -197,6 +197,7 @@ async def _index_project(task_instance, project_id: int, do_reset: bool):
                 vectors=embeddings,
                 ids=chunk_ids,
                 metadata=vector_metadata,
+                session=db,
                 session_maker=session_maker,
             )
 

@@ -1,0 +1,24 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e6]
+      - heading "Sign in to RAGMind" [level=1] [ref=e9]
+      - paragraph [ref=e10]: JWT bearer auth remains compatible with the existing backend.
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - text: Username
+        - textbox [ref=e13]
+        - paragraph
+      - generic [ref=e14]:
+        - text: Password
+        - textbox [ref=e15]
+        - paragraph
+      - button "Login" [ref=e16]
+    - generic [ref=e17]:
+      - text: No account?
+      - link "Create one" [ref=e18] [cursor=pointer]:
+        - /url: /signup
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]

@@ -150,6 +150,8 @@ graph TD
 7. `EmbeddingService.generate_embeddings()`
 8. `VectorDBProvider.add_vectors()`
 
+Note: pgvector embedding writes for freshly-created chunks must run through the same worker `AsyncSession` that flushed the new chunk rows, and `PGVectorProvider.add_vectors()` verifies every target chunk row is updated. Do not move fresh chunk embedding writes back to a separate uncommitted transaction.
+
 Note: `backend/controllers/document_controller.py` keeps `DocumentController.process_document()` as a deprecated guard (raises `RuntimeError`). The legacy implementation exists as `_deprecated_process_document_impl()` and should not be invoked by routes; processing must go through Celery tasks.
 
 ### Query
@@ -171,7 +173,7 @@ Note: `backend/controllers/document_controller.py` keeps `DocumentController.pro
 5. Sources/retrieval metadata are stored internally on `ConversationMessage`
 6. Customer reply hides sources unless `show_sources_to_customer` is enabled
 7. Webhook saves bot reply/fallback durably as `delivery_status="pending"` on `ConversationMessage`
-8. Celery `backend.tasks.telegram_outbox.deliver_pending_messages` delivers pending messages through `TelegramAPIService`
+8. Celery `backend.tasks.telegram_outbox.deliver_pending_messages` claims pending or stale `sending` messages through a lease timestamp and delivers them through `TelegramAPIService`
 
 ### Project Reindex
 
@@ -196,12 +198,15 @@ Note: `backend/controllers/document_controller.py` keeps `DocumentController.pro
 - Conversation sources/retrieval metadata are internal by default; customer-visible sources require `show_sources_to_customer`.
 - `POST /config/providers` now always requires an authenticated JWT user (no anonymous mutation fallback).
 - `GET /config/providers` requires an authenticated JWT user.
-- `GET /stats/` now requires an authenticated JWT user.
+- `GET /stats/` returns counts scoped to the authenticated user's owned projects; platform-wide stats belong under platform-owner-only `/admin/stats`.
+- Client IP extraction only honors `X-Forwarded-For` when `request.client.host` matches `SECURITY_TRUSTED_PROXY_IPS`; otherwise direct client host wins.
+- Local compose should publish backend and local tooling ports on `127.0.0.1` unless deliberately deployed behind an authenticated/proxied surface.
 - `POST /bot/config` now requires a real JWT-backed DB user and only accepts `active_project_id` values owned by that user.
 - `/bot/config` remains legacy/demo configuration and now returns a deprecation warning; do not build production behavior on it.
 - Configured `BOT_API_*` / `AUTH_ADMIN_*` service-account usernames are reserved from normal signup/password rotation, and successful service-account login keeps a matching DB user row available for `get_current_db_user()`.
 - Document processing must go through Celery tasks only (routes dispatch `process_document_task` / `process_and_index_workflow`; direct `DocumentController.process_document()` is disabled).
 - Security simulation is non-destructive by default; destructive simulation requires `SECURITY_SIMULATION_DESTRUCTIVE_ENABLED=true` and platform-owner role.
+- Unknown Alembic revision auto-stamping is local/dev recovery only; `ENVIRONMENT=production` must fail closed.
 
 ## Review Findings
 
@@ -235,8 +240,8 @@ Recently fixed:
    These are the only supported local entry scripts; when consolidating script behavior, remove stale helpers instead of keeping multiple overlapping launch paths. `start.bat` should default to a fast `docker compose up -d` path and reserve `--build` for explicit rebuilds only.
 13. `uploads/logs/`
   `setup.bat` writes `uploads/logs/setup.log`; `start.bat` writes `uploads/logs/start.log`, follows container output into `uploads/logs/docker_stack.log`, snapshots `docker compose ps` into `uploads/logs/docker_ps.log`, and redirects the local static frontend server to `uploads/logs/frontend.log`; `stop.bat` writes `uploads/logs/stop.log` and appends pre/post-stop stack state to `uploads/logs/docker_ps.log`.
-14. `frontend/app.js`, `frontend/login.html`, and `frontend/signup.html`
-   Frontend API autodiscovery now defaults to `http://localhost:8000` and probes port `8000` before legacy ports like `8101`; keep query-string and `localStorage` overrides intact for non-local environments.
+14. `frontend/app.js`, `frontend/login.html`, `frontend/signup.html`, and `frontend/index.html`
+   Frontend API autodiscovery and account placeholders now default to `http://localhost:8000` and probe port `8000` before legacy ports like `8101`; keep query-string and `localStorage` overrides intact for non-local environments.
 15. `backend/utils/task_tracking.py`, `backend/utils/idempotency_manager.py`, `backend/routes/projects.py`, `backend/routes/documents.py`, `backend/tasks/data_indexing.py`, `backend/tasks/file_processing.py`, `backend/tasks/process_workflow.py`, and `backend/celery_app.py`
   Task ownership is now persisted by `celery_task_id` instead of relying on in-memory-only `_TASK_OWNER_MAP`, manual project reindex uses the default worker queue plus durable owner tracking, worker tasks reuse the pre-created execution row instead of duplicating it, duplicate historical rows are merged away by `celery_task_id`, and `process-and-index` parent workflows now finalize from child-task reconciliation instead of needing `/tasks/{id}` polling to reach a terminal state.
 16. `backend/providers/llm/factory.py` and `backend/routes/app_config.py`
@@ -286,7 +291,9 @@ Recently fixed:
 38. `scripts/dev/newstart.bat`, `README.md`, and `AGENTS.md`
   `newstart.bat` is a user-requested helper that first calls `scripts/dev/start.bat`, then launches `frontend-next` with `pnpm dev` or `npm run dev`, waits for `http://localhost:3001/login`, and opens the Next.js frontend. This is an explicit exception to the normal three-script guidance in `scripts/dev/`.
 39. `frontend-next/src/lib/auth/session.ts`, `frontend-next/src/app/(auth)/login/page.tsx`, `frontend-next/src/components/layout/RoleGuard.tsx`, `docker/docker-compose.yml`, and `.env`
-  Next.js auth hydration now runs once via `useAuthStore.getState()` and auth consumers read store fields with separate selectors to avoid React 19 external-store infinite-update loops; local backend CORS now explicitly includes `http://localhost:3001` so the Next.js frontend can call `/health` and auth endpoints from the dev port.
+  Next.js auth hydration now runs once via `useAuthStore.getState()` and auth consumers read store fields with separate selectors to avoid React 19 external-store infinite-update loops; local backend CORS now explicitly includes `http://localhost:3001` and `http://127.0.0.1:3001` so the Next.js frontend can call `/health` and auth endpoints from the dev port.
+40. `backend/tasks/file_processing.py`, `backend/providers/vectordb/pgvector_provider.py`, `backend/database/connection.py`, `backend/security/client_ip.py`, `backend/tasks/telegram_outbox.py`, `backend/database/models.py`, `backend/alembic/versions/20260501_01_add_telegram_outbox_claim_lease.py`, `backend/routes/stats.py`, `backend/routes/bot_integrations.py`, `backend/services/bot_integration_service.py`, `frontend-next/src/components/bots/BotFormDrawer.tsx`, `frontend-next/package.json`, `frontend-next/pnpm-lock.yaml`, `docker/docker-compose.yml`, `scripts/dev/start.bat`, `backend/requirements.txt`, `README.md`, and `AGENTS.md`
+  Report hardening pass: fresh pgvector embeddings now update in the worker transaction and verify row counts; unknown Alembic revision auto-stamping is blocked in production; forwarded IPs require trusted proxies; Telegram outbox stale `sending` claims are recoverable; audited backend/PostCSS dependency pins were raised; legacy frontend defaults to localhost; `/stats/` is tenant-scoped; bot fallback messages can be cleared; Next bot forms expose customer-source and human-handoff toggles; local compose/static/Next frontend surfaces bind to loopback; stale `tempCodeRunnerFile.bat` was removed and the project graph moved to `docs/project-graph.md`.
 
 ## Known Drift Between Docs and Code
 

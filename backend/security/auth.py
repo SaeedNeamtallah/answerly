@@ -21,6 +21,7 @@ from backend.config import settings
 from backend.database import get_db
 from backend.database.models import User, UserAccountStatus
 from backend.security.event_service import log_event
+from backend.security.client_ip import get_optional_client_ip
 from backend.security.jwt_utils import create_jwt_access_token, decode_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 from backend.security.sanitization import sanitize_text
@@ -204,14 +205,7 @@ def has_security_engineer_role(roles: List[str]) -> bool:
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
-    if request is None:
-        return None
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip() or None
-    if request.client and request.client.host:
-        return request.client.host
-    return None
+    return get_optional_client_ip(request)
 
 
 def _verify_pbkdf2_sha256(password: str, encoded_hash: str) -> bool:

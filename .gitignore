@@ -10,8 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -121,6 +121,6 @@ __pycache__
 # Generated output files
 all_project_code.txt
 server_output.txt
-project-graph.md
+/project-graph.md
 newplan.md
 tmp/

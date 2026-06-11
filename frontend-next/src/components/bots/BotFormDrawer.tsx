@@ -11,7 +11,8 @@ import { BotIntegration } from "@/lib/types/bot";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -19,7 +20,13 @@ const schema = z.object({
   name: z.string().min(1, "Name is required"),
   project_id: z.number().min(1, "Project is required"),
   bot_token: z.string().optional(),
-  fallback_message: z.string().optional(),
+  fallback_message: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = String(value || "").trim();
+      return trimmed ? trimmed : null;
+    }),
   show_sources_to_customer: z.boolean().default(false),
   human_handoff_enabled: z.boolean().default(true),
 });
@@ -67,12 +74,14 @@ export function BotFormDrawer({
     });
   }, [form, initialValues]);
   const projectId = useWatch({ control: form.control, name: "project_id" });
+  const showSourcesToCustomer = useWatch({ control: form.control, name: "show_sources_to_customer" });
+  const humanHandoffEnabled = useWatch({ control: form.control, name: "human_handoff_enabled" });
 
   return (
     <Sheet>
       <SheetTrigger asChild>
         <Button>
-          <Plus className="size-4" />
+          <Plus data-icon="inline-start" />
           {triggerLabel}
         </Button>
       </SheetTrigger>
@@ -80,19 +89,19 @@ export function BotFormDrawer({
         <SheetHeader>
           <SheetTitle>{initialValues ? "Edit bot" : "Create bot"}</SheetTitle>
         </SheetHeader>
-        <form className="mt-6 space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Bot name</label>
-            <Input {...form.register("name")} />
+        <form className="mt-6 flex flex-col gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bot-name">Bot name</Label>
+            <Input id="bot-name" {...form.register("name")} />
           </div>
           {!initialValues ? (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">BotFather token</label>
-              <Input type="password" {...form.register("bot_token")} />
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="bot-token">BotFather token</Label>
+              <Input id="bot-token" type="password" {...form.register("bot_token")} />
             </div>
           ) : null}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Linked knowledge base</label>
+          <div className="flex flex-col gap-2">
+            <Label>Linked knowledge base</Label>
             <Select
               value={String(projectId || "")}
               onValueChange={(value) => form.setValue("project_id", Number(value))}
@@ -101,20 +110,48 @@ export function BotFormDrawer({
                 <SelectValue placeholder="Select project" />
               </SelectTrigger>
               <SelectContent>
-                {projects.map((project) => (
-                  <SelectItem key={project.id} value={String(project.id)}>
-                    {project.name}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={String(project.id)}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Fallback message</label>
-            <Textarea rows={4} {...form.register("fallback_message")} />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bot-fallback-message">Fallback message</Label>
+            <Textarea id="bot-fallback-message" rows={4} {...form.register("fallback_message")} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex min-h-20 items-start gap-3 rounded-lg border bg-background p-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-4 accent-primary"
+                checked={Boolean(showSourcesToCustomer)}
+                {...form.register("show_sources_to_customer")}
+              />
+              <span className="flex flex-col gap-1">
+                <span className="text-sm font-medium">Customer sources</span>
+                <span className="text-sm text-muted-foreground">Show source context in Telegram replies.</span>
+              </span>
+            </label>
+            <label className="flex min-h-20 items-start gap-3 rounded-lg border bg-background p-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-4 accent-primary"
+                checked={Boolean(humanHandoffEnabled)}
+                {...form.register("human_handoff_enabled")}
+              />
+              <span className="flex flex-col gap-1">
+                <span className="text-sm font-medium">Human handoff</span>
+                <span className="text-sm text-muted-foreground">Allow conversations to be escalated.</span>
+              </span>
+            </label>
           </div>
           <Button type="submit" disabled={isPending}>
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
             Save bot
           </Button>
         </form>

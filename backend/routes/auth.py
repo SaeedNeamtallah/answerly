@@ -27,6 +27,7 @@ from backend.services.login_security_service import (
 )
 from backend.security.event_service import log_event
 from backend.security.auth import get_current_db_user, get_product_role_for_user, resolve_roles_for_username
+from backend.security.client_ip import get_optional_client_ip
 from backend.security.jwt_utils import create_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
 
@@ -137,12 +138,7 @@ class SignupResponse(BaseModel):
 
 
 def _extract_client_ip(request: Request) -> str | None:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip() or None
-    if request.client and request.client.host:
-        return request.client.host
-    return None
+    return get_optional_client_ip(request)
 
 
 def _normalize_login_username(username: str) -> str:

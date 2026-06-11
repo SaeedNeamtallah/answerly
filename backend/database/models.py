@@ -5,7 +5,7 @@ Defines tables for users, projects, assets, and chunks with vector embeddings.
 from enum import Enum as PyEnum
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON, LargeBinary, Index, Boolean, Enum as SAEnum
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
@@ -325,6 +325,7 @@ class ConversationMessage(Base):
         default=0,
         server_default="0",
     )
+    delivery_claimed_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     owner = relationship("User", foreign_keys=[owner_id], back_populates="conversation_messages")

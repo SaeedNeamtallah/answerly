@@ -316,6 +316,7 @@ async def _process_document(task_instance, asset_id: int):
                     vectors=embeddings,
                     ids=chunk_ids,
                     metadata=vector_metadata,
+                    session=db,
                     session_maker=session_maker,
                 )
 

@@ -18,6 +18,7 @@ from backend.database import get_db
 from backend.database.models import User, UserAccountStatus
 from backend.config import settings
 from backend.security.auth import ROLE_PLATFORM_OWNER, get_product_role_for_user, require_security_center_access
+from backend.security.client_ip import get_optional_client_ip
 from backend.services.security_dashboard_service import security_dashboard_service
 
 
@@ -72,12 +73,7 @@ class SecurityUserStatusEventResponse(BaseModel):
 
 
 def _extract_client_ip(request: Request) -> Optional[str]:
-    forwarded_for = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if forwarded_for:
-        return forwarded_for[:128]
-    if request.client and request.client.host:
-        return str(request.client.host)[:128]
-    return None
+    return get_optional_client_ip(request, max_length=128)
 
 
 def _to_event_responses(events: List[Dict[str, Any]]) -> List[SecurityEventResponse]:

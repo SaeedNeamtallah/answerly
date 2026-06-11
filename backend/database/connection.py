@@ -70,6 +70,13 @@ async def init_db():
             if "Can't locate revision identified by" not in str(exc):
                 raise
 
+            if settings.environment.lower() == "production":
+                logger.error(
+                    "Database is stamped with an unknown Alembic revision in production; "
+                    "refusing automatic recovery."
+                )
+                raise
+
             logger.warning(
                 "Database is stamped with an unknown Alembic revision. "
                 "Stamping current schema to head before retrying migrations: %s",

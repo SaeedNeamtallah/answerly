@@ -6,7 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from backend.database import get_db
@@ -95,6 +95,8 @@ def _build_tracked_task_response(task_id: str, task_record) -> Dict[str, Any]:
 
 # Response Models
 class AssetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     filename: str
@@ -109,9 +111,6 @@ class AssetResponse(BaseModel):
     
 class ProcessAndIndexRequest(BaseModel):
     do_reset: bool = False
-
-    class Config:
-        from_attributes = True
 
 
 async def _ensure_owned_project(

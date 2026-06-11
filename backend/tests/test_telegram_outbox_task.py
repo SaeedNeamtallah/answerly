@@ -16,6 +16,7 @@ class FakeMessage:
     telegram_customer_id: int | None
     delivery_status: str = "pending"
     delivery_attempts: int = 0
+    delivery_claimed_at: object | None = None
     created_at: object | None = None
     telegram_message_id: str | None = None
 
@@ -89,7 +90,35 @@ class TelegramOutboxTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message.telegram_message_id, "42")
         self.assertGreaterEqual(fake_db.commits, 2)
 
+    async def test_outbox_worker_recovers_stale_sending_message(self):
+        message = FakeMessage(
+            id=2,
+            text="retry me",
+            bot_integration_id=10,
+            telegram_customer_id=20,
+            delivery_status="sending",
+            delivery_attempts=1,
+        )
+        integration = SimpleNamespace(token_encrypted="encrypted")
+        customer = SimpleNamespace(chat_id="123")
+        fake_db = FakeDB([message], integration, customer)
+        session_maker = FakeSessionMaker(fake_db)
+
+        async def fake_get_setup_utils():
+            return (None, session_maker, None, None, None, None, None)
+
+        with (
+            patch("backend.tasks.telegram_outbox.get_setup_utils", side_effect=fake_get_setup_utils),
+            patch("backend.tasks.telegram_outbox.TokenCryptoService.decrypt_token", return_value="token"),
+            patch("backend.tasks.telegram_outbox.TelegramAPIService.send_message", new=AsyncMock(return_value={"message_id": 43})),
+        ):
+            result = await telegram_outbox._deliver_pending_messages()
+
+        self.assertEqual(result["recovered"], 1)
+        self.assertEqual(result["sent"], 1)
+        self.assertEqual(message.delivery_status, "sent")
+        self.assertEqual(message.delivery_attempts, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
-

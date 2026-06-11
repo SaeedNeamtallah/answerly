@@ -13,12 +13,13 @@ It combines a FastAPI backend, background processing with Celery, vector search 
 - Product roles: `company_admin` and `platform_owner`
 - Telegram support: database-backed bot integrations plus durable conversations
 - Legacy bot: optional single-bot service kept for demo/backward compatibility
+- Local runtime exposure: compose-published services, the legacy static frontend, and Next.js dev/start scripts bind to `127.0.0.1` by default
 
 ## Architecture At A Glance
 
 1. Upload document to a project.
 2. Celery worker extracts text, chunks content, and generates embeddings.
-3. Vectors are written to the active vector provider.
+3. Vectors are written to the active vector provider; pgvector embedding writes share the worker transaction that created fresh chunks.
 4. Query endpoint retrieves relevant chunks and sends context to the configured LLM provider.
 5. Response is returned with source context for dashboard testing.
 6. Production Telegram webhooks resolve a bot integration, persist the customer conversation, reuse the same RAG stack with `owner_id`/`project_id` scoping, and hide sources from customers by default.
@@ -145,6 +146,8 @@ Default URLs:
 - Prometheus: [http://localhost:9090](http://localhost:9090)
 - Grafana: [http://localhost:3000](http://localhost:3000) with `admin` / `admin123`
 
+Local compose publishes the backend on `127.0.0.1:8000`. For a LAN or production deployment, put the backend behind an intentional reverse proxy and set `SECURITY_TRUSTED_PROXY_IPS` to the proxy IPs/CIDRs before relying on forwarded client IP headers.
+
 ### 5. Stop
 
 ```powershell
@@ -181,10 +184,11 @@ scripts\dev\newstart.bat
 
 Key details:
 
-- URL: `http://localhost:3001`
+- URL: `http://localhost:3001` (`pnpm dev` and `pnpm start` bind to `127.0.0.1`)
 - Env file: `frontend-next/.env.local`
 - Required public env: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`
 - Auth remains Bearer-token compatible in this migration round
+- Telegram bot forms expose source-visibility and human-handoff settings
 - The legacy `frontend/` remains in place during migration
 
 ## Docker And WSL Troubleshooting (Windows)
@@ -220,6 +224,8 @@ The scripts now print WSL-specific hints when this failure mode is detected.
 - node-exporter: 9100
 - Celery worker metrics: 9108
 
+The `/stats/` endpoint returns counts scoped to the authenticated company user's projects. Platform-wide counts are available through `/admin/stats` for `platform_owner` users.
+
 ## Monitoring
 
 The local Docker stack includes Prometheus, Grafana, postgres-exporter, node-exporter, and a Celery worker metrics endpoint.
@@ -246,6 +252,7 @@ Open Prometheus at [http://localhost:9090](http://localhost:9090). Open Grafana 
 
 Database initialization runs migrations via Alembic during backend startup.
 Manual commands are still useful when working directly with schema changes.
+Unknown Alembic revision auto-recovery is allowed only outside `ENVIRONMENT=production`; production fails closed and requires an operator migration decision.
 
 Upgrade:
 
@@ -270,6 +277,7 @@ Production Telegram endpoints:
 - `POST /telegram/webhook/{integration_id}/{webhook_secret}` receives Telegram updates for exactly one integration.
 - `GET /conversations/` and related routes power the company support inbox.
 - `/admin/*` routes are platform-owner-only and return `403` for normal company users.
+- Telegram outbox delivery uses a claim lease so stale `sending` messages can be retried by later worker runs.
 
 The legacy `/bot/config` and `telegram_bot/` active-project flow remains for demo compatibility only. It must not be used for multi-company production support behavior.
 
@@ -288,6 +296,10 @@ Optional environment variables:
 - RAGMIND_PROCESSING_TIMEOUT
 - RAGMIND_STRICT_QUERY
 
+## Dependency Security
+
+Backend framework/request-parsing dependencies are pinned past the audit findings in `backend/requirements.txt` (`fastapi`, `starlette`, `python-multipart`, and `python-dotenv`). The Next.js workspace uses a `pnpm` override to keep transitive `postcss` on `8.5.12`.
+
 ## Repository Layout
 
 ```text
@@ -299,6 +311,7 @@ frontend-next/  Next.js App Router dashboard migration
 telegram_bot/   Legacy single-bot integration
 scripts/dev/    setup/start/stop scripts for local Windows workflow
 backend/alembic/ Database migration revisions
+docs/project-graph.md Runtime/API/service/data/frontend graph
 docs/notes/     reports and long-form notes (non-runtime docs)
 tools/          Utility scripts, including smoke test
 uploads/        Local uploaded files and runtime logs under uploads/logs/

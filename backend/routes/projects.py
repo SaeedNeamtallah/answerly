@@ -48,15 +48,14 @@ class ProjectIndexRequest(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
     extra_metadata: Dict[str, Any]
     created_at: datetime
     updated_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 class PaginatedProjectsResponse(BaseModel):

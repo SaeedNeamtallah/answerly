@@ -159,7 +159,7 @@ if errorlevel 1 (
     >> "%FRONTEND_LOG%" echo ========================================
     call :log "[INFO] Starting frontend server on http://localhost:%FRONTEND_PORT%"
     call :log "[INFO] Frontend logs: %FRONTEND_LOG%"
-    start "%FRONTEND_WINDOW_TITLE%" /min cmd /d /c "cd /d "%ROOT%\frontend" && "%FRONTEND_PYTHON%" -m http.server %FRONTEND_PORT% 1>> "%FRONTEND_LOG%" 2>&1"
+    start "%FRONTEND_WINDOW_TITLE%" /min cmd /d /c "cd /d "%ROOT%\frontend" && "%FRONTEND_PYTHON%" -m http.server %FRONTEND_PORT% --bind 127.0.0.1 1>> "%FRONTEND_LOG%" 2>&1"
     for /l %%A in (1,1,20) do (
         curl.exe -fsS "http://127.0.0.1:%FRONTEND_PORT%/" >nul 2>&1
         if not errorlevel 1 goto :frontend_ready

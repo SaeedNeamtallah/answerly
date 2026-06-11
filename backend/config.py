@@ -5,7 +5,6 @@ Loads environment variables from .env file.
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import List
-import json
 
 
 class Settings(BaseSettings):
@@ -118,7 +117,7 @@ class Settings(BaseSettings):
     retrieval_hnsw_ef_search: int = Field(default=40, alias="RETRIEVAL_HNSW_EF_SEARCH")
     
     # API Configuration
-    api_host: str = Field(default="0.0.0.0", alias="API_HOST")
+    api_host: str = Field(default="127.0.0.1", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
     api_title: str = Field(default="RAGMind API", alias="API_TITLE")
     api_version: str = Field(default="1.0.0", alias="API_VERSION")
@@ -166,6 +165,10 @@ class Settings(BaseSettings):
     security_rate_limit_exempt_paths: str = Field(
         default="/health,/metrics,/docs,/openapi.json,/redoc",
         alias="SECURITY_RATE_LIMIT_EXEMPT_PATHS"
+    )
+    security_trusted_proxy_ips: str = Field(
+        default="127.0.0.1,::1",
+        alias="SECURITY_TRUSTED_PROXY_IPS",
     )
 
     security_rate_limit_chat_requests_per_window: int = Field(
@@ -248,7 +251,16 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     cors_origins: List[str] = Field(
-        default=["http://52.188.226.80", "http://localhost:3000", "http://localhost:8080"],
+        default=[
+            "http://127.0.0.1:3001",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://localhost:3000",
+            "http://127.0.0.1:8080",
+            "http://localhost:8080",
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+        ],
         alias="CORS_ORIGINS"
     )
     
@@ -290,6 +302,10 @@ class Settings(BaseSettings):
         default=3,
         alias="TELEGRAM_OUTBOX_MAX_DELIVERY_ATTEMPTS",
     )
+    telegram_outbox_claim_timeout_seconds: int = Field(
+        default=120,
+        alias="TELEGRAM_OUTBOX_CLAIM_TIMEOUT_SECONDS",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -321,19 +337,6 @@ def _validate_production_secrets(s: Settings) -> None:
         raise SystemExit("FATAL production configuration error: " + "; ".join(reasons))
 
 
-# Global settings instance - use default values if .env not found
-try:
-    settings = Settings()
-except Exception as e:
-    # If .env is missing, use defaults
-    import warnings
-    warnings.warn(f".env file not found or invalid, using default settings: {str(e)}")
-    # In Pydantic v2, we can't just pass _env_file=None to the constructor easily if it fails
-    # We'll try to create a default instance without loading from env
-    try:
-        settings = Settings(_env_file=None)
-    except:
-        # Fallback to a very basic settings if even that fails
-        settings = Settings()
-
+# Global settings instance. A missing .env is fine; malformed settings must fail startup.
+settings = Settings()
 _validate_production_secrets(settings)

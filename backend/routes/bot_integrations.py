@@ -175,6 +175,7 @@ async def update_bot_integration(
             show_sources_to_customer=payload.show_sources_to_customer,
             human_handoff_enabled=payload.human_handoff_enabled,
             fallback_message=payload.fallback_message,
+            fallback_message_provided="fallback_message" in payload.model_fields_set,
         )
         return _serialize_integration(integration)
     except Exception as exc:
