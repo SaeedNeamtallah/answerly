@@ -16,7 +16,7 @@ export default function ConversationsPage() {
   const [status, setStatus] = useState("all");
   const currentUser = useAuthStore((state) => state.currentUser);
   const query = useQuery({
-    queryKey: ["conversations"],
+    queryKey: ["conversations", status],
     queryFn: () => listConversations(status === "all" ? undefined : { status }),
   });
 

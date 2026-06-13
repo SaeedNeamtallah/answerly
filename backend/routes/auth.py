@@ -525,14 +525,14 @@ async def me(
             roles.append(role)
 
     # Resolve company name and website if the user is an employee
-    company_name = current_user.company_name
+    company_name = current_user.company_name or current_user.username
     company_website = current_user.company_website
     if current_user.role == "employee" and current_user.parent_id is not None:
         parent_user_stmt = select(User).where(User.id == current_user.parent_id).limit(1)
         parent_user_result = await db.execute(parent_user_stmt)
         parent_user = parent_user_result.scalar_one_or_none()
         if parent_user is not None:
-            company_name = parent_user.company_name
+            company_name = parent_user.company_name or parent_user.username
             company_website = parent_user.company_website
 
     return IdentityResponse(

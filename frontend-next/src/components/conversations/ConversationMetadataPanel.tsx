@@ -23,6 +23,7 @@ export function ConversationMetadataPanel({ conversation }: { conversation?: Con
         <p>Bot: {conversation.bot_name || "—"}</p>
         <p>Project ID: {conversation.project_id}</p>
         <p>Needs human: {conversation.needs_human ? "Yes" : "No"}</p>
+        <p>Assigned to: {conversation.assigned_to_username || "Unassigned"}</p>
         <p>Last message: {formatDateTime(conversation.last_message_at)}</p>
         <p>Last error: {conversation.last_error || "—"}</p>
       </div>

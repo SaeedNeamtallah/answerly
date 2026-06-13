@@ -9,6 +9,7 @@ export interface Conversation {
   status: string;
   needs_human: boolean;
   assigned_to_user_id?: number | null;
+  assigned_to_username?: string | null;
   last_message_at?: string | null;
   last_error?: string | null;
   created_at?: string;

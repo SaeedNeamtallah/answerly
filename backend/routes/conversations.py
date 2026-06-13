@@ -36,6 +36,7 @@ class ConversationResponse(BaseModel):
     status: str
     needs_human: bool
     assigned_to_user_id: Optional[int]
+    assigned_to_username: Optional[str] = None
     last_message_at: Optional[datetime]
     last_error: Optional[str]
     created_at: datetime
@@ -72,6 +73,7 @@ def _customer_label(conversation: Conversation) -> str:
 
 def _serialize_conversation(conversation: Conversation) -> ConversationResponse:
     integration = getattr(conversation, "bot_integration", None)
+    assigned_user = getattr(conversation, "assigned_to_user", None)
     return ConversationResponse(
         id=int(conversation.id),
         owner_id=int(conversation.owner_id),
@@ -83,6 +85,7 @@ def _serialize_conversation(conversation: Conversation) -> ConversationResponse:
         status=str(conversation.status),
         needs_human=bool(conversation.needs_human),
         assigned_to_user_id=conversation.assigned_to_user_id,
+        assigned_to_username=getattr(assigned_user, "username", None),
         last_message_at=conversation.last_message_at,
         last_error=conversation.last_error,
         created_at=conversation.created_at,

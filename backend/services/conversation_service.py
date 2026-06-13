@@ -225,7 +225,11 @@ class ConversationService:
     ) -> list[Conversation]:
         stmt = (
             select(Conversation)
-            .options(selectinload(Conversation.customer), selectinload(Conversation.bot_integration))
+            .options(
+                selectinload(Conversation.customer),
+                selectinload(Conversation.bot_integration),
+                selectinload(Conversation.assigned_to_user),
+            )
             .where(Conversation.owner_id == int(owner_id))
         )
         if status:
@@ -238,7 +242,11 @@ class ConversationService:
     async def get_conversation(self, db: AsyncSession, *, owner_id: int, conversation_id: int) -> Conversation | None:
         result = await db.execute(
             select(Conversation)
-            .options(selectinload(Conversation.customer), selectinload(Conversation.bot_integration))
+            .options(
+                selectinload(Conversation.customer),
+                selectinload(Conversation.bot_integration),
+                selectinload(Conversation.assigned_to_user),
+            )
             .where(Conversation.id == int(conversation_id), Conversation.owner_id == int(owner_id))
         )
         return result.scalar_one_or_none()

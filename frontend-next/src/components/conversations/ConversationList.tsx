@@ -24,7 +24,16 @@ export function ConversationList({ conversations }: { conversations: Conversatio
               <p className="font-medium text-slate-900">{conversation.customer_label}</p>
               <p className="text-sm text-slate-500">{formatRelativeDate(conversation.last_message_at)}</p>
             </div>
-            <StatusBadge status={conversation.status} />
+            <div className="flex flex-col items-end gap-1.5">
+              <StatusBadge status={conversation.status} />
+              {conversation.assigned_to_username ? (
+                <span className="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
+                  Assigned to: {conversation.assigned_to_username}
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">Unassigned</span>
+              )}
+            </div>
           </div>
         </Link>
       ))}
