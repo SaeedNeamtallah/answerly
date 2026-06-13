@@ -26,7 +26,7 @@ from backend.services.login_security_service import (
     login_security_service,
 )
 from backend.security.event_service import log_event
-from backend.security.auth import get_current_db_user, get_product_role_for_user, resolve_roles_for_username
+from backend.security.auth import get_current_db_user, get_product_role_for_user, resolve_roles_for_username, require_platform_owner_access
 from backend.security.client_ip import get_optional_client_ip
 from backend.security.jwt_utils import create_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
@@ -110,6 +110,8 @@ class LoginRequest(BaseModel):
 class SignupRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=150)
     password: str = Field(..., min_length=8, max_length=256)
+    role: str = Field("company_admin", description="Role of the new user")
+    parent_id: Optional[int] = Field(None, description="Company user ID for employees")
 
 
 class ChangePasswordRequest(BaseModel):
@@ -248,6 +250,7 @@ async def _apply_bruteforce_account_policy(
 async def signup(
     payload: SignupRequest,
     request: Request,
+    current_admin: User = Depends(require_platform_owner_access),
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
 ):
@@ -257,6 +260,8 @@ async def signup(
             db=db,
             username=payload.username,
             password=payload.password,
+            role=payload.role,
+            parent_id=payload.parent_id,
         )
         log_event(
             {

@@ -8,6 +8,8 @@ export interface LoginPayload {
 export interface SignupPayload {
   username: string;
   password: string;
+  role: string;
+  parent_id?: number;
 }
 
 export interface ChangePasswordPayload {

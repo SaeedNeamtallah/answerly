@@ -363,6 +363,8 @@ class AuthService:
         *,
         username: str,
         password: str,
+        role: str = "company_admin",
+        parent_id: int | None = None,
     ) -> User:
         """Create a new user account with bcrypt hashed password."""
         normalized_username = self._normalize_username(username)
@@ -387,6 +389,8 @@ class AuthService:
         user = User(
             username=normalized_username,
             hashed_password=self._hash_password(sanitized_password),
+            role=role,
+            parent_id=parent_id,
             status=UserAccountStatus.ACTIVE,
         )
         db.add(user)

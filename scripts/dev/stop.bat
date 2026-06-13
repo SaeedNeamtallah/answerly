@@ -20,6 +20,7 @@ call :log "========================================"
 call :log "."
 
 call :log "[INFO] Closing frontend window if it is running..."
+taskkill /FI "WINDOWTITLE eq RAGMind Next Frontend" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq RAGMind Frontend" /T /F >nul 2>&1
 call :log "[INFO] Closing Docker log streamer if it is running..."
 taskkill /FI "WINDOWTITLE eq RAGMind Docker Logs" /T /F >nul 2>&1

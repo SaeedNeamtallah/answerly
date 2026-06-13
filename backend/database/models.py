@@ -60,6 +60,7 @@ class User(Base):
     role = Column(String(30), nullable=False, default=UserRole.COMPANY_ADMIN.value, server_default=UserRole.COMPANY_ADMIN.value, index=True)
     company_name = Column(String(255), nullable=True)
     company_website = Column(String(500), nullable=True)
+    parent_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     status = Column(
         SAEnum(UserAccountStatus, name="user_account_status", native_enum=False),
         nullable=False,

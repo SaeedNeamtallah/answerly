@@ -7,7 +7,14 @@ pushd "%ROOT%"
 set "LOGS_DIR=%ROOT%\uploads\logs"
 set "RUN_LOG=%LOGS_DIR%\setup.log"
 set "HAS_UV=0"
-set "VENV_PY=venv\Scripts\python.exe"
+rem Auto-detect virtual environment directory (prefer .venv if it exists, otherwise venv)
+set "VENV_DIR=venv"
+if exist ".venv\Scripts\python.exe" (
+    set "VENV_DIR=.venv"
+) else if exist "venv\Scripts\python.exe" (
+    set "VENV_DIR=venv"
+)
+set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "COMPOSE_CMD="
 set "VENV_CREATE_CMD="
 set "VENV_CREATE_LOG_CMD="
@@ -35,29 +42,32 @@ if exist "%VENV_PY%" (
     "%VENV_PY%" --version >nul 2>&1
     if errorlevel 1 (
         call :log "[WARNING] Existing venv is broken. Recreating it..."
-        rmdir /s /q venv >> "%RUN_LOG%" 2>&1
+        if exist "%VENV_DIR%" rmdir /s /q "%VENV_DIR%" >> "%RUN_LOG%" 2>&1
     )
 )
 
-if not exist "%VENV_PY%" (
-    call :prepare_venv_command
-    if errorlevel 1 goto :fail
+if exist "%VENV_PY%" goto :venv_ready
 
-    call :log "[INFO] Creating virtual environment..."
-    >> "%RUN_LOG%" echo [COMMAND] %VENV_CREATE_LOG_CMD%
-    call %VENV_CREATE_CMD% >> "%RUN_LOG%" 2>&1
-    if errorlevel 1 (
-        if "%HAS_UV%"=="1" (
-            call :log "[WARNING] uv could not create a Python 3.11 venv. Retrying with default Python..."
-            >> "%RUN_LOG%" echo [COMMAND] uv venv venv
-            uv venv venv >> "%RUN_LOG%" 2>&1
-        )
-        if errorlevel 1 (
-            call :log "[ERROR] Failed to create the virtual environment."
-            goto :fail
-        )
-    )
+call :prepare_venv_command
+if errorlevel 1 goto :fail
+
+call :log "[INFO] Creating virtual environment..."
+>> "%RUN_LOG%" echo [COMMAND] %VENV_CREATE_LOG_CMD%
+call %VENV_CREATE_CMD% >> "%RUN_LOG%" 2>&1
+if not errorlevel 1 goto :venv_created
+
+if "%HAS_UV%"=="1" (
+    call :log "[WARNING] uv could not create a Python 3.11 venv. Retrying with default Python..."
+    >> "%RUN_LOG%" echo [COMMAND] uv venv %VENV_DIR%
+    uv venv %VENV_DIR% >> "%RUN_LOG%" 2>&1
 )
+if errorlevel 1 (
+    call :log "[ERROR] Failed to create the virtual environment."
+    goto :fail
+)
+
+:venv_created
+:venv_ready
 
 "%VENV_PY%" --version >nul 2>&1
 if errorlevel 1 (
@@ -177,29 +187,29 @@ goto :eof
 
 :prepare_venv_command
 if "%HAS_UV%"=="1" (
-    set "VENV_CREATE_CMD=uv venv --python 3.11 venv"
-    set "VENV_CREATE_LOG_CMD=uv venv --python 3.11 venv"
+    set "VENV_CREATE_CMD=uv venv --python 3.11 %VENV_DIR%"
+    set "VENV_CREATE_LOG_CMD=uv venv --python 3.11 %VENV_DIR%"
     goto :eof
 )
 
 py -3.11 --version >nul 2>&1
 if not errorlevel 1 (
-    set "VENV_CREATE_CMD=py -3.11 -m venv venv"
-    set "VENV_CREATE_LOG_CMD=py -3.11 -m venv venv"
+    set "VENV_CREATE_CMD=py -3.11 -m venv %VENV_DIR%"
+    set "VENV_CREATE_LOG_CMD=py -3.11 -m venv %VENV_DIR%"
     goto :eof
 )
 
 py -3 --version >nul 2>&1
 if not errorlevel 1 (
-    set "VENV_CREATE_CMD=py -3 -m venv venv"
-    set "VENV_CREATE_LOG_CMD=py -3 -m venv venv"
+    set "VENV_CREATE_CMD=py -3 -m venv %VENV_DIR%"
+    set "VENV_CREATE_LOG_CMD=py -3 -m venv %VENV_DIR%"
     goto :eof
 )
 
 python --version >nul 2>&1
 if not errorlevel 1 (
-    set "VENV_CREATE_CMD=python -m venv venv"
-    set "VENV_CREATE_LOG_CMD=python -m venv venv"
+    set "VENV_CREATE_CMD=python -m venv %VENV_DIR%"
+    set "VENV_CREATE_LOG_CMD=python -m venv %VENV_DIR%"
     goto :eof
 )
 

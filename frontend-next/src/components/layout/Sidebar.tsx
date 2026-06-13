@@ -26,6 +26,7 @@ export const companyNav: NavItem[] = [
 export const adminNav: NavItem[] = [
   { href: "/admin", label: "Overview", icon: Shield },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
+  { href: "/signup", label: "Create Account", icon: UserRound },
   { href: "/admin/conversations", label: "Conversations", icon: MessageSquareText },
   { href: "/admin/bots", label: "Bots", icon: Bot },
   { href: "/admin/errors", label: "Errors", icon: Shield },

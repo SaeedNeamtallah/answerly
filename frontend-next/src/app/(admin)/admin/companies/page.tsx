@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { activateCompany, blockCompany, listAdminCompanies, suspendCompany } from "@/lib/api/admin";
+import { activateCompany, blockCompany, deleteCompany, listAdminCompanies, suspendCompany } from "@/lib/api/admin";
 
 import { CompaniesTable } from "@/components/admin/CompaniesTable";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -24,6 +24,17 @@ export default function AdminCompaniesPage() {
     onSuccess: () => {
       toast.success("Company status updated");
       queryClient.invalidateQueries({ queryKey: ["adminCompanies"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteCompany(id),
+    onSuccess: () => {
+      toast.success("Company and associated employees deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["adminCompanies"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete company");
     },
   });
 
@@ -60,6 +71,13 @@ export default function AdminCompaniesPage() {
               description="Block this company account."
               variant="destructive"
               onConfirm={() => mutation.mutate({ id: company.id, action: "block" })}
+            />
+            <ConfirmDialog
+              trigger={<Button size="sm" variant="destructive">Delete</Button>}
+              title="Delete company"
+              description="Are you sure you want to delete this company? This will also delete all of its employees immediately. This action cannot be undone."
+              variant="destructive"
+              onConfirm={() => deleteMutation.mutate(company.id)}
             />
           </div>
         )}

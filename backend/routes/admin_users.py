@@ -179,3 +179,27 @@ async def admin_restore_user(
         message="User account restored successfully",
         user=_serialize_user_status(updated_user),
     )
+
+
+@router.delete("/{user_id}", status_code=204)
+async def admin_delete_user(
+    user_id: int = Path(..., gt=0),
+    current_admin: User = Depends(require_platform_owner_access),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a user account and cascade delete all its resources (projects, bots, employees)."""
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own admin account")
+
+    await db.delete(user)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete user")
+
+    return None

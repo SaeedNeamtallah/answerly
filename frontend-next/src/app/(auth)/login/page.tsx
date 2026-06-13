@@ -12,7 +12,8 @@ import { z } from "zod";
 import { getHealth } from "@/lib/api/health";
 import { login } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { handleAuthenticatedRedirect, refreshCurrentUser } from "@/lib/auth/session";
+import { handleAuthenticatedRedirect, refreshCurrentUser, isTokenExpired } from "@/lib/auth/session";
+import { isPlatformOwner } from "@/lib/auth/permissions";
 import { useAuthStore } from "@/store/auth-store";
 
 import { BackendUnavailableBanner } from "@/components/shared/BackendUnavailableBanner";
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 const schema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
+  role: z.enum(["admin", "company", "employee"]),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -29,17 +31,18 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginPage() {
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const currentUser = useAuthStore((state) => state.currentUser);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { username: "", password: "" },
+    defaultValues: { username: "", password: "", role: "company" },
   });
 
   useEffect(() => {
-    if (isHydrated && accessToken) {
+    if (isHydrated && accessToken && currentUser && !isTokenExpired(accessToken)) {
       handleAuthenticatedRedirect().catch(() => undefined);
     }
-  }, [accessToken, isHydrated]);
+  }, [accessToken, currentUser, isHydrated]);
 
   const healthQuery = useQuery({
     queryKey: ["health"],
@@ -52,8 +55,37 @@ export default function LoginPage() {
     onSuccess: async (payload) => {
       setAccessToken(payload.access_token);
       const user = await refreshCurrentUser();
+      
+      // Get the selected user type from form values
+      const selectedRole = form.getValues("role");
+      
+      // Enforce security checks based on selected login role and actual DB role
+      if (selectedRole === "admin" && user.role !== "platform_owner") {
+        toast.error("Access Denied: You do not have Platform Owner (Admin) permissions.");
+        useAuthStore.getState().clearSession();
+        return;
+      }
+      if (selectedRole === "company" && user.role !== "company_admin" && user.role !== "platform_owner") {
+        toast.error("Access Denied: This account is not registered as a Company Admin.");
+        useAuthStore.getState().clearSession();
+        return;
+      }
+      if (selectedRole === "employee" && user.role !== "employee" && user.role !== "platform_owner") {
+        toast.error("Access Denied: This account is not registered as a Support Employee.");
+        useAuthStore.getState().clearSession();
+        return;
+      }
+      
       toast.success(`Welcome back, ${user.username}`);
-      handleAuthenticatedRedirect();
+
+      // Direct according to selected type
+      if (selectedRole === "admin") {
+        window.location.replace("/admin");
+      } else if (selectedRole === "employee") {
+        window.location.replace("/conversations");
+      } else {
+        window.location.replace("/dashboard");
+      }
     },
     onError: (error) => {
       toast.error(error instanceof ApiError ? error.message : "Login failed");
@@ -73,7 +105,7 @@ export default function LoginPage() {
 
         {healthQuery.isError ? <BackendUnavailableBanner /> : null}
 
-        <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+        <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate({ username: values.username, password: values.password }))}>
           <div className="space-y-2">
             <label className="text-sm font-medium">Username</label>
             <Input {...form.register("username")} />
@@ -84,18 +116,23 @@ export default function LoginPage() {
             <Input type="password" {...form.register("password")} />
             <p className="text-sm text-rose-600">{form.formState.errors.password?.message}</p>
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">User Type </label>
+            <select
+              {...form.register("role")}
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="admin">Platform Owner </option>
+              <option value="company">Company Admin </option>
+              <option value="employee">Support Employee </option>
+            </select>
+            <p className="text-sm text-rose-600">{form.formState.errors.role?.message}</p>
+          </div>
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
             {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
             Login
           </Button>
         </form>
-
-        <div className="text-center text-sm text-slate-600">
-          No account?{" "}
-          <Link href="/signup" className="font-medium text-indigo-600">
-            Create one
-          </Link>
-        </div>
       </div>
     </div>
   );

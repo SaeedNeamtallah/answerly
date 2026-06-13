@@ -5,8 +5,8 @@ import { useEffect } from "react";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { canAccessAdmin, canAccessCompanyWorkspace } from "@/lib/auth/permissions";
 import { getDefaultRouteForUser } from "@/lib/auth/redirects";
-import { refreshCurrentUser } from "@/lib/auth/session";
-import { useAuthStore } from "@/store/auth-store";
+import { refreshCurrentUser, isTokenExpired } from "@/lib/auth/session";
+import { useAuthStore, clearAuthSession } from "@/store/auth-store";
 
 export function RoleGuard({
   variant,
@@ -29,9 +29,16 @@ export function RoleGuard({
       return;
     }
 
+    if (isTokenExpired(accessToken)) {
+      clearAuthSession();
+      window.location.replace("/login?reason=expired");
+      return;
+    }
+
     if (!currentUser) {
       refreshCurrentUser().catch(() => {
-        window.location.replace("/login");
+        clearAuthSession();
+        window.location.replace("/login?reason=expired");
       });
       return;
     }
@@ -46,7 +53,7 @@ export function RoleGuard({
     }
   }, [accessToken, currentUser, isHydrated, variant]);
 
-  if (!isHydrated || !accessToken || !currentUser) {
+  if (!isHydrated || !accessToken || !currentUser || isTokenExpired(accessToken)) {
     return <LoadingState label="Preparing workspace..." />;
   }
 

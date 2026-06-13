@@ -6,32 +6,23 @@ set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..\..") do set "ROOT=%%~fI"
 pushd "%ROOT%"
 
-set "FRONTEND_PORT=8080"
+set "FRONTEND_PORT=3001"
 set "BACKEND_HEALTH_URL=http://127.0.0.1:8000/health/full"
-set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%/login.html?api=http://localhost:8000"
-set "FRONTEND_WINDOW_TITLE=RAGMind Frontend"
+set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%/login"
+set "FRONTEND_WINDOW_TITLE=RAGMind Next Frontend"
 set "STACK_LOG_WINDOW_TITLE=RAGMind Docker Logs"
 set "FRONTEND_PYTHON="
 set "BACKEND_HEALTH_TIMEOUT_SECONDS=15"
-set "FRONTEND_READY_TIMEOUT_SECONDS=30"
+set "FRONTEND_READY_TIMEOUT_SECONDS=90"
 set "LOGS_DIR=%ROOT%\uploads\logs"
 set "RUN_LOG=%LOGS_DIR%\start.log"
 set "STACK_LOG=%LOGS_DIR%\docker_stack.log"
-set "FRONTEND_LOG=%LOGS_DIR%\frontend.log"
+set "FRONTEND_LOG=%LOGS_DIR%\frontend_next.log"
 set "STACK_STATE_LOG=%LOGS_DIR%\docker_ps.log"
 set "COMPOSE_UP_ARGS=up -d"
 set "COMPOSE_PROFILE_ARGS="
 set "START_MODE=normal"
-if not defined FRONTEND_MODE set "FRONTEND_MODE=local"
-if /I "%FRONTEND_MODE%"=="docker" (
-    set "COMPOSE_PROFILE_ARGS=--profile docker-frontend"
-    set "FRONTEND_URL=http://localhost/login.html?api=http://localhost:8000"
-) else if /I not "%FRONTEND_MODE%"=="local" (
-    echo [ERROR] FRONTEND_MODE must be local or docker.
-    popd
-    endlocal
-    exit /b 1
-)
+set "NEXT_CMD="
 
 if not exist "%LOGS_DIR%" mkdir "%LOGS_DIR%"
 >> "%RUN_LOG%" echo.
@@ -72,7 +63,9 @@ if errorlevel 1 (
 )
 del "%DOCKER_INFO_TMP%" >nul 2>&1
 
-if exist "%ROOT%\venv\Scripts\python.exe" (
+if exist "%ROOT%\.venv\Scripts\python.exe" (
+    set "FRONTEND_PYTHON=%ROOT%\.venv\Scripts\python.exe"
+) else if exist "%ROOT%\venv\Scripts\python.exe" (
     set "FRONTEND_PYTHON=%ROOT%\venv\Scripts\python.exe"
 ) else (
     python --version >nul 2>&1
@@ -82,6 +75,12 @@ if exist "%ROOT%\venv\Scripts\python.exe" (
         goto :fail
     )
     set "FRONTEND_PYTHON=python"
+)
+
+call :resolve_package_manager
+if not defined NEXT_CMD (
+    call :log "[ERROR] Neither pnpm nor npm is available in PATH. Cannot run Next.js frontend."
+    goto :fail
 )
 
 if /I "%START_MODE%"=="build" (
@@ -140,37 +139,26 @@ if errorlevel 1 (
     call :log "[INFO] Docker log streamer is already running"
 )
 
-if /I "%FRONTEND_MODE%"=="docker" (
-    call :log "[INFO] FRONTEND_MODE=docker; using compose frontend at http://localhost"
-    for /l %%A in (1,1,%FRONTEND_READY_TIMEOUT_SECONDS%) do (
-        curl.exe -fsS "http://127.0.0.1/login.html?api=http://localhost:8000" >nul 2>&1
-        if not errorlevel 1 goto :frontend_ready
-        timeout /t 1 /nobreak >nul
-    )
-    call :log "[ERROR] Docker frontend did not become reachable in time."
-    goto :fail
-)
-
 netstat -ano | findstr /R /C:":%FRONTEND_PORT% .*LISTENING" >nul 2>&1
 if errorlevel 1 (
     >> "%FRONTEND_LOG%" echo.
     >> "%FRONTEND_LOG%" echo ========================================
-    >> "%FRONTEND_LOG%" echo [FRONTEND LOG SESSION] %date% %time%
+    >> "%FRONTEND_LOG%" echo [NEXT FRONTEND LOG SESSION] %date% %time%
     >> "%FRONTEND_LOG%" echo ========================================
-    call :log "[INFO] Starting frontend server on http://localhost:%FRONTEND_PORT%"
-    call :log "[INFO] Frontend logs: %FRONTEND_LOG%"
-    start "%FRONTEND_WINDOW_TITLE%" /min cmd /d /c "cd /d "%ROOT%\frontend" && "%FRONTEND_PYTHON%" -m http.server %FRONTEND_PORT% --bind 127.0.0.1 1>> "%FRONTEND_LOG%" 2>&1"
-    for /l %%A in (1,1,20) do (
-        curl.exe -fsS "http://127.0.0.1:%FRONTEND_PORT%/" >nul 2>&1
+    call :log "[INFO] Starting Next.js frontend on %FRONTEND_URL%"
+    call :log "[INFO] Next frontend logs: %FRONTEND_LOG%"
+    start "%FRONTEND_WINDOW_TITLE%" /min cmd /d /c "cd /d "%ROOT%\frontend-next" && %NEXT_CMD% 1>> "%FRONTEND_LOG%" 2>&1"
+    for /l %%A in (1,1,%FRONTEND_READY_TIMEOUT_SECONDS%) do (
+        curl.exe -fsS "%FRONTEND_URL%" >nul 2>&1
         if not errorlevel 1 goto :frontend_ready
         timeout /t 1 /nobreak >nul
     )
-    call :log "[ERROR] Frontend server did not start in time."
+    call :log "[ERROR] Next.js frontend server did not start in time."
     goto :fail
 ) else (
-    call :log "[INFO] Frontend server already listening on port %FRONTEND_PORT%"
+    call :log "[INFO] Next.js frontend server already listening on port %FRONTEND_PORT%"
     for /l %%A in (1,1,%FRONTEND_READY_TIMEOUT_SECONDS%) do (
-        curl.exe -fsS "http://127.0.0.1:%FRONTEND_PORT%/" >nul 2>&1
+        curl.exe -fsS "%FRONTEND_URL%" >nul 2>&1
         if not errorlevel 1 goto :frontend_ready
         timeout /t 1 /nobreak >nul
     )
@@ -242,4 +230,15 @@ goto :eof
 :log
 echo %~1
 >> "%RUN_LOG%" echo %~1
+goto :eof
+
+:resolve_package_manager
+for /f "delims=" %%P in ('where pnpm.cmd 2^>nul') do (
+    set "NEXT_CMD="%%P" dev"
+    goto :eof
+)
+for /f "delims=" %%N in ('where npm.cmd 2^>nul') do (
+    set "NEXT_CMD="%%N" run dev"
+    goto :eof
+)
 goto :eof

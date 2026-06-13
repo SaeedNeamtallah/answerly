@@ -19,7 +19,6 @@ export function login(payload: LoginPayload) {
 export function signup(payload: SignupPayload) {
   return apiRequest<ApiMessageResponse>("/auth/signup", {
     method: "POST",
-    auth: false,
     body: JSON.stringify(payload),
   });
 }

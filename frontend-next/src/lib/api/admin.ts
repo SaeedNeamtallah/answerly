@@ -81,3 +81,9 @@ export function blockCompany(companyId: string | number, payload?: AdminStatusRe
     body: JSON.stringify(payload || {}),
   });
 }
+
+export function deleteCompany(companyId: string | number) {
+  return apiRequest<void>(`/admin/users/${companyId}`, {
+    method: "DELETE",
+  });
+}

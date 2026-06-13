@@ -576,6 +576,16 @@ async def get_current_db_user(
         user=user,
     )
 
+    # If the user is an employee and has a parent company ID, load and return the parent (company) user
+    if user.role == "employee" and user.parent_id is not None:
+        parent_user_stmt = select(User).where(User.id == user.parent_id).limit(1)
+        parent_user_result = await db.execute(parent_user_stmt)
+        parent_user = parent_user_result.scalar_one_or_none()
+        if parent_user is not None:
+            # Transfer the employee's username in-memory so other checks (like resolve_roles) can still refer to it
+            parent_user.employee_username = user.username
+            return parent_user
+
     return user
 
 

@@ -159,6 +159,7 @@ services:
     depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads
+      - ../backend:/app/backend
     restart: always
 
   # 6. معالج المهام (Celery Worker) - إضافة مهمة
@@ -178,6 +179,7 @@ services:
     depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads
+      - ../backend:/app/backend
     restart: always
 
   scheduler:
@@ -189,6 +191,7 @@ services:
     depends_on: *app-depends-on
     volumes:
       - ../uploads:/app/uploads
+      - ../backend:/app/backend
     restart: always
 
   # 7. بوت التليجرام (اختياري)
