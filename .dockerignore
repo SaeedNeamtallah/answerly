@@ -6,6 +6,8 @@
 !telegram_bot/**
 !frontend/
 !frontend/**
+!frontend-next/
+!frontend-next/**
 !docker/
 !docker/**
 !app_config.json
@@ -15,3 +17,7 @@ backend/__pycache__/
 backend/**/*.pyc
 telegram_bot/__pycache__/
 telegram_bot/**/*.pyc
+
+frontend-next/node_modules/
+frontend-next/.next/
+frontend-next/out/

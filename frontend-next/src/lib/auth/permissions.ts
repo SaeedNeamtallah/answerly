@@ -13,5 +13,6 @@ export function canAccessAdmin(user: CurrentUser | null) {
 }
 
 export function canAccessCompanyWorkspace(user: CurrentUser | null) {
-  return isCompanyAdmin(user) || isPlatformOwner(user);
+  return isCompanyAdmin(user) || isPlatformOwner(user) || String(user?.role || "").toLowerCase() === "employee";
 }
+

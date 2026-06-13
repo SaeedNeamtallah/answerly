@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Bot, Building2, FolderKanban, LayoutDashboard, MessageSquareText, Settings2, Shield, UserRound } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+import { useAuthStore } from "@/store/auth-store";
 
 export interface NavItem {
   href: string;
@@ -35,12 +36,16 @@ export const adminNav: NavItem[] = [
 
 export function Sidebar({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const workspaceLabel = currentUser?.company_name || "Workspace";
 
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-slate-950 text-slate-100 lg:flex lg:flex-col">
       <div className="border-b border-slate-800 px-6 py-6">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-400">RAGMind</p>
-        <h2 className="mt-2 text-xl font-semibold">Workspace</h2>
+        <h2 className="mt-2 text-xl font-semibold truncate" title={workspaceLabel}>
+          {workspaceLabel}
+        </h2>
       </div>
       <nav className="flex-1 space-y-1 p-4">
         {items.map((item) => {

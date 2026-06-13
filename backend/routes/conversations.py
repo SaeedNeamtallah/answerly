@@ -181,7 +181,7 @@ async def manual_reply(
             db,
             owner_id=current_user.id,
             conversation_id=conversation_id,
-            agent_user_id=current_user.id,
+            agent_user_id=getattr(current_user, "employee_id", current_user.id),
             text=payload.text,
         )
         return _serialize_message(message)
@@ -202,7 +202,7 @@ async def assign_conversation_to_self(
             db,
             owner_id=current_user.id,
             conversation_id=conversation_id,
-            user_id=current_user.id,
+            user_id=getattr(current_user, "employee_id", current_user.id),
         )
         return _serialize_conversation(conversation)
     except Exception as exc:

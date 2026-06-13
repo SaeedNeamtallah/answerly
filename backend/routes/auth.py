@@ -26,7 +26,7 @@ from backend.services.login_security_service import (
     login_security_service,
 )
 from backend.security.event_service import log_event
-from backend.security.auth import get_current_db_user, get_product_role_for_user, resolve_roles_for_username, require_platform_owner_access
+from backend.security.auth import get_current_db_user, get_actual_db_user, get_product_role_for_user, resolve_roles_for_username, require_platform_owner_access
 from backend.security.client_ip import get_optional_client_ip
 from backend.security.jwt_utils import create_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
@@ -250,18 +250,39 @@ async def _apply_bruteforce_account_policy(
 async def signup(
     payload: SignupRequest,
     request: Request,
-    current_admin: User = Depends(require_platform_owner_access),
+    current_user: User = Depends(get_current_db_user),
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
 ):
     """Create a new user account with username and password."""
+    creator_role = current_user.role
+    if creator_role == "platform_owner":
+        if payload.role not in ("platform_owner", "company_admin", "employee"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid target role: {payload.role}"
+            )
+        target_parent_id = payload.parent_id
+    elif creator_role == "company_admin":
+        if payload.role != "employee":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Company admins can only create support employees."
+            )
+        target_parent_id = current_user.id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to create user accounts."
+        )
+
     try:
         created_user = await auth_service.signup_user(
             db=db,
             username=payload.username,
             password=payload.password,
             role=payload.role,
-            parent_id=payload.parent_id,
+            parent_id=target_parent_id,
         )
         log_event(
             {
@@ -492,21 +513,36 @@ async def login(
 
 
 @router.get("/me", response_model=IdentityResponse)
-async def me(current_user: User = Depends(get_current_db_user)):
+async def me(
+    current_user: User = Depends(get_actual_db_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Return current authenticated user from database."""
-    product_role = get_product_role_for_user(current_user)
+    product_role = current_user.role
     roles = [product_role]
     for role in resolve_roles_for_username(current_user.username):
         if role not in roles:
             roles.append(role)
+
+    # Resolve company name and website if the user is an employee
+    company_name = current_user.company_name
+    company_website = current_user.company_website
+    if current_user.role == "employee" and current_user.parent_id is not None:
+        parent_user_stmt = select(User).where(User.id == current_user.parent_id).limit(1)
+        parent_user_result = await db.execute(parent_user_stmt)
+        parent_user = parent_user_result.scalar_one_or_none()
+        if parent_user is not None:
+            company_name = parent_user.company_name
+            company_website = parent_user.company_website
+
     return IdentityResponse(
         id=current_user.id,
         username=current_user.username,
         role=product_role,
         roles=roles,
         status=_normalize_account_status_label(current_user.status),
-        company_name=current_user.company_name,
-        company_website=current_user.company_website,
+        company_name=company_name,
+        company_website=company_website,
         created_at=current_user.created_at,
     )
 
@@ -516,7 +552,7 @@ async def me(current_user: User = Depends(get_current_db_user)):
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
-    current_user: User = Depends(get_current_db_user),
+    current_user: User = Depends(get_actual_db_user),
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(AuthService),
 ):

@@ -1,8 +1,13 @@
+"use client";
+
 import { ReactNode } from "react";
+import { UserRound } from "lucide-react";
 
 import { RoleGuard } from "@/components/layout/RoleGuard";
 import { Sidebar, adminNav, companyNav } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { useAuthStore } from "@/store/auth-store";
+import { isCompanyAdmin } from "@/lib/auth/permissions";
 
 export function AppShell({
   variant,
@@ -11,7 +16,27 @@ export function AppShell({
   variant: "company" | "admin";
   children: ReactNode;
 }) {
-  const items = variant === "admin" ? adminNav : companyNav;
+  const currentUser = useAuthStore((state) => state.currentUser);
+
+  let items = variant === "admin" ? adminNav : companyNav;
+
+  if (variant === "company" && currentUser) {
+    if (isCompanyAdmin(currentUser)) {
+      items = [
+        ...companyNav.slice(0, companyNav.length - 1),
+        { href: "/signup", label: "Create Employee", icon: UserRound },
+        companyNav[companyNav.length - 1]
+      ];
+    } else if (String(currentUser.role).toLowerCase() === "employee") {
+      items = companyNav.filter(
+        (item) => 
+          item.href === "/knowledge-bases" ||
+          item.href === "/smart-chat" ||
+          item.href === "/conversations" ||
+          item.href === "/account"
+      );
+    }
+  }
 
   return (
     <RoleGuard variant={variant}>

@@ -72,13 +72,15 @@ export default function AdminCompaniesPage() {
               variant="destructive"
               onConfirm={() => mutation.mutate({ id: company.id, action: "block" })}
             />
-            <ConfirmDialog
-              trigger={<Button size="sm" variant="destructive">Delete</Button>}
-              title="Delete company"
-              description="Are you sure you want to delete this company? This will also delete all of its employees immediately. This action cannot be undone."
-              variant="destructive"
-              onConfirm={() => deleteMutation.mutate(company.id)}
-            />
+            {company.role !== "platform_owner" && (
+              <ConfirmDialog
+                trigger={<Button size="sm" variant="destructive">Delete</Button>}
+                title="Delete company"
+                description="Are you sure you want to delete this company? This will also delete all of its employees immediately. This action cannot be undone."
+                variant="destructive"
+                onConfirm={() => deleteMutation.mutate(company.id)}
+              />
+            )}
           </div>
         )}
       />

@@ -12,7 +12,7 @@ import { z } from "zod";
 import { signup } from "@/lib/api/auth";
 import { listAdminCompanies } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/client";
-import { isPlatformOwner } from "@/lib/auth/permissions";
+import { isCompanyAdmin, isPlatformOwner } from "@/lib/auth/permissions";
 import { useAuthStore } from "@/store/auth-store";
 
 import { Button } from "@/components/ui/button";
@@ -23,25 +23,13 @@ const schema = z
     username: z.string().min(3, "Minimum 3 characters"),
     password: z.string().min(8, "Minimum 8 characters"),
     confirmPassword: z.string().min(8, "Confirm your password"),
-    role: z.enum(["company_admin", "employee"]),
+    role: z.enum(["platform_owner", "company_admin", "employee"]),
     parentId: z.string().optional(),
   })
   .refine((value) => value.password === value.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-  })
-  .refine(
-    (value) => {
-      if (value.role === "employee" && !value.parentId) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: "Please select a parent company for the employee",
-      path: ["parentId"],
-    }
-  );
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -55,10 +43,18 @@ export default function SignupPage() {
     defaultValues: { username: "", password: "", confirmPassword: "", role: "company_admin", parentId: "" },
   });
 
-  // Protect page: Only logged-in Platform Owners (Admins) can see it
+  // Set default role to employee for company admin creators
+  useEffect(() => {
+    if (currentUser && isCompanyAdmin(currentUser)) {
+      form.setValue("role", "employee");
+    }
+  }, [currentUser, form]);
+
+  // Protect page: Only Platform Owners and Company Admins can see it
   useEffect(() => {
     if (isHydrated) {
-      if (!accessToken || !currentUser || !isPlatformOwner(currentUser)) {
+      const allowed = isPlatformOwner(currentUser) || isCompanyAdmin(currentUser);
+      if (!accessToken || !currentUser || !allowed) {
         window.location.replace("/login");
       }
     }
@@ -72,21 +68,30 @@ export default function SignupPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: async (values: FormValues) => signup({ 
-      username: values.username, 
-      password: values.password,
-      role: values.role,
-      parent_id: values.role === "employee" && values.parentId ? parseInt(values.parentId) : undefined,
-    }),
+    mutationFn: async (values: FormValues) => {
+      const targetRole = isCompanyAdmin(currentUser) ? "employee" : values.role;
+      const targetParentId = targetRole === "employee"
+        ? (isCompanyAdmin(currentUser) ? (currentUser?.id ?? 0) : (values.parentId ? parseInt(values.parentId) : undefined))
+        : undefined;
+      return signup({ 
+        username: values.username, 
+        password: values.password,
+        role: targetRole,
+        parent_id: targetParentId,
+      });
+    },
     onSuccess: () => {
       toast.success("Account created successfully!");
-      window.location.replace("/admin/companies");
+      if (currentUser && isPlatformOwner(currentUser)) {
+        window.location.replace("/admin/companies");
+      } else {
+        window.location.replace("/dashboard");
+      }
     },
     onError: (error) => toast.error(error instanceof ApiError ? error.message : "Signup failed"),
   });
 
-  // Render nothing or loading if not hydrated/authorized yet to avoid flicker
-  if (!isHydrated || !accessToken || !currentUser || !isPlatformOwner(currentUser)) {
+  if (!isHydrated || !accessToken || !currentUser || (!isPlatformOwner(currentUser) && !isCompanyAdmin(currentUser))) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <Loader2 className="size-8 animate-spin text-indigo-600" />
@@ -99,10 +104,19 @@ export default function SignupPage() {
       <div className="w-full max-w-md space-y-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="space-y-2 text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Create account</h1>
-          <p className="text-sm text-slate-600">Register a new company or employee account (Admin Only).</p>
+          <p className="text-sm text-slate-600">Register a new employee account (Admin Only).</p>
         </div>
 
-        <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+        <form
+          className="space-y-4"
+          onSubmit={form.handleSubmit((values) => {
+            if (values.role === "employee" && isPlatformOwner(currentUser) && !values.parentId) {
+              form.setError("parentId", { message: "Please select a parent company for the employee" });
+              return;
+            }
+            mutation.mutate(values);
+          })}
+        >
           <div className="space-y-2">
             <label className="text-sm font-medium">Username</label>
             <Input {...form.register("username")} />
@@ -119,21 +133,27 @@ export default function SignupPage() {
             <p className="text-sm text-rose-600">{form.formState.errors.confirmPassword?.message}</p>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Account Type (نوع الحساب)</label>
+            <label className="text-sm font-medium">Account Type</label>
             <select
               {...form.register("role")}
+              disabled={isCompanyAdmin(currentUser)}
               className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <option value="company_admin">Company Admin (مدير شركة)</option>
-              <option value="employee">Support Employee (موظف دعم)</option>
+              {isPlatformOwner(currentUser) && (
+                <option value="platform_owner">Platform Owner</option>
+              )}
+              {isPlatformOwner(currentUser) && (
+                <option value="company_admin">Company Admin</option>
+              )}
+              <option value="employee">Employee</option>
             </select>
             <p className="text-sm text-rose-600">{form.formState.errors.role?.message}</p>
           </div>
 
           {/* Conditional Dropdown for selecting parent company */}
-          {form.watch("role") === "employee" && (
+          {form.watch("role") === "employee" && isPlatformOwner(currentUser) && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Belongs to Company (تابع لأي شركة؟)</label>
+              <label className="text-sm font-medium">Belongs to Company</label>
               {companiesQuery.isLoading ? (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <Loader2 className="size-4 animate-spin" /> Loading companies list...

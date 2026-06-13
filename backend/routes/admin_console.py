@@ -176,7 +176,7 @@ async def list_admin_companies(
         .outerjoin(Project, Project.owner_id == User.id)
         .outerjoin(BotIntegration, BotIntegration.owner_id == User.id)
         .outerjoin(Conversation, Conversation.owner_id == User.id)
-        .where(User.role.in_((ROLE_COMPANY_ADMIN, ROLE_PLATFORM_OWNER)))
+        .where(User.role.in_((ROLE_COMPANY_ADMIN, ROLE_PLATFORM_OWNER, "employee")))
         .group_by(User.id)
         .order_by(User.created_at.desc(), User.id.desc())
     )

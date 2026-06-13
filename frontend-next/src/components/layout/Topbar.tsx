@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -11,7 +11,25 @@ import { useAuthStore } from "@/store/auth-store";
 export function Topbar({ variant }: { variant: "company" | "admin" }) {
   const user = useAuthStore((state) => state.currentUser);
   const clearSession = useAuthStore((state) => state.clearSession);
-  const nav = variant === "admin" ? adminNav : companyNav;
+  
+  let nav = variant === "admin" ? adminNav : companyNav;
+  if (variant === "company" && user) {
+    if (String(user.role).toLowerCase() === "company_admin") {
+      nav = [
+        ...companyNav.slice(0, companyNav.length - 1),
+        { href: "/signup", label: "Create Employee", icon: UserRound } as any,
+        companyNav[companyNav.length - 1]
+      ];
+    } else if (String(user.role).toLowerCase() === "employee") {
+      nav = companyNav.filter(
+        (item) => 
+          item.href === "/knowledge-bases" ||
+          item.href === "/smart-chat" ||
+          item.href === "/conversations" ||
+          item.href === "/account"
+      );
+    }
+  }
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
@@ -20,9 +38,15 @@ export function Topbar({ variant }: { variant: "company" | "admin" }) {
           <MobileNav items={nav as NavItem[]} />
           <div>
             <p className="text-sm font-medium text-slate-500">
-              {variant === "admin" ? "Platform Console" : "Company Workspace"}
+              {variant === "admin" 
+                ? "Platform Console" 
+                : (user?.role === "employee" 
+                    ? `Employee @ ${user?.company_name || "Company"}` 
+                    : "Company Workspace")}
             </p>
-            <h2 className="text-lg font-semibold text-slate-950">{user?.company_name || user?.username || "RAGMind"}</h2>
+            <h2 className="text-lg font-semibold text-slate-950">
+              {user?.role === "employee" ? user?.username : (user?.company_name || user?.username || "RAGMind")}
+            </h2>
           </div>
         </div>
         <div className="flex items-center gap-3">

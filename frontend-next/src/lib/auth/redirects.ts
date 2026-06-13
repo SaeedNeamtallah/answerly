@@ -6,6 +6,9 @@ export function getDefaultRouteForUser(user: CurrentUser | null) {
   if (canAccessAdmin(user)) {
     return "/admin";
   }
+  if (String(user?.role || "").toLowerCase() === "employee") {
+    return "/conversations";
+  }
 
   return "/dashboard";
 }

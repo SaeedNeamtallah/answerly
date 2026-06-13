@@ -71,7 +71,7 @@ export default function LoginPage() {
         return;
       }
       if (selectedRole === "employee" && user.role !== "employee" && user.role !== "platform_owner") {
-        toast.error("Access Denied: This account is not registered as a Support Employee.");
+        toast.error("Access Denied: This account is not registered as an Employee.");
         useAuthStore.getState().clearSession();
         return;
       }
@@ -124,7 +124,7 @@ export default function LoginPage() {
             >
               <option value="admin">Platform Owner </option>
               <option value="company">Company Admin </option>
-              <option value="employee">Support Employee </option>
+              <option value="employee">Employee </option>
             </select>
             <p className="text-sm text-rose-600">{form.formState.errors.role?.message}</p>
           </div>

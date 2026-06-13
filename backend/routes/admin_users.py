@@ -192,8 +192,8 @@ async def admin_delete_user(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user.id == current_admin.id:
-        raise HTTPException(status_code=400, detail="Cannot delete your own admin account")
+    if user.role == "platform_owner":
+        raise HTTPException(status_code=400, detail="Cannot delete a Platform Owner account")
 
     await db.delete(user)
     try:

@@ -582,11 +582,54 @@ async def get_current_db_user(
         parent_user_result = await db.execute(parent_user_stmt)
         parent_user = parent_user_result.scalar_one_or_none()
         if parent_user is not None:
-            # Transfer the employee's username in-memory so other checks (like resolve_roles) can still refer to it
+            # Transfer the employee's details in-memory so other checks can still refer to them
             parent_user.employee_username = user.username
+            parent_user.employee_id = user.id
+            parent_user.employee_role = "employee"
+            parent_user.employee_status = user.status
             return parent_user
 
     return user
+
+
+async def get_actual_db_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(AuthService),
+) -> User:
+    """Require bearer token, validate JWT, and fetch the actual current user (e.g. employee) from database without redirecting to parent."""
+    if credentials is None:
+        log_event(
+            {
+                "event_type": SecurityEventType.AUTH_REQUIRED,
+                "severity": SecuritySeverity.LOW,
+                "ip_address": _extract_client_ip(request),
+                "message": "Authentication required but bearer token is missing",
+                "metadata": {"path": request.url.path, "method": request.method},
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_user = _decode_access_token(credentials.credentials)
+    user = await _get_user_for_token_subject(
+        db=db,
+        request=request,
+        token_user=token_user,
+    )
+    await _enforce_account_status_policy(
+        db=db,
+        request=request,
+        auth_service=auth_service,
+        user=user,
+    )
+
+    return user
+
 
 
 async def require_mutation_auth_if_enabled(
