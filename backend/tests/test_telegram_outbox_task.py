@@ -2,10 +2,12 @@
 
 import unittest
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import backend.tasks.telegram_outbox as telegram_outbox
+from backend.services.telegram_api_service import TelegramAPIError
 
 
 @dataclass
@@ -17,6 +19,7 @@ class FakeMessage:
     delivery_status: str = "pending"
     delivery_attempts: int = 0
     delivery_claimed_at: object | None = None
+    delivery_next_attempt_at: object | None = None
     created_at: object | None = None
     telegram_message_id: str | None = None
 
@@ -67,6 +70,11 @@ class FakeSessionMaker:
         return self._db
 
 
+class FakeEngine:
+    async def dispose(self):
+        return None
+
+
 class TelegramOutboxTaskTests(unittest.IsolatedAsyncioTestCase):
     async def test_outbox_worker_claims_and_sends_pending_message(self):
         message = FakeMessage(id=1, text="hello", bot_integration_id=10, telegram_customer_id=20)
@@ -75,11 +83,9 @@ class TelegramOutboxTaskTests(unittest.IsolatedAsyncioTestCase):
         fake_db = FakeDB([message], integration, customer)
         session_maker = FakeSessionMaker(fake_db)
 
-        async def fake_get_setup_utils():
-            return (None, session_maker, None, None, None, None, None)
-
         with (
-            patch("backend.tasks.telegram_outbox.get_setup_utils", side_effect=fake_get_setup_utils),
+            patch("backend.tasks.telegram_outbox.create_async_engine", return_value=FakeEngine()),
+            patch("backend.tasks.telegram_outbox.async_sessionmaker", return_value=session_maker),
             patch("backend.tasks.telegram_outbox.TokenCryptoService.decrypt_token", return_value="token"),
             patch("backend.tasks.telegram_outbox.TelegramAPIService.send_message", new=AsyncMock(return_value={"message_id": 42})),
         ):
@@ -104,11 +110,9 @@ class TelegramOutboxTaskTests(unittest.IsolatedAsyncioTestCase):
         fake_db = FakeDB([message], integration, customer)
         session_maker = FakeSessionMaker(fake_db)
 
-        async def fake_get_setup_utils():
-            return (None, session_maker, None, None, None, None, None)
-
         with (
-            patch("backend.tasks.telegram_outbox.get_setup_utils", side_effect=fake_get_setup_utils),
+            patch("backend.tasks.telegram_outbox.create_async_engine", return_value=FakeEngine()),
+            patch("backend.tasks.telegram_outbox.async_sessionmaker", return_value=session_maker),
             patch("backend.tasks.telegram_outbox.TokenCryptoService.decrypt_token", return_value="token"),
             patch("backend.tasks.telegram_outbox.TelegramAPIService.send_message", new=AsyncMock(return_value={"message_id": 43})),
         ):
@@ -118,6 +122,30 @@ class TelegramOutboxTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["sent"], 1)
         self.assertEqual(message.delivery_status, "sent")
         self.assertEqual(message.delivery_attempts, 2)
+
+    async def test_outbox_worker_schedules_backoff_after_transient_failure(self):
+        message = FakeMessage(id=3, text="retry later", bot_integration_id=10, telegram_customer_id=20)
+        integration = SimpleNamespace(token_encrypted="encrypted")
+        customer = SimpleNamespace(chat_id="123")
+        fake_db = FakeDB([message], integration, customer)
+        session_maker = FakeSessionMaker(fake_db)
+
+        with (
+            patch("backend.tasks.telegram_outbox.create_async_engine", return_value=FakeEngine()),
+            patch("backend.tasks.telegram_outbox.async_sessionmaker", return_value=session_maker),
+            patch("backend.tasks.telegram_outbox.TokenCryptoService.decrypt_token", return_value="token"),
+            patch(
+                "backend.tasks.telegram_outbox.TelegramAPIService.send_message",
+                new=AsyncMock(side_effect=TelegramAPIError("temporary")),
+            ),
+        ):
+            before = datetime.now(timezone.utc)
+            result = await telegram_outbox._deliver_pending_messages()
+
+        self.assertEqual(result["retried"], 1)
+        self.assertEqual(message.delivery_status, "pending")
+        self.assertIsNotNone(message.delivery_next_attempt_at)
+        self.assertGreater(message.delivery_next_attempt_at, before)
 
 
 if __name__ == "__main__":

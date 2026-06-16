@@ -326,6 +326,7 @@ class ConversationMessage(Base):
         server_default="0",
     )
     delivery_claimed_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    delivery_next_attempt_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     owner = relationship("User", foreign_keys=[owner_id], back_populates="conversation_messages")
@@ -339,6 +340,7 @@ class ConversationMessage(Base):
         Index("ix_conversation_messages_update_unique", "bot_integration_id", "telegram_update_id", unique=True),
         Index("ix_conversation_messages_message_unique", "bot_integration_id", "telegram_customer_id", "telegram_message_id", unique=True),
         Index("ix_conversation_messages_owner_sender", "owner_id", "sender_type"),
+        Index("ix_conversation_messages_delivery_next_attempt_at", "delivery_next_attempt_at"),
     )
 
     def __repr__(self):

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+from hmac import compare_digest
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
+from backend.config import settings
 from backend.services.telegram_webhook_service import (
     TelegramWebhookError,
     TelegramWebhookService,
@@ -32,6 +34,11 @@ async def telegram_webhook(
     db: AsyncSession = Depends(get_db),
     service: TelegramWebhookService = Depends(get_telegram_webhook_service),
 ):
+    if settings.telegram_webhook_require_secret_header:
+        header_secret = str(request.headers.get("x-telegram-bot-api-secret-token") or "")
+        if not compare_digest(header_secret, str(webhook_secret)):
+            raise HTTPException(status_code=404, detail="Bot integration not found")
+
     try:
         payload: dict[str, Any] = await request.json()
     except Exception as exc:

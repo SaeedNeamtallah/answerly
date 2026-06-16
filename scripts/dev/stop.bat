@@ -19,8 +19,8 @@ call :log "   RAGMind - Stop"
 call :log "========================================"
 call :log "."
 
-call :log "[INFO] Closing frontend window if it is running..."
-taskkill /FI "WINDOWTITLE eq RAGMind Frontend" /T /F >nul 2>&1
+call :log "[INFO] Closing Next.js frontend window if it is running..."
+taskkill /FI "WINDOWTITLE eq RAGMind Next Frontend" /T /F >nul 2>&1
 call :log "[INFO] Closing Docker log streamer if it is running..."
 taskkill /FI "WINDOWTITLE eq RAGMind Docker Logs" /T /F >nul 2>&1
 
@@ -56,7 +56,7 @@ docker compose -f docker/docker-compose.yml ps -a >> "%STACK_STATE_LOG%" 2>&1
 
 call :log "."
 call :log "========================================"
-call :log "[✓] RAGMind is stopped"
+call :log "[OK] RAGMind is stopped"
 call :log "========================================"
 call :log "."
 call :log "Stop log:  %RUN_LOG%"

@@ -7,6 +7,7 @@ __all__ = [
     "admin_users",
     "admin",
     "admin_console",
+    "admin_observability",
     "auth",
     "bot_config",
     "bot_integrations",

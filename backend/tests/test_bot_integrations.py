@@ -36,9 +36,20 @@ class _FakeCryptoService:
 class _FakeTelegramAPI:
     def __init__(self, webhook_url="https://example.test/webhook"):
         self.webhook_url = webhook_url
+        self.set_webhook_calls = []
 
     async def validate_token(self, _token):
         return {"telegram_bot_id": "123", "telegram_username": "support_bot"}
+
+    async def set_webhook(self, token, webhook_url, *, drop_pending_updates=False, secret_token=None):
+        self.set_webhook_calls.append(
+            {
+                "token": token,
+                "webhook_url": webhook_url,
+                "drop_pending_updates": drop_pending_updates,
+                "secret_token": secret_token,
+            }
+        )
 
     async def get_webhook_info(self, _token):
         return {
@@ -186,6 +197,86 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsNone(updated.fallback_message)
+
+    async def test_register_webhook_uses_current_public_base_url_without_dropping_updates(self):
+        integration = BotIntegration(
+            id=4,
+            owner_id=2,
+            project_id=3,
+            name="Support",
+            telegram_bot_id="123",
+            telegram_username="support_bot",
+            token_encrypted="encrypted",
+            token_hash="hash",
+            webhook_secret="secret",
+            status="active",
+            show_sources_to_customer=False,
+            human_handoff_enabled=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        fake_api = _FakeTelegramAPI()
+        service = BotIntegrationService(telegram_api=fake_api)
+
+        with patch("backend.services.bot_integration_service.settings.public_webhook_base_url", "https://api.example.com"):
+            registered = await service.register_webhook(integration, "123:secret-token")
+
+        self.assertTrue(registered)
+        self.assertEqual(
+            integration.webhook_url,
+            "https://api.example.com/telegram/webhook/4/secret",
+        )
+        self.assertEqual(
+            fake_api.set_webhook_calls,
+            [
+                {
+                    "token": "123:secret-token",
+                    "webhook_url": "https://api.example.com/telegram/webhook/4/secret",
+                    "drop_pending_updates": False,
+                    "secret_token": "secret",
+                }
+            ],
+        )
+
+    async def test_enable_integration_refreshes_telegram_webhook(self):
+        integration = BotIntegration(
+            id=5,
+            owner_id=2,
+            project_id=3,
+            name="Support",
+            telegram_bot_id="123",
+            telegram_username="support_bot",
+            token_encrypted="encrypted",
+            token_hash="hash",
+            webhook_secret="secret",
+            webhook_url="https://old.example.com/telegram/webhook/5/secret",
+            status="disabled",
+            show_sources_to_customer=False,
+            human_handoff_enabled=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        fake_api = _FakeTelegramAPI()
+        service = BotIntegrationService(
+            crypto_service=_FakeCryptoService(),
+            telegram_api=fake_api,
+        )
+        service.get_integration = AsyncMock(return_value=integration)
+
+        with patch("backend.services.bot_integration_service.settings.public_webhook_base_url", "https://api.example.com"):
+            updated = await service.set_status(
+                _FakeMutationDB(),
+                owner_id=2,
+                integration_id=5,
+                status="active",
+            )
+
+        self.assertEqual(updated.status, "active")
+        self.assertEqual(
+            updated.webhook_url,
+            "https://api.example.com/telegram/webhook/5/secret",
+        )
+        self.assertEqual(fake_api.set_webhook_calls[0]["drop_pending_updates"], False)
 
     async def test_readiness_detects_webhook_mismatch(self):
         integration = BotIntegration(

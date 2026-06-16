@@ -15,11 +15,11 @@ export function AppShell({
 
   return (
     <RoleGuard variant={variant}>
-      <div className="flex min-h-screen bg-slate-50">
+      <div className="flex min-h-screen bg-background">
         <Sidebar items={items} />
-        <div className="flex min-h-screen flex-1 flex-col">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <Topbar variant={variant} />
-          <main className="flex-1 px-4 py-6 md:px-6">{children}</main>
+          <main className="flex-1 px-4 py-5 md:px-6 xl:px-7">{children}</main>
         </div>
       </div>
     </RoleGuard>

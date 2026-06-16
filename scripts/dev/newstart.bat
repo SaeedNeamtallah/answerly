@@ -66,7 +66,7 @@ call :log "[INFO] Waiting for Next.js frontend readiness..."
 for /l %%A in (1,1,90) do (
     curl.exe -fsS "%NEXT_FRONTEND_URL%" >nul 2>&1
     if not errorlevel 1 goto :frontend_ready
-    timeout /t 1 /nobreak >nul
+    timeout /t 1 /nobreak <nul >nul 2>&1 || ping 127.0.0.1 -n 2 >nul 2>&1
 )
 
 call :log "[ERROR] Next.js frontend did not become reachable in time."

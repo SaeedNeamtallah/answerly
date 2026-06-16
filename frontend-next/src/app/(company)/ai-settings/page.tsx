@@ -6,8 +6,10 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { BrainCircuit, Database, Network, Rows3 } from "lucide-react";
 
 import { getProviders, updateProviders } from "@/lib/api/config";
+import { queryKeys } from "@/lib/api/queryKeys";
 import { canAccessAdmin } from "@/lib/auth/permissions";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -16,6 +18,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { FormSection } from "@/components/shared/FormSection";
 import { LoadingState } from "@/components/shared/LoadingState";
+import { MetricCard } from "@/components/shared/MetricCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,7 +36,7 @@ type FormValues = z.output<typeof schema>;
 export default function AiSettingsPage() {
   const user = useAuthStore((state) => state.currentUser);
   const query = useQuery({
-    queryKey: ["providers"],
+    queryKey: queryKeys.providers,
     queryFn: getProviders,
   });
   const form = useForm<FormInput, unknown, FormValues>({
@@ -88,6 +91,12 @@ export default function AiSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Admin-only" title="AI Settings" description="Uses the authenticated `/config/providers` runtime config endpoints." />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="LLM Provider" value={query.data?.llm_provider || "Unset"} icon={<BrainCircuit className="size-4" />} tone="info" />
+        <MetricCard title="Embedding" value={query.data?.embedding_provider || "Unset"} icon={<Network className="size-4" />} tone="default" />
+        <MetricCard title="Vector DB" value={query.data?.vector_db_provider || "Unset"} icon={<Database className="size-4" />} tone="success" />
+        <MetricCard title="Retrieval Top K" value={query.data?.retrieval_top_k || 0} icon={<Rows3 className="size-4" />} tone="warning" />
+      </div>
       <FormSection title="Provider selections">
         <form
           className="grid gap-4 md:grid-cols-2"
@@ -129,8 +138,9 @@ export default function AiSettingsPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Retrieval top K</label>
             <Input type="number" {...form.register("retrieval_top_k")} />
+            <p className="text-xs text-muted-foreground">This value is submitted to `/config/providers` with the selected providers.</p>
           </div>
-          <Button type="submit" className="md:col-span-2">Save settings</Button>
+          <Button type="submit" className="md:col-span-2" disabled={mutation.isPending}>Save settings</Button>
         </form>
       </FormSection>
     </div>

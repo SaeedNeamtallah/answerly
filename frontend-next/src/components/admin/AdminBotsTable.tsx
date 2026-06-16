@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 export function AdminBotsTable({ bots }: { bots: AdminBotIntegration[] }) {
   return (
     <DataTable
+      caption="Cross-company bot integrations"
       columns={["Bot", "Company", "Project", "Status", "Last Error"]}
       rows={bots.map((bot) => [
         bot.name,

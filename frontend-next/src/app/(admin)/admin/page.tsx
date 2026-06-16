@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getAdminOverview, listAdminBotIntegrations, listAdminConversations, listAdminCompanies } from "@/lib/api/admin";
+import { queryKeys } from "@/lib/api/queryKeys";
 
 import { AdminMetricCards } from "@/components/admin/AdminMetricCards";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -14,10 +15,10 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
 
 export default function AdminOverviewPage() {
-  const overviewQuery = useQuery({ queryKey: ["adminOverview"], queryFn: getAdminOverview });
-  const companiesQuery = useQuery({ queryKey: ["adminCompanies"], queryFn: listAdminCompanies });
-  const botsQuery = useQuery({ queryKey: ["adminBots"], queryFn: listAdminBotIntegrations });
-  const conversationsQuery = useQuery({ queryKey: ["adminConversations"], queryFn: () => listAdminConversations() });
+  const overviewQuery = useQuery({ queryKey: queryKeys.admin.overview, queryFn: getAdminOverview });
+  const companiesQuery = useQuery({ queryKey: queryKeys.admin.companies, queryFn: listAdminCompanies });
+  const botsQuery = useQuery({ queryKey: queryKeys.admin.bots, queryFn: listAdminBotIntegrations });
+  const conversationsQuery = useQuery({ queryKey: queryKeys.admin.conversations, queryFn: () => listAdminConversations() });
 
   if (overviewQuery.isLoading || companiesQuery.isLoading || botsQuery.isLoading || conversationsQuery.isLoading) {
     return <LoadingState label="Loading admin overview..." />;

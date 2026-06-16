@@ -328,9 +328,6 @@ class ConversationService:
         customer = await db.get(TelegramCustomer, conversation.telegram_customer_id)
         if integration is None or customer is None or integration.owner_id != int(owner_id):
             raise ConversationError("Conversation integration is unavailable")
-        token = self.crypto_service.decrypt_token(integration.token_encrypted)
-        result = await self.telegram_api.send_message(token, customer.chat_id, self._clean_message_text(text))
-        telegram_message_id = result.get("message_id")
         message, _ = await self.save_message(
             db,
             integration=integration,
@@ -339,7 +336,7 @@ class ConversationService:
             sender_type="agent",
             agent_user_id=agent_user_id,
             text=text,
-            telegram_message_id=str(telegram_message_id) if telegram_message_id is not None else None,
+            delivery_status="pending",
         )
         await db.commit()
         await db.refresh(message)

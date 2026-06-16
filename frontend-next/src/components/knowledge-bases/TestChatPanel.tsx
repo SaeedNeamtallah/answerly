@@ -6,6 +6,8 @@ import { Loader2, Send } from "lucide-react";
 import type { QueryResponse } from "@/lib/types/query";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
 export function TestChatPanel({
@@ -20,11 +22,17 @@ export function TestChatPanel({
   const [question, setQuestion] = useState("");
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div>
-        <h3 className="text-lg font-semibold text-slate-950">Test chat</h3>
-        <p className="text-sm text-slate-600">Uses the supported non-streaming project query endpoint.</p>
-      </div>
+    <Card className="border-border/80 bg-card shadow-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Send className="size-4" />
+          </span>
+          Test chat
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">Uses the supported non-streaming project query endpoint.</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
       <form
         className="space-y-3"
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -47,17 +55,18 @@ export function TestChatPanel({
         </Button>
       </form>
       {result ? (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="whitespace-pre-wrap text-sm text-slate-800">{result.answer}</p>
-          <div className="space-y-1 text-xs text-slate-500">
+        <div className="space-y-3 rounded-xl border bg-muted/40 p-4">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{result.answer}</p>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {(result.sources || []).map((source, index) => (
-              <p key={`${source.document_name}-${index}`}>
+              <Badge key={`${source.document_name}-${index}`} variant="outline" className="rounded-md">
                 {source.document_name} · chunk {source.chunk_index} · similarity {source.similarity.toFixed(3)}
-              </p>
+              </Badge>
             ))}
           </div>
         </div>
       ) : null}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { listAdminBotIntegrations } from "@/lib/api/admin";
+import { queryKeys } from "@/lib/api/queryKeys";
 
 import { AdminBotsTable } from "@/components/admin/AdminBotsTable";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -10,7 +11,7 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
 
 export default function AdminBotsPage() {
-  const query = useQuery({ queryKey: ["adminBots"], queryFn: listAdminBotIntegrations });
+  const query = useQuery({ queryKey: queryKeys.admin.bots, queryFn: listAdminBotIntegrations });
 
   if (query.isLoading) {
     return <LoadingState label="Loading admin bots..." />;

@@ -4,6 +4,8 @@ import type {
   AdminCompany,
   AdminConversation,
   AdminConversationMessage,
+  AdminObservabilityDashboard,
+  AdminObservabilitySummary,
   AdminOverview,
   AdminProject,
   AdminStatusReasonPayload,
@@ -80,4 +82,14 @@ export function blockCompany(companyId: string | number, payload?: AdminStatusRe
     method: "POST",
     body: JSON.stringify(payload || {}),
   });
+}
+
+export function getAdminObservabilityDashboards(range = "1h") {
+  const search = new URLSearchParams({ range });
+  return apiRequest<AdminObservabilityDashboard[]>(`/admin/observability/dashboards?${search.toString()}`);
+}
+
+export function getAdminObservabilitySummary(range = "1h") {
+  const search = new URLSearchParams({ range });
+  return apiRequest<AdminObservabilitySummary>(`/admin/observability/summary?${search.toString()}`);
 }

@@ -52,11 +52,28 @@ class TelegramAPIService:
             "first_name": result.get("first_name"),
         }
 
-    async def set_webhook(self, token: str, webhook_url: str) -> None:
+    async def set_webhook(
+        self,
+        token: str,
+        webhook_url: str,
+        *,
+        drop_pending_updates: bool = False,
+        secret_token: str | None = None,
+    ) -> None:
         clean_url = str(webhook_url or "").strip()
         if not clean_url:
             raise TelegramAPIError("Webhook URL is required")
-        await self._post(token, "setWebhook", {"url": clean_url})
+        payload: dict[str, Any] = {
+            "url": clean_url,
+            "drop_pending_updates": bool(drop_pending_updates),
+        }
+        if secret_token:
+            payload["secret_token"] = str(secret_token)
+        await self._post(
+            token,
+            "setWebhook",
+            payload,
+        )
 
     async def delete_webhook(self, token: str) -> None:
         await self._post(token, "deleteWebhook", {"drop_pending_updates": False})

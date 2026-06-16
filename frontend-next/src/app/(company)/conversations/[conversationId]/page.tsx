@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { CheckCircle2, Hand, ShieldAlert, UserRoundCheck } from "lucide-react";
 
 import {
   assignConversation,
@@ -22,6 +23,7 @@ import { SourceMetadataPanel } from "@/components/conversations/SourceMetadataPa
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function ConversationDetailPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -78,12 +80,26 @@ export default function ConversationDetailPage() {
         title={conversationQuery.data!.customer_label}
         description="Internal sources and retrieval metadata remain visible only inside the dashboard."
       />
-      <div className="flex flex-wrap gap-3">
-        <Button variant="outline" onClick={() => statusMutation.mutate("assign")}>Assign to me</Button>
-        <Button variant="outline" onClick={() => statusMutation.mutate("escalate")}>Escalate</Button>
-        <Button variant="outline" onClick={() => statusMutation.mutate("resolve")}>Resolve</Button>
-        <Button variant="destructive" onClick={() => statusMutation.mutate("block")}>Block customer</Button>
-      </div>
+      <Card className="border-border/80 bg-card shadow-sm">
+        <CardContent className="flex flex-wrap gap-3 p-3">
+          <Button variant="outline" onClick={() => statusMutation.mutate("assign")}>
+            <UserRoundCheck className="size-4" />
+            Assign to me
+          </Button>
+          <Button variant="outline" onClick={() => statusMutation.mutate("escalate")}>
+            <Hand className="size-4" />
+            Escalate
+          </Button>
+          <Button variant="outline" onClick={() => statusMutation.mutate("resolve")}>
+            <CheckCircle2 className="size-4" />
+            Resolve
+          </Button>
+          <Button variant="destructive" onClick={() => statusMutation.mutate("block")}>
+            <ShieldAlert className="size-4" />
+            Block customer
+          </Button>
+        </CardContent>
+      </Card>
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-4">
           <ReplyComposer isPending={replyMutation.isPending} onSend={(text) => replyMutation.mutate(text)} />

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -17,7 +17,9 @@ import { useAuthStore } from "@/store/auth-store";
 
 import { BackendUnavailableBanner } from "@/components/shared/BackendUnavailableBanner";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 const schema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -61,15 +63,23 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-full max-w-md space-y-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="space-y-2 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-indigo-600 text-white">
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
+      <Card className="w-full max-w-md border-border/80 shadow-xl">
+        <CardHeader className="space-y-4 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <ShieldCheck className="size-5" />
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Sign in to RAGMind</h1>
-          <p className="text-sm text-slate-600">JWT bearer auth remains compatible with the existing backend.</p>
-        </div>
+          <div>
+            <CardTitle className="text-2xl">Sign in to RAGMind</CardTitle>
+            <p className="mt-2 text-sm text-muted-foreground">Manage knowledge bases, bots, conversations, and platform operations.</p>
+          </div>
+          {!healthQuery.isError && healthQuery.data ? (
+            <div className="flex justify-center">
+              <StatusBadge status={healthQuery.data.status} />
+            </div>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-6">
 
         {healthQuery.isError ? <BackendUnavailableBanner /> : null}
 
@@ -85,18 +95,19 @@ export default function LoginPage() {
             <p className="text-sm text-rose-600">{form.formState.errors.password?.message}</p>
           </div>
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}
             Login
           </Button>
         </form>
 
-        <div className="text-center text-sm text-slate-600">
+        <div className="text-center text-sm text-muted-foreground">
           No account?{" "}
-          <Link href="/signup" className="font-medium text-indigo-600">
+          <Link href="/signup" className="font-medium text-primary">
             Create one
           </Link>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

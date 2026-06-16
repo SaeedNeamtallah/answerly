@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Bot, ExternalLink } from "lucide-react";
 
 import { BotIntegration } from "@/lib/types/bot";
 
+import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 
@@ -18,19 +20,27 @@ export function LinkedBotsPanel({ bots }: { bots: BotIntegration[] }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-3 md:grid-cols-2">
       {bots.map((bot) => (
-        <Link
-          key={bot.id}
-          href={`/telegram-bots/${bot.id}`}
-          className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
-        >
-          <div>
-            <p className="font-medium text-slate-900">{bot.name}</p>
-            <p className="text-sm text-slate-500">{bot.telegram_username || "Telegram username pending"}</p>
-          </div>
-          <StatusBadge status={bot.status} />
-        </Link>
+        <Card key={bot.id} className="border-border/80 bg-card shadow-sm">
+          <CardContent className="flex items-center justify-between gap-4 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Bot className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">{bot.name}</p>
+                <p className="truncate text-sm text-muted-foreground">{bot.telegram_username || "Telegram username pending"}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <StatusBadge status={bot.status} />
+              <Link href={`/telegram-bots/${bot.id}`} className="text-muted-foreground hover:text-foreground">
+                <ExternalLink className="size-4" />
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

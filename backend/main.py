@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 from backend.database import init_db, close_db
 from backend.routes import (
     admin_console,
+    admin_observability,
     admin_users,
     app_config,
     auth,
@@ -128,6 +129,7 @@ app.include_router(security.router)
 app.include_router(incidents.router)
 app.include_router(admin_users.router)
 app.include_router(admin_console.router)
+app.include_router(admin_observability.router)
 app.include_router(bot_integrations.router)
 app.include_router(conversations.router)
 app.include_router(telegram_webhook.router)

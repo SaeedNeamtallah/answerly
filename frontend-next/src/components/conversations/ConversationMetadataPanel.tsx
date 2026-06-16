@@ -2,30 +2,38 @@ import { Conversation } from "@/lib/types/conversation";
 
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateTime } from "@/lib/utils/dates";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ConversationMetadataPanel({ conversation }: { conversation?: Conversation | null }) {
   if (!conversation) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
+      <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground shadow-sm">
         Select a conversation to inspect metadata.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-slate-950">Metadata</h3>
+    <Card className="border-border/80 bg-card shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle className="text-base">Metadata</CardTitle>
         <StatusBadge status={conversation.status} />
-      </div>
-      <div className="space-y-2 text-sm text-slate-600">
-        <p>Customer: {conversation.customer_label}</p>
-        <p>Bot: {conversation.bot_name || "—"}</p>
-        <p>Project ID: {conversation.project_id}</p>
-        <p>Needs human: {conversation.needs_human ? "Yes" : "No"}</p>
-        <p>Last message: {formatDateTime(conversation.last_message_at)}</p>
-        <p>Last error: {conversation.last_error || "—"}</p>
-      </div>
-    </div>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {[
+          ["Customer", conversation.customer_label],
+          ["Bot", conversation.bot_name || "—"],
+          ["Project ID", conversation.project_id],
+          ["Needs human", conversation.needs_human ? "Yes" : "No"],
+          ["Last message", formatDateTime(conversation.last_message_at)],
+          ["Last error", conversation.last_error || "—"],
+        ].map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-4 rounded-lg border bg-background px-3 py-2">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="max-w-[60%] truncate text-right font-medium text-foreground">{value}</span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

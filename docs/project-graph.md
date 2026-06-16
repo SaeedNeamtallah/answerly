@@ -8,7 +8,7 @@ Last verified against code on 2026-04-21.
 - Celery in `backend/celery_app.py` runs background work on `default` and `file_processing` queues, with a separate beat scheduler in `docker/docker-compose.yml`.
 - PostgreSQL is the primary relational store, `chunks.embedding` uses native `pgvector`, and Qdrant remains an optional vector backend.
 - Runtime app and bot config resolve through shared files under `uploads/config/` via `backend/shared_config_paths.py`.
-- The user-facing clients are a static HTML/CSS/JS frontend in `frontend/` and an optional Telegram bot in `telegram_bot/`.
+- The user-facing clients are the Next.js App Router frontend in `frontend-next/` and an optional Telegram bot in `telegram_bot/`.
 
 ## Runtime Architecture
 
@@ -126,13 +126,15 @@ Storage notes:
 
 ```mermaid
 flowchart LR
-  Login["login.html and signup.html"] --> App["frontend/app.js"]
-  App --> Health["GET /health autodiscovery"]
-  App --> Auth["/auth/*"]
-  App --> Projects["/projects/*"]
-  App --> Documents["/projects/{project_id}/documents and /documents/{asset_id}"]
-  App --> Query["/projects/{project_id}/query"]
-  App --> Config["/config/providers and /bot/*"]
+  Login["frontend-next auth routes"] --> App["frontend-next app routes"]
+  App --> ApiClient["frontend-next/src/lib/api/*"]
+  ApiClient --> Health["GET /health"]
+  ApiClient --> Auth["/auth/*"]
+  ApiClient --> Projects["/projects/*"]
+  ApiClient --> Documents["/projects/{project_id}/documents and /documents/{asset_id}"]
+  ApiClient --> Query["/projects/{project_id}/query"]
+  ApiClient --> Config["/config/providers"]
+  App --> Store["frontend-next/src/store/auth-store.ts"]
   Bot["telegram_bot/handlers.py"] --> BotLogin["/auth/login"]
   Bot --> BotProjects["/projects/"]
   Bot --> BotQuery["/projects/{project_id}/query"]
@@ -141,8 +143,10 @@ flowchart LR
 
 Frontend notes:
 
-- `frontend/app.js` is the main dashboard client and owns API-base autodiscovery, auth state, project listing, document actions, query UX, config screens, and bot settings UI.
-- `frontend/index.html` is the main shell; `frontend/login.html` and `frontend/signup.html` are separate auth entry pages.
+- `frontend-next/src/app/` owns App Router pages for auth, company, and admin surfaces.
+- `frontend-next/src/lib/api/` owns backend HTTP clients for auth, projects, documents, query, config, bot integrations, conversations, health, and admin console calls.
+- `frontend-next/src/store/auth-store.ts` owns Bearer-token compatible auth state for this round.
+- The deleted static frontend previously lived under `frontend/` and used port `8080`; do not rely on that path.
 
 ## Open Edges and Constraints
 

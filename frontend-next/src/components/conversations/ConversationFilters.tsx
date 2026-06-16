@@ -1,6 +1,11 @@
 "use client";
 
+import { ListFilter } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const statuses = ["all", "open", "escalated", "resolved", "blocked"];
 
 export function ConversationFilters({
   status,
@@ -10,17 +15,35 @@ export function ConversationFilters({
   onStatusChange: (value: string) => void;
 }) {
   return (
-    <div className="flex gap-3">
+    <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <ListFilter className="size-4" />
+        Status filter
+      </div>
+      <div className="hidden flex-wrap gap-2 md:flex">
+        {statuses.map((item) => (
+          <Button
+            key={item}
+            type="button"
+            size="sm"
+            variant={status === item ? "default" : "outline"}
+            onClick={() => onStatusChange(item)}
+            className="capitalize"
+          >
+            {item}
+          </Button>
+        ))}
+      </div>
       <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger className="w-56 bg-white">
+        <SelectTrigger className="w-full bg-background md:hidden">
           <SelectValue placeholder="Filter by status" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All</SelectItem>
-          <SelectItem value="open">Open</SelectItem>
-          <SelectItem value="escalated">Escalated</SelectItem>
-          <SelectItem value="resolved">Resolved</SelectItem>
-          <SelectItem value="blocked">Blocked</SelectItem>
+          {statuses.map((item) => (
+            <SelectItem key={item} value={item} className="capitalize">
+              {item}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>

@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, FolderKanban, MessageSquareText } from "lucide-react";
+import { AlertTriangle, Bot, FolderKanban, MessageSquareText, UserRoundCheck } from "lucide-react";
 
 import { listBotIntegrations } from "@/lib/api/botIntegrations";
+import { ApiError } from "@/lib/api/client";
 import { listConversations } from "@/lib/api/conversations";
 import { listProjects, normalizeProjectListResponse } from "@/lib/api/projects";
-import { ApiError } from "@/lib/api/client";
+import { queryKeys } from "@/lib/api/queryKeys";
 import { formatNumber } from "@/lib/utils/formatters";
 
 import { BotHealthPanel } from "@/components/dashboard/BotHealthPanel";
@@ -20,16 +21,16 @@ import { MetricCard } from "@/components/shared/MetricCard";
 
 export default function DashboardPage() {
   const projectsQuery = useQuery({
-    queryKey: ["projects"],
+    queryKey: queryKeys.projects.all,
     queryFn: listProjects,
     select: normalizeProjectListResponse,
   });
   const botsQuery = useQuery({
-    queryKey: ["botIntegrations"],
+    queryKey: queryKeys.bots.all,
     queryFn: listBotIntegrations,
   });
   const conversationsQuery = useQuery({
-    queryKey: ["conversations", "recent"],
+    queryKey: queryKeys.conversations.filtered("recent"),
     queryFn: () => listConversations(),
   });
 
@@ -49,30 +50,52 @@ export default function DashboardPage() {
   const projects = projectsQuery.data || [];
   const bots = botsQuery.data || [];
   const conversations = conversationsQuery.data || [];
+  const openConversations = conversations.filter((conversation) => conversation.status === "open").length;
+  const needsHuman = conversations.filter((conversation) => conversation.needs_human).length;
+  const activeBots = bots.filter((bot) => ["active", "online", "ready"].includes(String(bot.status).toLowerCase())).length;
+  const botIssues = bots.filter((bot) => bot.last_error).length;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Company workspace"
         title="Dashboard"
-        description="Projects are presented as knowledge bases while preserving the backend domain model."
+        description="Overview of your bots, conversations, and knowledge assets. All values come from the current backend APIs."
       />
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard title="Knowledge Bases" value={formatNumber(projects.length)} icon={<FolderKanban className="size-4 text-indigo-600" />} />
-        <MetricCard title="Telegram Bots" value={formatNumber(bots.length)} icon={<Bot className="size-4 text-indigo-600" />} />
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard title="Active Bots" value={formatNumber(activeBots)} hint={`${formatNumber(bots.length)} total bots`} tone="info" icon={<Bot />} />
         <MetricCard
-          title="Conversations"
-          value={formatNumber(conversations.length)}
-          icon={<MessageSquareText className="size-4 text-indigo-600" />}
+          title="Open Conversations"
+          value={formatNumber(openConversations)}
+          hint={`${formatNumber(conversations.length)} total loaded`}
+          tone="default"
+          icon={<MessageSquareText />}
+        />
+        <MetricCard
+          title="Needs Human"
+          value={formatNumber(needsHuman)}
+          hint="Escalated from live data"
+          tone={needsHuman > 0 ? "warning" : "success"}
+          icon={<UserRoundCheck />}
+        />
+        <MetricCard title="Knowledge Bases" value={formatNumber(projects.length)} hint="Backend projects" tone="default" icon={<FolderKanban />} />
+        <MetricCard
+          title="Bot Issues"
+          value={formatNumber(botIssues)}
+          hint="Reported by integrations"
+          tone={botIssues > 0 ? "danger" : "success"}
+          icon={<AlertTriangle />}
         />
       </div>
+
       <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <SetupChecklist />
-        <KnowledgeBaseReadiness projects={projects} />
-      </div>
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <SetupChecklist projects={projects} bots={bots} conversations={conversations} />
         <BotHealthPanel bots={bots} />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <RecentConversations conversations={conversations} />
+        <KnowledgeBaseReadiness projects={projects} bots={bots} />
       </div>
     </div>
   );

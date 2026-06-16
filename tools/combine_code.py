@@ -29,7 +29,6 @@ EXCLUDE_DIRS = {
 }
 
 EXCLUDE_PATH_TOKENS = (
-    "frontend/",
     "tmp/",
 )
 
@@ -375,7 +374,7 @@ def combine_code(root_dir: Path, output_file: Path) -> int:
         outfile.write("Bundle: default\n")
         outfile.write("Notes:\n")
         outfile.write("- Includes current repo code and runtime files.\n")
-        outfile.write("- Excludes legacy static frontend under frontend/.\n")
+        outfile.write("- Includes the current Next.js frontend under frontend-next/.\n")
         outfile.write("- Includes important project context files and Windows startup scripts first.\n\n")
 
         for filepath in get_default_bundle_files(root_dir):

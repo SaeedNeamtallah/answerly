@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { getAdminConversation, getAdminConversationMessages } from "@/lib/api/admin";
+import { queryKeys } from "@/lib/api/queryKeys";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConversationThread } from "@/components/conversations/ConversationThread";
@@ -14,11 +15,11 @@ import { LoadingState } from "@/components/shared/LoadingState";
 export default function AdminConversationDetailPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const conversationQuery = useQuery({
-    queryKey: ["adminConversation", conversationId],
+    queryKey: queryKeys.admin.conversation(conversationId),
     queryFn: () => getAdminConversation(conversationId),
   });
   const messagesQuery = useQuery({
-    queryKey: ["adminConversationMessages", conversationId],
+    queryKey: queryKeys.admin.conversationMessages(conversationId),
     queryFn: () => getAdminConversationMessages(conversationId),
   });
 
@@ -39,7 +40,7 @@ export default function AdminConversationDetailPage() {
       <PageHeader
         eyebrow="Read-only detail"
         title={`Conversation #${conversationQuery.data!.id}`}
-        description="Platform owners can inspect the full thread but cannot reply here in v1."
+        description="Platform-owner read-only thread and internal retrieval inspection."
       />
       <ConversationThread
         messages={(messagesQuery.data || []).map((message) => ({

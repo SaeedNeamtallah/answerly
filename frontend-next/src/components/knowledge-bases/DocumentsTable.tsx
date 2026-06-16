@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 
 import { DocumentAsset } from "@/lib/types/document";
+import { formatRelativeDate } from "@/lib/utils/dates";
 import { formatBytes } from "@/lib/utils/formatters";
 
 import { DataTable } from "@/components/shared/DataTable";
@@ -15,13 +16,17 @@ export function DocumentsTable({
 }) {
   return (
     <DataTable
-      columns={["File", "Size", "Status", "Actions"]}
+      caption="Uploaded documents"
+      columns={["File", "Type", "Size", "Uploaded", "Status", "Actions"]}
       rows={documents.map((document) => [
         document.original_filename,
+        document.file_type || "unknown",
         formatBytes(document.file_size),
+        formatRelativeDate(document.created_at),
         <StatusBadge key={document.id} status={document.status} />,
         renderActions(document),
       ])}
+      empty="No documents uploaded yet."
     />
   );
 }

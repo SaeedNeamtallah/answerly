@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { KeyRound, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
 export function RotateTokenDialog({
@@ -19,11 +19,17 @@ export function RotateTokenDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">Rotate token</Button>
+        <Button variant="outline">
+          <KeyRound className="size-4" />
+          Rotate token
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Rotate Telegram token</DialogTitle>
+          <DialogDescription>
+            The new token is sent to the backend once and will not be displayed after rotation.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <Input

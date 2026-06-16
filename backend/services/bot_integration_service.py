@@ -48,6 +48,40 @@ class BotIntegrationService:
         return f"{base_url}/telegram/webhook/{int(integration_id)}/{webhook_secret}"
 
     @staticmethod
+    def redact_webhook_url(webhook_url: str | None) -> str | None:
+        """Return a log/report-safe webhook URL without the secret path segment."""
+        if not webhook_url:
+            return None
+        clean_url = str(webhook_url)
+        marker = "/telegram/webhook/"
+        if marker not in clean_url:
+            return clean_url
+        prefix, suffix = clean_url.split(marker, 1)
+        integration_id = suffix.split("/", 1)[0]
+        return f"{prefix}{marker}{integration_id}/<redacted>"
+
+    async def register_webhook(
+        self,
+        integration: BotIntegration,
+        bot_token: str,
+        *,
+        drop_pending_updates: bool = False,
+    ) -> bool:
+        """Build, persist, and register the current public Telegram webhook URL."""
+        integration.webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)
+        if not integration.webhook_url:
+            return False
+
+        await self.telegram_api.set_webhook(
+            bot_token,
+            integration.webhook_url,
+            drop_pending_updates=drop_pending_updates,
+            secret_token=integration.webhook_secret,
+        )
+        integration.last_error = None
+        return True
+
+    @staticmethod
     def _sanitize_name(value: str) -> str:
         name = sanitize_text(value, max_length=120, strip_html=True, allow_newlines=False)
         if not name:
@@ -176,10 +210,9 @@ class BotIntegrationService:
             await db.rollback()
             raise BotIntegrationError("Telegram bot token is already connected") from exc
 
-        integration.webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)
-        if integration.webhook_url:
+        if self._build_webhook_url(integration.id, integration.webhook_secret):
             try:
-                await self.telegram_api.set_webhook(bot_token, integration.webhook_url)
+                await self.register_webhook(integration, bot_token, drop_pending_updates=False)
             except TelegramAPIError as exc:
                 integration.status = "error"
                 integration.last_error = str(exc)
@@ -241,13 +274,12 @@ class BotIntegrationService:
         integration.telegram_username = sanitize_optional_text(bot_info.get("telegram_username"), 120)
         integration.token_encrypted = self.crypto_service.encrypt_token(bot_token)
         integration.token_hash = self.crypto_service.hash_token(bot_token)
-        integration.webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)
         integration.status = "active"
         integration.last_error = None
 
-        if integration.webhook_url:
+        if self._build_webhook_url(integration.id, integration.webhook_secret):
             try:
-                await self.telegram_api.set_webhook(bot_token, integration.webhook_url)
+                await self.register_webhook(integration, bot_token, drop_pending_updates=False)
             except TelegramAPIError as exc:
                 integration.status = "error"
                 integration.last_error = str(exc)
@@ -273,6 +305,14 @@ class BotIntegrationService:
         if integration is None:
             raise BotIntegrationError("Bot integration not found")
         integration.status = status
+        if status == "active":
+            try:
+                token = self.crypto_service.decrypt_token(integration.token_encrypted)
+                await self.register_webhook(integration, token, drop_pending_updates=False)
+                integration.last_error = None
+            except TelegramAPIError as exc:
+                integration.status = "error"
+                integration.last_error = str(exc)
         db.add(integration)
         await db.commit()
         await db.refresh(integration)

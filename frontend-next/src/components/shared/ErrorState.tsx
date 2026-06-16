@@ -1,7 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ErrorState({
   title = "Something went wrong",
@@ -15,19 +15,17 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <Card className="border-rose-200 bg-rose-50/70">
-      <CardHeader className="flex flex-row items-center gap-3">
-        <AlertTriangle className="size-5 text-rose-600" />
-        <CardTitle className="text-rose-700">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm text-rose-700">
-        <p>{description}</p>
+    <Alert variant="destructive" className="rounded-xl bg-card">
+      <AlertTriangle className="size-4" />
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription className="flex flex-col gap-4">
+        <span>{description}</span>
         {onRetry ? (
-          <Button variant="outline" onClick={onRetry}>
+          <Button variant="outline" className="w-fit" onClick={onRetry}>
             {retryLabel}
           </Button>
         ) : null}
-      </CardContent>
-    </Card>
+      </AlertDescription>
+    </Alert>
   );
 }

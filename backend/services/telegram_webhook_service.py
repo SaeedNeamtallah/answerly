@@ -8,14 +8,17 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
-from backend.controllers.query_controller import QueryInfrastructureError
 from backend.database.models import BotIntegration
-from backend.monitoring.metrics import TELEGRAM_WEBHOOK_FAILURES_TOTAL
 from backend.services.bot_integration_service import BotIntegrationService
 from backend.services.conversation_service import ConversationService
 from backend.services.customer_bot_query_service import CustomerBotQueryService
 from backend.services.telegram_api_service import TelegramAPIService
 from backend.services.token_crypto_service import TokenCryptoService
+
+try:
+    import redis.asyncio as redis_async
+except Exception:  # pragma: no cover - redis is an optional runtime dependency for fallback behavior
+    redis_async = None
 
 
 class TelegramWebhookError(ValueError):
@@ -31,6 +34,7 @@ class TelegramWebhookService:
 
     _request_buckets: dict[int, deque[float]] = defaultdict(deque)
     _in_flight: dict[int, int] = defaultdict(int)
+    _redis_client = None
 
     def __init__(
         self,
@@ -71,7 +75,27 @@ class TelegramWebhookService:
         return self._conversation_service
 
     @classmethod
-    def _acquire_limit(cls, integration_id: int) -> None:
+    def _rate_limit_redis_url(cls) -> str:
+        configured = str(settings.telegram_rate_limit_redis_url or "").strip()
+        if configured:
+            return configured
+        backend = str(settings.celery_result_backend or "").strip()
+        return backend if backend.startswith(("redis://", "rediss://")) else ""
+
+    @classmethod
+    async def _get_redis_client(cls):
+        if redis_async is None:
+            return None
+        if cls._redis_client is not None:
+            return cls._redis_client
+        url = cls._rate_limit_redis_url()
+        if not url:
+            return None
+        cls._redis_client = redis_async.from_url(url, decode_responses=True)
+        return cls._redis_client
+
+    @classmethod
+    def _acquire_memory_limit(cls, integration_id: int) -> str:
         now = time.monotonic()
         bucket = cls._request_buckets[int(integration_id)]
         window_seconds = 60.0
@@ -85,10 +109,65 @@ class TelegramWebhookService:
 
         bucket.append(now)
         cls._in_flight[int(integration_id)] += 1
+        return "memory"
 
     @classmethod
-    def _release_limit(cls, integration_id: int) -> None:
+    async def _acquire_redis_limit(cls, integration_id: int) -> str | None:
+        client = await cls._get_redis_client()
+        if client is None:
+            return None
+
+        max_requests = max(1, int(settings.telegram_webhook_requests_per_minute))
+        max_in_flight = max(1, int(settings.telegram_webhook_max_in_flight))
+        minute_bucket = int(time.time() // 60)
+        rate_key = f"telegram:webhook:rate:{int(integration_id)}:{minute_bucket}"
+        in_flight_key = f"telegram:webhook:inflight:{int(integration_id)}"
+
+        current_count = await client.incr(rate_key)
+        if current_count == 1:
+            await client.expire(rate_key, 120)
+        if int(current_count) > max_requests:
+            raise TelegramWebhookThrottle("Telegram webhook rate limit exceeded")
+
+        current_in_flight = await client.incr(in_flight_key)
+        await client.expire(in_flight_key, max(30, int(settings.telegram_reply_generation_claim_timeout_seconds)))
+        if int(current_in_flight) > max_in_flight:
+            await client.decr(in_flight_key)
+            raise TelegramWebhookThrottle("Telegram webhook concurrency limit exceeded")
+
+        return "redis"
+
+    @classmethod
+    async def _acquire_limit(cls, integration_id: int) -> str:
+        try:
+            backend = await cls._acquire_redis_limit(integration_id)
+            if backend:
+                return backend
+        except TelegramWebhookThrottle:
+            raise
+        except Exception:
+            # Keep webhook availability during Redis outages; memory fallback is per replica.
+            pass
+
+        return cls._acquire_memory_limit(integration_id)
+
+    @classmethod
+    async def _release_limit(cls, integration_id: int, backend: str) -> None:
+        if backend == "redis":
+            try:
+                client = await cls._get_redis_client()
+                if client is not None:
+                    await client.decr(f"telegram:webhook:inflight:{int(integration_id)}")
+                    return
+            except Exception:
+                pass
         cls._in_flight[int(integration_id)] = max(0, cls._in_flight[int(integration_id)] - 1)
+
+    @staticmethod
+    def _enqueue_reply_generation(customer_message_id: int) -> None:
+        from backend.tasks.telegram_query import generate_bot_reply_task
+
+        generate_bot_reply_task.delay(int(customer_message_id))
 
     @staticmethod
     def _extract_message(update: dict[str, Any]) -> dict[str, Any] | None:
@@ -120,11 +199,11 @@ class TelegramWebhookService:
         if integration is None:
             raise TelegramWebhookError("Bot integration not found")
 
-        self._acquire_limit(integration.id)
+        limit_backend = await self._acquire_limit(integration.id)
         try:
             return await self._handle_update_for_integration(db, integration=integration, update=update)
         finally:
-            self._release_limit(integration.id)
+            await self._release_limit(integration.id, limit_backend)
 
     async def _handle_update_for_integration(
         self,
@@ -175,65 +254,19 @@ class TelegramWebhookService:
             telegram_update_id=str(update.get("update_id")) if update.get("update_id") is not None else None,
             telegram_message_id=str(message.get("message_id")) if message.get("message_id") is not None else None,
             raw_payload=update,
+            retrieval_metadata={"reply_generation_status": "queued"},
         )
-        if not created:
-            await db.commit()
-            return {"ok": True, "duplicate": True, "message_id": customer_message.id}
-
-        language = self._language_for_customer(message)
         try:
-            answer_result = await self.query_service.answer(
-                db,
-                integration=integration,
-                query=text,
-                language=language,
-            )
-            reply_text = answer_result["customer_answer"]
-            if int(answer_result.get("context_used") or 0) <= 0 and integration.human_handoff_enabled:
-                conversation.needs_human = True
-                conversation.status = "escalated"
-                if integration.fallback_message:
-                    reply_text = integration.fallback_message
-
-            await self.conversation_service.save_message(
-                db,
-                integration=integration,
-                conversation=conversation,
-                customer=customer,
-                sender_type="bot",
-                text=reply_text,
-                telegram_message_id=None,
-                delivery_status="pending",
-                answer_sources=answer_result.get("internal_sources") or [],
-                retrieval_metadata={"context_used": answer_result.get("context_used")},
-            )
-            integration.status = "active"
-            integration.last_error = None
-            db.add(integration)
             await db.commit()
-            return {"ok": True, "conversation_id": conversation.id}
-        except QueryInfrastructureError:
-            TELEGRAM_WEBHOOK_FAILURES_TOTAL.labels(reason="query_infrastructure").inc()
-            fallback = integration.fallback_message or "Support is temporarily unavailable. Please try again later."
-            return await self._handle_failure(
-                db,
-                integration=integration,
-                conversation=conversation,
-                customer=customer,
-                fallback=fallback,
-                error="Query service unavailable",
-            )
-        except Exception:
-            TELEGRAM_WEBHOOK_FAILURES_TOTAL.labels(reason="processing").inc()
-            fallback = integration.fallback_message or "Support is temporarily unavailable. Please try again later."
-            return await self._handle_failure(
-                db,
-                integration=integration,
-                conversation=conversation,
-                customer=customer,
-                fallback=fallback,
-                error="Telegram webhook processing failed",
-            )
+            self._enqueue_reply_generation(int(customer_message.id))
+        except Exception as exc:
+            raise TelegramWebhookError("Telegram reply queue is unavailable") from exc
+
+        result = {"ok": True, "conversation_id": conversation.id, "reply_queued": True}
+        if not created:
+            result["duplicate"] = True
+            result["message_id"] = customer_message.id
+        return result
 
     async def _handle_failure(
         self,

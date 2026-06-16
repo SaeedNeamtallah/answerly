@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { activateCompany, blockCompany, listAdminCompanies, suspendCompany } from "@/lib/api/admin";
+import { queryKeys } from "@/lib/api/queryKeys";
 
 import { CompaniesTable } from "@/components/admin/CompaniesTable";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 
 export default function AdminCompaniesPage() {
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: ["adminCompanies"], queryFn: listAdminCompanies });
+  const query = useQuery({ queryKey: queryKeys.admin.companies, queryFn: listAdminCompanies });
   const mutation = useMutation({
     mutationFn: async ({ id, action }: { id: number; action: "activate" | "suspend" | "block" }) => {
       if (action === "activate") return activateCompany(id, {});
@@ -23,7 +24,7 @@ export default function AdminCompaniesPage() {
     },
     onSuccess: () => {
       toast.success("Company status updated");
-      queryClient.invalidateQueries({ queryKey: ["adminCompanies"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.companies });
     },
   });
 
@@ -37,7 +38,7 @@ export default function AdminCompaniesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Admin" title="Companies" description="Platform-owner account actions use confirm dialogs instead of browser prompts." />
+      <PageHeader eyebrow="Admin" title="Companies" description="Platform-owner account controls for company workspaces." />
       <CompaniesTable
         companies={query.data || []}
         renderActions={(company) => (

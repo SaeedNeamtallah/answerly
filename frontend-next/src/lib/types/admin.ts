@@ -69,3 +69,48 @@ export interface AdminStatusReasonPayload {
   reason?: string;
   duration_minutes?: number;
 }
+
+export interface AdminObservabilityDashboard {
+  uid: string;
+  title: string;
+  category: string;
+  description: string;
+  url: string;
+  embed_url?: string | null;
+}
+
+export interface AdminObservabilityEndpointStatus {
+  status: string;
+  public_url?: string | null;
+  embedding_enabled?: boolean | null;
+  version?: string | null;
+  database?: string | null;
+  base_url_configured?: boolean | null;
+}
+
+export interface AdminObservabilityTarget {
+  job: string;
+  label: string;
+  health: string;
+  last_scrape?: string | null;
+  scrape_url?: string | null;
+  last_error?: string | null;
+}
+
+export interface AdminObservabilityMetric {
+  key: string;
+  label: string;
+  unit: string;
+  value?: number | null;
+  status: string;
+  description: string;
+}
+
+export interface AdminObservabilitySummary {
+  range: string;
+  generated_at: string;
+  grafana: AdminObservabilityEndpointStatus;
+  prometheus: AdminObservabilityEndpointStatus;
+  targets: AdminObservabilityTarget[];
+  metrics: AdminObservabilityMetric[];
+}

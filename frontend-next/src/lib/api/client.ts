@@ -5,13 +5,31 @@ const DEFAULT_API_BASE_URL = "http://localhost:8000";
 export class ApiError extends Error {
   status: number;
   detail?: unknown;
+  isUnavailable: boolean;
 
   constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.isUnavailable = status === 0 || status >= 500;
   }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+export function getApiErrorMessage(error: unknown, fallback = "Request failed") {
+  if (error instanceof ApiError) {
+    return error.message || fallback;
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+
+  return fallback;
 }
 
 function getApiBaseUrl() {
@@ -75,7 +93,13 @@ export async function apiRequest<T>(
         typeof payload === "object" && payload && "detail" in payload
           ? (payload as { detail?: string }).detail
           : undefined;
-      throw new ApiError(response.status, detail || response.statusText || "Request failed", payload);
+      const message =
+        typeof detail === "string" && detail.trim()
+          ? detail
+          : response.status >= 500
+            ? "Backend service unavailable"
+            : response.statusText || "Request failed";
+      throw new ApiError(response.status, message, payload);
     }
 
     return payload as T;

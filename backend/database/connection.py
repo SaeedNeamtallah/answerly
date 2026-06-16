@@ -306,6 +306,16 @@ async def init_db():
             )
         )
 
+    async def ensure_telegram_outbox_schema(conn):
+        """Backfill Telegram outbox retry columns for older local databases."""
+        await conn.execute(text("ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS delivery_next_attempt_at TIMESTAMPTZ"))
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_conversation_messages_delivery_next_attempt_at "
+                "ON conversation_messages(delivery_next_attempt_at)"
+            )
+        )
+
     try:
         async with engine.begin() as conn:
             try:
@@ -329,6 +339,7 @@ async def init_db():
             await ensure_user_account_status_schema(conn)
             await ensure_incident_schema(conn)
             await ensure_audit_log_schema(conn)
+            await ensure_telegram_outbox_schema(conn)
             logger.info("Legacy security schema compatibility checks completed")
     except Exception as compatibility_error:
         logger.warning(f"Could not apply legacy compatibility schema checks: {str(compatibility_error)}")

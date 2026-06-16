@@ -10,11 +10,11 @@ export function MessageBubble({ message }: { message: ConversationMessage }) {
     <div
       className={cn(
         "max-w-[85%] rounded-2xl px-4 py-3 shadow-sm",
-        isCustomer ? "mr-auto bg-white border border-slate-200" : "ml-auto bg-indigo-600 text-white",
+        isCustomer ? "mr-auto border bg-background" : "ml-auto bg-primary text-primary-foreground",
       )}
     >
       <p className="whitespace-pre-wrap text-sm">{message.text}</p>
-      <p className={cn("mt-2 text-xs", isCustomer ? "text-slate-500" : "text-indigo-100")}>
+      <p className={cn("mt-2 text-xs capitalize", isCustomer ? "text-muted-foreground" : "text-primary-foreground/80")}>
         {message.sender_type} · {formatDateTime(message.created_at)}
       </p>
     </div>

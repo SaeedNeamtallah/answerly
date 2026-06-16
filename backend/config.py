@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     retrieval_rerank_top_k: int = Field(default=10, alias="RETRIEVAL_RERANK_TOP_K")
     query_rewrite_enabled: bool = Field(default=False, alias="QUERY_REWRITE_ENABLED")
     retrieval_hnsw_ef_search: int = Field(default=40, alias="RETRIEVAL_HNSW_EF_SEARCH")
+    answer_max_tokens: int = Field(default=1024, alias="ANSWER_MAX_TOKENS")
     
     # API Configuration
     api_host: str = Field(default="127.0.0.1", alias="API_HOST")
@@ -236,6 +237,14 @@ class Settings(BaseSettings):
     # Database-backed Telegram SaaS Configuration
     bot_token_encryption_key: str = Field(default="", alias="BOT_TOKEN_ENCRYPTION_KEY")
     public_webhook_base_url: str = Field(default="", alias="PUBLIC_WEBHOOK_BASE_URL")
+    telegram_webhook_require_secret_header: bool = Field(
+        default=True,
+        alias="TELEGRAM_WEBHOOK_REQUIRE_SECRET_HEADER",
+    )
+    telegram_rate_limit_redis_url: str = Field(
+        default="",
+        alias="TELEGRAM_RATE_LIMIT_REDIS_URL",
+    )
     telegram_webhook_requests_per_minute: int = Field(
         default=30,
         alias="TELEGRAM_WEBHOOK_REQUESTS_PER_MINUTE",
@@ -248,6 +257,10 @@ class Settings(BaseSettings):
         default=30,
         alias="TELEGRAM_RAW_PAYLOAD_RETENTION_DAYS",
     )
+    telegram_raw_payload_cleanup_interval_seconds: int = Field(
+        default=6 * 3600,
+        alias="TELEGRAM_RAW_PAYLOAD_CLEANUP_INTERVAL_SECONDS",
+    )
     
     # CORS Configuration
     cors_origins: List[str] = Field(
@@ -256,8 +269,6 @@ class Settings(BaseSettings):
             "http://localhost:3001",
             "http://127.0.0.1:3000",
             "http://localhost:3000",
-            "http://127.0.0.1:8080",
-            "http://localhost:8080",
             "http://127.0.0.1:8000",
             "http://localhost:8000",
         ],
@@ -284,6 +295,13 @@ class Settings(BaseSettings):
     )
     celery_flower_password: str = Field(default="", alias="CELERY_FLOWER_PASSWORD")
 
+    # Observability / dashboard integration
+    prometheus_base_url: str = Field(default="http://localhost:9090", alias="PROMETHEUS_BASE_URL")
+    grafana_public_url: str = Field(default="http://localhost:3000", alias="GRAFANA_PUBLIC_URL")
+    grafana_internal_url: str = Field(default="", alias="GRAFANA_INTERNAL_URL")
+    grafana_embed_enabled: bool = Field(default=False, alias="GRAFANA_EMBED_ENABLED")
+    grafana_dashboard_org_id: int = Field(default=1, alias="GRAFANA_DASHBOARD_ORG_ID")
+
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
@@ -305,6 +323,18 @@ class Settings(BaseSettings):
     telegram_outbox_claim_timeout_seconds: int = Field(
         default=120,
         alias="TELEGRAM_OUTBOX_CLAIM_TIMEOUT_SECONDS",
+    )
+    telegram_outbox_retry_base_seconds: int = Field(
+        default=30,
+        alias="TELEGRAM_OUTBOX_RETRY_BASE_SECONDS",
+    )
+    telegram_outbox_retry_max_seconds: int = Field(
+        default=15 * 60,
+        alias="TELEGRAM_OUTBOX_RETRY_MAX_SECONDS",
+    )
+    telegram_reply_generation_claim_timeout_seconds: int = Field(
+        default=600,
+        alias="TELEGRAM_REPLY_GENERATION_CLAIM_TIMEOUT_SECONDS",
     )
 
     model_config = SettingsConfigDict(
@@ -332,6 +362,32 @@ def _validate_production_secrets(s: Settings) -> None:
     bot_key = (s.bot_token_encryption_key or "").strip()
     if not bot_key:
         reasons.append("BOT_TOKEN_ENCRYPTION_KEY is required in production")
+
+    webhook_base = (s.public_webhook_base_url or "").strip().lower()
+    if not webhook_base.startswith("https://"):
+        reasons.append("PUBLIC_WEBHOOK_BASE_URL must be a public HTTPS URL in production")
+    if "ngrok" in webhook_base or "localhost" in webhook_base or "127.0.0.1" in webhook_base:
+        reasons.append("PUBLIC_WEBHOOK_BASE_URL must not use local or temporary tunnel hosts in production")
+
+    cors_origins = [str(origin).lower() for origin in (s.cors_origins or [])]
+    if not cors_origins:
+        reasons.append("CORS_ORIGINS must include the production frontend origin")
+    if any("localhost" in origin or "127.0.0.1" in origin for origin in cors_origins):
+        reasons.append("CORS_ORIGINS must not include localhost origins in production")
+
+    llm_provider = (s.llm_provider or "").strip().lower()
+    if llm_provider.startswith("groq") and not (s.groq_api_key or "").strip():
+        reasons.append("GROQ_API_KEY is required for the configured production LLM provider")
+    if llm_provider.startswith("gemini") and not (s.gemini_api_key or "").strip():
+        reasons.append("GEMINI_API_KEY is required for the configured production LLM provider")
+    if llm_provider.startswith("openrouter") and not (s.openrouter_api_key or "").strip():
+        reasons.append("OPENROUTER_API_KEY is required for the configured production LLM provider")
+
+    embedding_provider = (s.embedding_provider or "").strip().lower()
+    if embedding_provider == "cohere" and not (s.cohere_api_key or "").strip():
+        reasons.append("COHERE_API_KEY is required for the configured production embedding provider")
+    if embedding_provider == "gemini" and not (s.gemini_api_key or "").strip():
+        reasons.append("GEMINI_API_KEY is required for the configured production embedding provider")
 
     if reasons:
         raise SystemExit("FATAL production configuration error: " + "; ".join(reasons))

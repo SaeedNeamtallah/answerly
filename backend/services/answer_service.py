@@ -56,7 +56,7 @@ class AnswerService:
                 prompt=prompt,
                 system_prompt=system_prompt,
                 temperature=0.7,
-                max_tokens=25000
+                max_tokens=max(128, int(settings.answer_max_tokens)),
             )
 
             answer = (answer or "").strip()

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { signup } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 const schema = z
@@ -43,12 +44,18 @@ export default function SignupPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-full max-w-md space-y-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="space-y-2 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Create account</h1>
-          <p className="text-sm text-slate-600">This preserves the existing `/auth/signup` backend flow.</p>
-        </div>
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
+      <Card className="w-full max-w-md border-border/80 shadow-xl">
+        <CardHeader className="space-y-4 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+            <UserPlus className="size-5" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Create account</CardTitle>
+            <p className="mt-2 text-sm text-muted-foreground">Start a company workspace for knowledge bases and bot operations.</p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
 
         <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
           <div className="space-y-2">
@@ -67,18 +74,19 @@ export default function SignupPage() {
             <p className="text-sm text-rose-600">{form.formState.errors.confirmPassword?.message}</p>
           </div>
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
             Create account
           </Button>
         </form>
 
-        <div className="text-center text-sm text-slate-600">
+        <div className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-indigo-600">
+          <Link href="/login" className="font-medium text-primary">
             Sign in
           </Link>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

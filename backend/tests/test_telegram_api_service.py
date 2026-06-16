@@ -53,11 +53,13 @@ class TelegramAPIServiceTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("backend.services.telegram_api_service.httpx.AsyncClient", lambda *a, **k: FakeAsyncClient(calls=calls)):
             service = TelegramAPIService()
-            await service.set_webhook("123:secret", "https://example.test/webhook")
+            await service.set_webhook("123:secret", "https://example.test/webhook", secret_token="secret-header")
             await service.send_message("123:secret", "456", "hello")
 
         self.assertIn("/setWebhook", calls[0][0])
         self.assertEqual(calls[0][1]["url"], "https://example.test/webhook")
+        self.assertFalse(calls[0][1]["drop_pending_updates"])
+        self.assertEqual(calls[0][1]["secret_token"], "secret-header")
         self.assertIn("/sendMessage", calls[1][0])
         self.assertEqual(calls[1][1]["chat_id"], "456")
 

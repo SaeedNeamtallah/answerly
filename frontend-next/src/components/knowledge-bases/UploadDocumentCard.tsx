@@ -16,12 +16,17 @@ export function UploadDocumentCard({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upload document</CardTitle>
+    <Card className="border-border/80 bg-card shadow-sm">
+      <CardHeader className="has-data-[slot=card-description]:grid-rows-[auto_auto]">
+        <CardTitle className="flex items-center gap-2">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Upload className="size-4" />
+          </span>
+          Upload document
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           Files are uploaded to the backend and must be processed through Celery tasks only.
         </p>
         <input

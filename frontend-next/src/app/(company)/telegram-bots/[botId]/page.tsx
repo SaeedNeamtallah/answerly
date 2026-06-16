@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Bot, MessageSquareText, ShieldCheck, TriangleAlert } from "lucide-react";
 
 import {
   deleteBotIntegration,
@@ -24,6 +25,8 @@ import { DangerZone } from "@/components/shared/DangerZone";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/shared/MetricCard";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 export default function TelegramBotDetailPage() {
   const { botId } = useParams<{ botId: string }>();
@@ -91,6 +94,8 @@ export default function TelegramBotDetailPage() {
   }
 
   const bot = botQuery.data!;
+  const conversations = conversationsQuery.data || [];
+  const escalated = conversations.filter((conversation) => conversation.needs_human || conversation.status === "escalated").length;
 
   return (
     <div className="space-y-6">
@@ -100,14 +105,22 @@ export default function TelegramBotDetailPage() {
         description={bot.telegram_username || "Telegram username pending"}
         actions={<RotateTokenDialog onSubmit={(token) => rotateMutation.mutate(token)} isPending={rotateMutation.isPending} />}
       />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Status" value={<StatusBadge status={bot.status} />} icon={<Bot className="size-4" />} tone="info" />
+        <MetricCard title="Readiness" value={readinessQuery.data?.ready ? "Ready" : "Review"} icon={<ShieldCheck className="size-4" />} tone={readinessQuery.data?.ready ? "success" : "warning"} />
+        <MetricCard title="Conversations" value={conversations.length} icon={<MessageSquareText className="size-4" />} tone="default" />
+        <MetricCard title="Needs Human" value={escalated} icon={<TriangleAlert className="size-4" />} tone={escalated > 0 ? "warning" : "success"} />
+      </div>
       <BotReadinessChecklist readiness={readinessQuery.data} />
-      <BotFormDrawer
-        projects={projectsQuery.data || []}
-        initialValues={bot}
-        isPending={updateMutation.isPending}
-        triggerLabel="Edit bot"
-        onSubmit={(values) => updateMutation.mutate(values)}
-      />
+      <div>
+        <BotFormDrawer
+          projects={projectsQuery.data || []}
+          initialValues={bot}
+          isPending={updateMutation.isPending}
+          triggerLabel="Edit bot"
+          onSubmit={(values) => updateMutation.mutate(values)}
+        />
+      </div>
       <ConversationList conversations={conversationsQuery.data || []} />
       <DangerZone title="Danger zone" description="Deleting this integration also removes it from the dashboard.">
         <ConfirmDialog

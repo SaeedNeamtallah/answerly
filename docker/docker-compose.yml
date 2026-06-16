@@ -3,7 +3,11 @@ x-app-environment: &app-environment
   QDRANT_URL: http://qdrant:6333
   CELERY_BROKER_URL: amqp://minirag_user:minirag_rabbitmq_2222@rabbitmq:5672/minirag_vhost
   CELERY_RESULT_BACKEND: redis://:minirag_redis_2222@redis:6379/0
-  CORS_ORIGINS: '["http://127.0.0.1:8080","http://localhost:8080","http://127.0.0.1:3000","http://localhost:3000","http://127.0.0.1:3001","http://localhost:3001","http://127.0.0.1:8000","http://localhost:8000"]'
+  CORS_ORIGINS: '["http://127.0.0.1:3000","http://localhost:3000","http://127.0.0.1:3001","http://localhost:3001","http://127.0.0.1:8000","http://localhost:8000"]'
+  PROMETHEUS_BASE_URL: http://prometheus:9090
+  GRAFANA_INTERNAL_URL: http://grafana:3000
+  GRAFANA_PUBLIC_URL: http://localhost:3000
+  GRAFANA_EMBED_ENABLED: "true"
   RAGMIND_SHARED_CONFIG_DIR: /app/uploads/config
   SECURITY_ENGINEER_USERNAMES: ${SECURITY_ENGINEER_USERNAMES:-codex_security_smoke}
 
@@ -135,6 +139,10 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_HIDE_VERSION: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
     volumes:
@@ -213,21 +221,6 @@ services:
         condition: service_started
     volumes:
       - ../uploads:/app/uploads
-    restart: always
-
-    #8 بالطبع الفرونت إند (React) - إضافة مهمة
-
-  frontend:
-    profiles:
-      - docker-frontend
-    build:
-      context: .. # المسار لفولدر الفرونت إند بالنسبة لفولدر الدوكر
-      dockerfile: docker/front.Dockerfile
-    container_name: ragmind-frontend
-    ports:
-      - "127.0.0.1:80:80"
-    depends_on:
-      - backend
     restart: always
 
 volumes:

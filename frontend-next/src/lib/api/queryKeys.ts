@@ -1,0 +1,38 @@
+export const queryKeys = {
+  health: ["health"] as const,
+  me: ["me"] as const,
+  providers: ["providers"] as const,
+  projects: {
+    all: ["projects"] as const,
+    detail: (projectId: string | number) => ["project", String(projectId)] as const,
+    stats: (projectId: string | number) => ["projectStats", String(projectId)] as const,
+    documents: (projectId: string | number) => ["documents", String(projectId)] as const,
+  },
+  bots: {
+    all: ["botIntegrations"] as const,
+    detail: (botId: string | number) => ["botIntegration", String(botId)] as const,
+    readiness: (botId: string | number) => ["botReadiness", String(botId)] as const,
+  },
+  conversations: {
+    all: ["conversations"] as const,
+    filtered: (status?: string) => ["conversations", status || "all"] as const,
+    detail: (conversationId: string | number) => ["conversation", String(conversationId)] as const,
+    messages: (conversationId: string | number) => ["messages", String(conversationId)] as const,
+    byBot: (botId: string | number) => ["conversations", "bot", String(botId)] as const,
+  },
+  admin: {
+    overview: ["adminOverview"] as const,
+    stats: ["adminStats"] as const,
+    companies: ["adminCompanies"] as const,
+    company: (companyId: string | number) => ["adminCompany", String(companyId)] as const,
+    companyProjects: (companyId: string | number) => ["adminCompanyProjects", String(companyId)] as const,
+    companyBots: (companyId: string | number) => ["adminCompanyBots", String(companyId)] as const,
+    companyConversations: (companyId: string | number) => ["adminCompanyConversations", String(companyId)] as const,
+    bots: ["adminBots"] as const,
+    conversations: ["adminConversations"] as const,
+    conversation: (conversationId: string | number) => ["adminConversation", String(conversationId)] as const,
+    conversationMessages: (conversationId: string | number) => ["adminConversationMessages", String(conversationId)] as const,
+    observabilityDashboards: (range: string) => ["adminObservabilityDashboards", range] as const,
+    observabilitySummary: (range: string) => ["adminObservabilitySummary", range] as const,
+  },
+};

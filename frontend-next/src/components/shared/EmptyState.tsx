@@ -2,7 +2,7 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 
 export function EmptyState({
   title,
@@ -20,20 +20,20 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <Card className="border-dashed border-slate-300 bg-white/80">
-      <CardHeader className="items-start gap-3">
-        {icon}
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm text-slate-600">
-        <p>{description}</p>
+    <Empty className="min-h-48 border border-dashed border-border bg-card/80">
+      <EmptyHeader>
+        {icon ? <EmptyMedia variant="icon">{icon}</EmptyMedia> : null}
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{description}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
         {actionLabel && actionHref ? (
           <Button asChild>
             <Link href={actionHref}>{actionLabel}</Link>
           </Button>
         ) : null}
         {actionLabel && action ? <Button onClick={action}>{actionLabel}</Button> : null}
-      </CardContent>
-    </Card>
+      </EmptyContent>
+    </Empty>
   );
 }

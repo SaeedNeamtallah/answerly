@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>RAGMind Presentation</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reset.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/theme/dracula.min.css" id="theme">
+        <style>
+            .reveal h1, .reveal h2, .reveal h3 {
+                text-transform: none;
+                font-family: 'Inter', sans-serif;
+            }
+            .highlight {
+                color: #ff79c6;
+            }
+            .tech-badge {
+                display: inline-block;
+                padding: 5px 15px;
+                margin: 5px;
+                border-radius: 20px;
+                background: #44475a;
+                font-size: 0.6em;
+            }
+            .text-left {
+                text-align: left;
+            }
+        </style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+                <!-- Slide 1 -->
+				<section>
+					<h1>RAG<span class="highlight">Mind</span></h1>
+					<h3>Intelligent B2B SaaS Knowledge & Support Platform</h3>
+					<p>
+						<small>Turning company documents into searchable project knowledge bases and Telegram customer-support bots.</small>
+					</p>
+				</section>
+
+                <!-- Slide 2 -->
+				<section class="text-left">
+					<h2 style="text-align: center;">Business Value</h2>
+					<ul>
+						<li style="margin-bottom: 15px;"><strong>Centralized Knowledge:</strong> Upload and manage company documents effortlessly.</li>
+						<li style="margin-bottom: 15px;"><strong>Instant Answers:</strong> RAG pipeline ensures accurate, context-aware answers to user queries.</li>
+						<li style="margin-bottom: 15px;"><strong>Automated Customer Support:</strong> Deploy intelligent Telegram bots powered by your company's proprietary data.</li>
+						<li style="margin-bottom: 15px;"><strong>Multi-tenant SaaS:</strong> Role-based access (Company Admin vs. Platform Owner) with strict data isolation per project.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 3 -->
+				<section>
+					<h2>Key Features</h2>
+					<div style="display: flex; justify-content: space-between; font-size: 0.8em; margin-top: 40px;">
+                        <div style="width: 45%; background: rgba(255, 255, 255, 0.05); padding: 30px; border-radius: 15px;">
+                            <h4 class="highlight">Knowledge Management</h4>
+                            <ul style="font-size: 0.9em;">
+                                <li>Document Upload & Processing</li>
+                                <li>Intelligent Context Retrieval</li>
+                                <li>Dashboard Testing Environment</li>
+                                <li>Project Scoping & Analytics</li>
+                            </ul>
+                        </div>
+                        <div style="width: 45%; background: rgba(255, 255, 255, 0.05); padding: 30px; border-radius: 15px;">
+                            <h4 class="highlight">Telegram Integrations</h4>
+                            <ul style="font-size: 0.9em;">
+                                <li>Multiple Bot Integrations</li>
+                                <li>Durable Conversations</li>
+                                <li>Source Visibility Control</li>
+                                <li>Human-Handoff Settings</li>
+                            </ul>
+                        </div>
+                    </div>
+				</section>
+
+                <!-- Slide 4 -->
+				<section>
+                    <h2>Architecture Overview</h2>
+                    <ul style="margin-top: 40px;">
+                        <li style="margin-bottom: 15px;"><strong>Frontend:</strong> Next.js App Router (React)</li>
+                        <li style="margin-bottom: 15px;"><strong>Backend:</strong> FastAPI + SQLAlchemy (async, Python)</li>
+                        <li style="margin-bottom: 15px;"><strong>Background Jobs:</strong> Celery + RabbitMQ + Redis</li>
+                        <li style="margin-bottom: 15px;"><strong>Database:</strong> PostgreSQL + pgvector (Optional: Qdrant)</li>
+                    </ul>
+				</section>
+
+                <!-- Slide 5 -->
+				<section class="text-left">
+					<h2 style="text-align: center;">Level 1: AI & RAG Pipeline</h2>
+					<ul style="margin-top: 30px;">
+                        <li class="fragment" style="margin-bottom: 15px;"><strong>Extraction:</strong> Celery workers extract text from files securely.</li>
+                        <li class="fragment" style="margin-bottom: 15px;"><strong>Chunking:</strong> Content is split into semantic chunks.</li>
+                        <li class="fragment" style="margin-bottom: 15px;"><strong>Embeddings:</strong> Generated via providers (Gemini, Cohere).</li>
+                        <li class="fragment" style="margin-bottom: 15px;"><strong>Generation:</strong> Vector search retrieves chunks; LLMs (Groq, OpenRouter, Cerebras) generate context-aware answers.</li>
+                    </ul>
+                    <div class="fragment" style="text-align: center; margin-top: 30px;">
+                        <span class="tech-badge">LLMs</span> 
+                        <span class="tech-badge">Embeddings</span> 
+                        <span class="tech-badge">Vector DB</span>
+                        <span class="tech-badge">Celery Workers</span>
+                    </div>
+				</section>
+
+                <!-- Slide 6 -->
+				<section class="text-left">
+					<h2 style="text-align: center;">Level 2: Database Layer</h2>
+					<ul style="margin-top: 30px;">
+						<li style="margin-bottom: 15px;"><strong>Relational Data:</strong> PostgreSQL reliably stores Users, Projects, Assets, Telegram Customers, and Conversations.</li>
+						<li style="margin-bottom: 15px;"><strong>Vector Storage:</strong> <span class="highlight">pgvector</span> stores document chunk embeddings natively in PostgreSQL.</li>
+						<li style="margin-bottom: 15px;"><strong>Migrations:</strong> Managed by Alembic to ensure safe schema evolution.</li>
+						<li style="margin-bottom: 15px;"><strong>Vector Alternatives:</strong> Built-in support for Qdrant as an optional vector backend.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 7 -->
+				<section class="text-left">
+					<h2 style="text-align: center;">Level 3: Integrations & Bots</h2>
+					<ul style="margin-top: 30px;">
+						<li style="margin-bottom: 15px;"><strong>Telegram Webhooks:</strong> Registers bots securely to dynamic HTTPS backend URLs.</li>
+						<li style="margin-bottom: 15px;"><strong>Conversations:</strong> Persists customer messages and orchestrates RAG specific to the company's project.</li>
+						<li style="margin-bottom: 15px;"><strong>Outbox Pattern:</strong> Responses are queued as <code>pending</code> and delivered by a reliable background worker, preventing lost messages.</li>
+						<li style="margin-bottom: 15px;"><strong>Token Encryption:</strong> Bot tokens are encrypted via Fernet and are never returned to clients.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 8 -->
+                <section class="text-left">
+                    <h2 style="text-align: center;">Level 4: Infrastructure & Monitoring</h2>
+                    <ul style="margin-top: 30px;">
+                        <li style="margin-bottom: 15px;"><strong>Local Stack:</strong> Docker Compose for seamless, single-command dev setup.</li>
+                        <li style="margin-bottom: 15px;"><strong>Observability:</strong> Prometheus & Grafana with pre-configured dashboards.</li>
+                        <li style="margin-bottom: 15px;"><strong>Metrics:</strong> Complete monitoring of FastAPI endpoints, Celery workers, and Node.</li>
+                        <li style="margin-bottom: 15px;"><strong>Cloud Production:</strong> Automated deployment to Azure Container Apps (ACR, PostgreSQL Flexible Server).</li>
+                    </ul>
+                </section>
+
+                <!-- Slide 9 -->
+				<section>
+					<h2>Conclusion</h2>
+					<p style="margin-top: 30px;">RAGMind offers a scalable, secure, and modern architecture connecting a <span class="highlight">Next.js UI</span>, <span class="highlight">FastAPI logic</span>, and powerful <span class="highlight">LLM capabilities</span> to deliver real business impact.</p>
+                    <br><br>
+                    <h3>Thank You!</h3>
+                    <p style="color: gray;">Questions?</p>
+				</section>
+			</div>
+		</div>
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.js"></script>
+		<script>
+			Reveal.initialize({
+				hash: true,
+				transition: 'slide'
+			});
+		</script>
+	</body>
+</html>

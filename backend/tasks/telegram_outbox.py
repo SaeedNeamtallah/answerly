@@ -3,8 +3,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from backend.celery_app import celery_app, get_setup_utils
+from backend.celery_app import celery_app
 from backend.config import settings
 from backend.database.models import BotIntegration, ConversationMessage, TelegramCustomer
 from backend.services.telegram_api_service import TelegramAPIError, TelegramAPIService
@@ -23,8 +24,6 @@ def deliver_pending_messages(self):
 
 
 async def _deliver_pending_messages() -> dict[str, object]:
-    db_engine = None
-
     claimed_count = 0
     sent_count = 0
     failed_count = 0
@@ -35,25 +34,40 @@ async def _deliver_pending_messages() -> dict[str, object]:
     telegram_api = TelegramAPIService()
     max_attempts = max(1, int(settings.telegram_outbox_max_delivery_attempts))
     claim_timeout_seconds = max(1, int(settings.telegram_outbox_claim_timeout_seconds))
-    stale_claim_cutoff = datetime.now(timezone.utc) - timedelta(seconds=claim_timeout_seconds)
+    now = datetime.now(timezone.utc)
+    stale_claim_cutoff = now - timedelta(seconds=claim_timeout_seconds)
+    retry_base_seconds = max(1, int(settings.telegram_outbox_retry_base_seconds))
+    retry_max_seconds = max(retry_base_seconds, int(settings.telegram_outbox_retry_max_seconds))
+
+    db_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        pool_size=2,
+        max_overflow=1,
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
+    session_maker = async_sessionmaker(
+        db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
     try:
-        (
-            db_engine,
-            session_maker,
-            document_loader,
-            chunking_service,
-            embedding_service,
-            vector_db,
-            file_service,
-        ) = await get_setup_utils()
-
         async with session_maker() as db:
             stmt = (
                 select(ConversationMessage)
                 .where(
                     or_(
-                        ConversationMessage.delivery_status == "pending",
+                        and_(
+                            ConversationMessage.delivery_status == "pending",
+                            or_(
+                                ConversationMessage.delivery_next_attempt_at.is_(None),
+                                ConversationMessage.delivery_next_attempt_at <= now,
+                            ),
+                        ),
                         and_(
                             ConversationMessage.delivery_status == "sending",
                             or_(
@@ -77,6 +91,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
                 if not message_text:
                     message.delivery_status = "failed"
                     message.delivery_claimed_at = None
+                    message.delivery_next_attempt_at = None
                     failed_count += 1
                     await db.commit()
                     continue
@@ -87,6 +102,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
                 if message.bot_integration_id is None or message.telegram_customer_id is None:
                     message.delivery_status = "failed"
                     message.delivery_claimed_at = None
+                    message.delivery_next_attempt_at = None
                     failed_count += 1
                     await db.commit()
                     continue
@@ -96,6 +112,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
                 if integration is None or customer is None or not getattr(customer, "chat_id", None):
                     message.delivery_status = "failed"
                     message.delivery_claimed_at = None
+                    message.delivery_next_attempt_at = None
                     failed_count += 1
                     await db.commit()
                     continue
@@ -105,6 +122,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
                 except Exception:
                     message.delivery_status = "failed"
                     message.delivery_claimed_at = None
+                    message.delivery_next_attempt_at = None
                     failed_count += 1
                     await db.commit()
                     continue
@@ -112,6 +130,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
                 # Claim before external call to reduce duplicate sends across workers.
                 message.delivery_status = "sending"
                 message.delivery_claimed_at = datetime.now(timezone.utc)
+                message.delivery_next_attempt_at = None
                 message.delivery_attempts = int(message.delivery_attempts or 0) + 1
                 claimed_count += 1
                 if was_stale_claim:
@@ -124,9 +143,15 @@ async def _deliver_pending_messages() -> dict[str, object]:
                     logger.warning("Telegram outbox delivery failed: %s", str(exc))
                     if message.delivery_attempts >= max_attempts:
                         message.delivery_status = "failed"
+                        message.delivery_next_attempt_at = None
                         failed_count += 1
                     else:
                         message.delivery_status = "pending"
+                        delay_seconds = min(
+                            retry_max_seconds,
+                            retry_base_seconds * (2 ** max(0, int(message.delivery_attempts or 1) - 1)),
+                        )
+                        message.delivery_next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
                         retried_count += 1
                     message.delivery_claimed_at = None
                     await db.commit()
@@ -135,9 +160,15 @@ async def _deliver_pending_messages() -> dict[str, object]:
                     logger.exception("Unexpected telegram outbox error: %s", str(exc))
                     if message.delivery_attempts >= max_attempts:
                         message.delivery_status = "failed"
+                        message.delivery_next_attempt_at = None
                         failed_count += 1
                     else:
                         message.delivery_status = "pending"
+                        delay_seconds = min(
+                            retry_max_seconds,
+                            retry_base_seconds * (2 ** max(0, int(message.delivery_attempts or 1) - 1)),
+                        )
+                        message.delivery_next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
                         retried_count += 1
                     message.delivery_claimed_at = None
                     await db.commit()
@@ -145,6 +176,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
 
                 message.delivery_status = "sent"
                 message.delivery_claimed_at = None
+                message.delivery_next_attempt_at = None
                 telegram_message_id = result_payload.get("message_id") if isinstance(result_payload, dict) else None
                 message.telegram_message_id = str(telegram_message_id) if telegram_message_id is not None else None
                 sent_count += 1
@@ -160,7 +192,6 @@ async def _deliver_pending_messages() -> dict[str, object]:
         }
     finally:
         try:
-            if db_engine:
-                await db_engine.dispose()
+            await db_engine.dispose()
         except Exception as exc:
             logger.error("Error disposing telegram outbox DB engine: %s", str(exc))

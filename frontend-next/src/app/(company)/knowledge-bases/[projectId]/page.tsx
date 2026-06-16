@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Boxes, Database, FileText, RefreshCw, UploadCloud } from "lucide-react";
 
 import { listBotIntegrations } from "@/lib/api/botIntegrations";
 import {
@@ -24,11 +25,14 @@ import { LinkedBotsPanel } from "@/components/knowledge-bases/LinkedBotsPanel";
 import { TestChatPanel } from "@/components/knowledge-bases/TestChatPanel";
 import { UploadDocumentCard } from "@/components/knowledge-bases/UploadDocumentCard";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingState } from "@/components/shared/LoadingState";
+import { MetricCard } from "@/components/shared/MetricCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { formatBytes, formatNumber } from "@/lib/utils/formatters";
 
 export default function KnowledgeBaseDetailPage() {
   const params = useParams<{ projectId: string }>();
@@ -119,6 +123,8 @@ export default function KnowledgeBaseDetailPage() {
 
   const project = projectQuery.data!;
   const linkedBots = (botsQuery.data || []).filter((bot) => bot.project_id === Number(projectId));
+  const stats = statsQuery.data?.stats || {};
+  const numberStat = (key: string) => Number(stats[key] || 0);
 
   return (
     <div className="space-y-6">
@@ -138,12 +144,29 @@ export default function KnowledgeBaseDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-950">Stats</h3>
-            <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">
-              {JSON.stringify(statsQuery.data?.stats || {}, null, 2)}
-            </pre>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard title="Documents" value={formatNumber(numberStat("asset_count"))} icon={<FileText className="size-4" />} tone="info" />
+            <MetricCard title="Chunks" value={formatNumber(numberStat("chunk_count"))} icon={<Boxes className="size-4" />} tone="default" />
+            <MetricCard title="Total Size" value={formatBytes(numberStat("total_size"))} icon={<Database className="size-4" />} tone="success" />
+            <MetricCard title="Failed Assets" value={formatNumber(numberStat("failed_assets"))} icon={<UploadCloud className="size-4" />} tone={numberStat("failed_assets") > 0 ? "danger" : "success"} />
           </div>
+          <Card className="border-border/80 bg-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Processing State</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              {[
+                ["completed_assets", "Completed"],
+                ["processing_assets", "Processing"],
+                ["failed_assets", "Failed"],
+              ].map(([key, label]) => (
+                <div key={key} className="rounded-lg border bg-background p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-2xl font-semibold">{formatNumber(numberStat(key))}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
@@ -179,15 +202,20 @@ export default function KnowledgeBaseDetailPage() {
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-950">Project settings</h3>
-            <p className="mt-2 text-sm text-slate-600">
+          <Card className="border-border/80 bg-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Project settings</CardTitle>
+            </CardHeader>
+            <CardContent>
+            <p className="text-sm text-muted-foreground">
               Mutations remain backend-owned. Reindexing uses the existing task queue.
             </p>
             <Button className="mt-4" onClick={() => reindexMutation.mutate()}>
+              <RefreshCw className="size-4" />
               Reindex knowledge base
             </Button>
-          </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
