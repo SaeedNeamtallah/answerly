@@ -65,13 +65,15 @@ export default function AdminCompaniesPage() {
               description="Suspend this company account."
               onConfirm={() => mutation.mutate({ id: company.id, action: "suspend" })}
             />
-            <ConfirmDialog
-              trigger={<Button size="sm" variant="destructive">Block</Button>}
-              title="Block company"
-              description="Block this company account."
-              variant="destructive"
-              onConfirm={() => mutation.mutate({ id: company.id, action: "block" })}
-            />
+            {company.role !== "platform_owner" && (
+              <ConfirmDialog
+                trigger={<Button size="sm" variant="destructive">Block</Button>}
+                title="Block company"
+                description="Block this company account."
+                variant="destructive"
+                onConfirm={() => mutation.mutate({ id: company.id, action: "block" })}
+              />
+            )}
             {company.role !== "platform_owner" && (
               <ConfirmDialog
                 trigger={<Button size="sm" variant="destructive">Delete</Button>}

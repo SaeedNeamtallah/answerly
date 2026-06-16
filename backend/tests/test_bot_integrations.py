@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
+from backend.config import settings
 from backend.database.models import BotIntegration, Project
 from backend.routes.bot_integrations import _serialize_integration
 from backend.services.bot_integration_service import BotIntegrationError, BotIntegrationService
@@ -36,9 +37,13 @@ class _FakeCryptoService:
 class _FakeTelegramAPI:
     def __init__(self, webhook_url="https://example.test/webhook"):
         self.webhook_url = webhook_url
+        self.set_webhook_calls = []
 
     async def validate_token(self, _token):
         return {"telegram_bot_id": "123", "telegram_username": "support_bot"}
+
+    async def set_webhook(self, token, webhook_url):
+        self.set_webhook_calls.append((token, webhook_url))
 
     async def get_webhook_info(self, _token):
         return {
@@ -186,6 +191,69 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsNone(updated.fallback_message)
+
+    async def test_create_integration_requires_public_webhook_base_url(self):
+        service = BotIntegrationService()
+
+        with (
+            patch.object(settings, "public_webhook_base_url", ""),
+            self.assertRaisesRegex(BotIntegrationError, "PUBLIC_WEBHOOK_BASE_URL"),
+        ):
+            await service.create_integration(
+                _FakeMutationDB(),
+                owner_id=2,
+                project_id=3,
+                name="Support",
+                bot_token="123:secret-token",
+            )
+
+    async def test_rotate_token_requires_public_webhook_base_url(self):
+        service = BotIntegrationService()
+
+        with (
+            patch.object(settings, "public_webhook_base_url", ""),
+            self.assertRaisesRegex(BotIntegrationError, "PUBLIC_WEBHOOK_BASE_URL"),
+        ):
+            await service.rotate_token(
+                _FakeMutationDB(),
+                owner_id=2,
+                integration_id=3,
+                bot_token="123:secret-token",
+            )
+
+    async def test_update_integration_registers_webhook_for_existing_bot(self):
+        integration = BotIntegration(
+            id=4,
+            owner_id=2,
+            project_id=3,
+            name="Support",
+            telegram_bot_id="123",
+            telegram_username="support_bot",
+            token_encrypted="encrypted",
+            token_hash="hash",
+            webhook_secret="secret",
+            webhook_url=None,
+            status="error",
+            last_error="missing webhook",
+            show_sources_to_customer=False,
+            human_handoff_enabled=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        telegram_api = _FakeTelegramAPI()
+        service = BotIntegrationService(
+            crypto_service=_FakeCryptoService(),
+            telegram_api=telegram_api,
+        )
+        service.get_integration = AsyncMock(return_value=integration)
+
+        with patch.object(settings, "public_webhook_base_url", "https://hooks.example.test"):
+            updated = await service.update_integration(_FakeMutationDB(), owner_id=2, integration_id=4)
+
+        self.assertEqual(updated.webhook_url, "https://hooks.example.test/telegram/webhook/4/secret")
+        self.assertEqual(updated.status, "active")
+        self.assertIsNone(updated.last_error)
+        self.assertEqual(telegram_api.set_webhook_calls, [("123:secret-token", updated.webhook_url)])
 
     async def test_readiness_detects_webhook_mismatch(self):
         integration = BotIntegration(

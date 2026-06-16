@@ -2,7 +2,7 @@
 
 RAGMind is a B2B SaaS Retrieval Augmented Generation (RAG) platform for turning uploaded company documents into searchable project knowledge bases and Telegram customer-support bots.
 
-It combines a FastAPI backend, background processing with Celery, vector search with pgvector or Qdrant, a lightweight static frontend, and a Next.js migration frontend in `frontend-next/`.
+It combines a FastAPI backend, background processing with Celery, vector search with pgvector and Qdrant, a lightweight static frontend, and a Next.js migration frontend in `frontend-next/`.
 
 ## Current Stack
 
@@ -327,3 +327,8 @@ tmp/            Generated local artifacts
 ## License
 
 MIT. See LICENSE.
+
+
+
+conda deactivate
+scripts\dev\newstart.bat

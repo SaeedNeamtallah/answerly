@@ -48,6 +48,11 @@ class BotIntegrationService:
         return f"{base_url}/telegram/webhook/{int(integration_id)}/{webhook_secret}"
 
     @staticmethod
+    def _require_webhook_base_url() -> None:
+        if not str(settings.public_webhook_base_url or "").strip():
+            raise BotIntegrationError("PUBLIC_WEBHOOK_BASE_URL is required for Telegram bot replies")
+
+    @staticmethod
     def _sanitize_name(value: str) -> str:
         name = sanitize_text(value, max_length=120, strip_html=True, allow_newlines=False)
         if not name:
@@ -149,6 +154,7 @@ class BotIntegrationService:
         fallback_message: str | None = None,
         created_by_user_id: int | None = None,
     ) -> BotIntegration:
+        self._require_webhook_base_url()
         await self._get_owned_project(db, owner_id=owner_id, project_id=project_id)
         bot_info = await self.telegram_api.validate_token(bot_token)
         token_hash = self.crypto_service.hash_token(bot_token)
@@ -218,7 +224,23 @@ class BotIntegrationService:
         if fallback_message_provided:
             integration.fallback_message = sanitize_optional_text(fallback_message, 1000)
 
-        integration.webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)
+        webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)
+        if webhook_url:
+            previous_webhook_url = str(integration.webhook_url or "").strip()
+            integration.webhook_url = webhook_url
+            if webhook_url != previous_webhook_url:
+                try:
+                    token = self.crypto_service.decrypt_token(integration.token_encrypted)
+                    await self.telegram_api.set_webhook(token, webhook_url)
+                    integration.status = "active"
+                    integration.last_error = None
+                except TelegramAPIError as exc:
+                    integration.status = "error"
+                    integration.last_error = str(exc)
+        elif not integration.webhook_url:
+            integration.status = "error"
+            integration.last_error = "PUBLIC_WEBHOOK_BASE_URL is required for Telegram bot replies"
+
         db.add(integration)
         await db.commit()
         await db.refresh(integration)
@@ -232,6 +254,7 @@ class BotIntegrationService:
         integration_id: int,
         bot_token: str,
     ) -> BotIntegration:
+        self._require_webhook_base_url()
         integration = await self.get_integration(db, owner_id=owner_id, integration_id=integration_id)
         if integration is None:
             raise BotIntegrationError("Bot integration not found")

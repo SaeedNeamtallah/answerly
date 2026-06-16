@@ -3697,7 +3697,9 @@ function renderAdminCompanies(companies) {
         list.innerHTML = '<div class="empty-state">No companies</div>';
         return;
     }
-    list.innerHTML = companies.map((company) => `
+    list.innerHTML = companies.map((company) => {
+        const canBlockCompany = company.role !== 'platform_owner';
+        return `
         <div class="product-row">
             <div class="product-row-main">
                 <div class="product-row-title">${escapeHtml(company.company_name || company.username)}</div>
@@ -3714,10 +3716,11 @@ function renderAdminCompanies(companies) {
                 <button class="btn btn-secondary btn-sm admin-view-company" data-id="${company.id}">${i18n[state.lang].admin_view_detail_btn}</button>
                 <button class="btn btn-secondary btn-sm admin-activate-company" data-id="${company.id}">${i18n[state.lang].admin_activate_btn}</button>
                 <button class="btn btn-secondary btn-sm admin-suspend-company" data-id="${company.id}">${i18n[state.lang].admin_suspend_btn}</button>
-                <button class="btn btn-danger btn-sm admin-block-company" data-id="${company.id}">${i18n[state.lang].admin_block_btn}</button>
+                ${canBlockCompany ? `<button class="btn btn-danger btn-sm admin-block-company" data-id="${company.id}">${i18n[state.lang].admin_block_btn}</button>` : ''}
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
     list.querySelectorAll('.admin-view-company').forEach((button) => {
         button.onclick = async () => renderAdminCompanyDetail(button.dataset.id);
     });
@@ -3758,6 +3761,7 @@ async function renderAdminCompanyDetail(companyId) {
         api.get(`/admin/companies/${companyId}/bot-integrations`),
         api.get(`/admin/companies/${companyId}/conversations`)
     ]);
+    const canBlockCompany = company.role !== 'platform_owner';
     panel.innerHTML = `
         <div class="admin-detail-header">
             <div>
@@ -3767,7 +3771,7 @@ async function renderAdminCompanyDetail(companyId) {
             <div class="product-row-actions">
                 <button class="btn btn-secondary btn-sm" id="admin-detail-activate">${i18n[state.lang].admin_activate_btn}</button>
                 <button class="btn btn-secondary btn-sm" id="admin-detail-suspend">${i18n[state.lang].admin_suspend_btn}</button>
-                <button class="btn btn-danger btn-sm" id="admin-detail-block">${i18n[state.lang].admin_block_btn}</button>
+                ${canBlockCompany ? `<button class="btn btn-danger btn-sm" id="admin-detail-block">${i18n[state.lang].admin_block_btn}</button>` : ''}
             </div>
         </div>
         <div class="admin-detail-grid">
@@ -3797,13 +3801,16 @@ async function renderAdminCompanyDetail(companyId) {
         showNotification(i18n[state.lang].success_saved, 'success');
         await renderAdminCompanyDetail(companyId);
     };
-    document.getElementById('admin-detail-block').onclick = async () => {
-        const reason = prompt('Reason', 'platform_owner_block');
-        if (reason === null) return;
-        await api.post(`/admin/companies/${companyId}/block`, { reason: reason || 'platform_owner_block' });
-        showNotification(i18n[state.lang].success_saved, 'success');
-        await renderAdminCompanyDetail(companyId);
-    };
+    const detailBlockButton = document.getElementById('admin-detail-block');
+    if (detailBlockButton) {
+        detailBlockButton.onclick = async () => {
+            const reason = prompt('Reason', 'platform_owner_block');
+            if (reason === null) return;
+            await api.post(`/admin/companies/${companyId}/block`, { reason: reason || 'platform_owner_block' });
+            showNotification(i18n[state.lang].success_saved, 'success');
+            await renderAdminCompanyDetail(companyId);
+        };
+    }
 }
 
 const views = {
