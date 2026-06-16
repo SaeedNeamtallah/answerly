@@ -1,9 +1,13 @@
 """Small Telegram Bot API client that never logs bot tokens."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 class TelegramAPIError(RuntimeError):

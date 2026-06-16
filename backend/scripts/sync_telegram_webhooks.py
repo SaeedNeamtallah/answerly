@@ -1,4 +1,4 @@
-"""Synchronize active Telegram bot webhooks with PUBLIC_WEBHOOK_BASE_URL."""
+"""Synchronize recoverable Telegram bot webhooks with PUBLIC_WEBHOOK_BASE_URL."""
 from __future__ import annotations
 
 import argparse
@@ -6,6 +6,7 @@ import asyncio
 import json
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 
 from backend.database.connection import async_session_maker, close_db
@@ -13,6 +14,10 @@ from backend.database.models import BotIntegration
 from backend.services.bot_integration_service import BotIntegrationService
 from backend.services.telegram_api_service import TelegramAPIError
 from backend.services.token_crypto_service import SecretConfigurationError
+
+
+class WebhookPreflightError(RuntimeError):
+    """Raised when PUBLIC_WEBHOOK_BASE_URL does not reach this backend webhook route."""
 
 
 def _result_payload(
@@ -32,6 +37,34 @@ def _result_payload(
     }
 
 
+async def _preflight_webhook_url(webhook_url: str | None, webhook_secret: str) -> None:
+    if not webhook_url:
+        raise WebhookPreflightError("PUBLIC_WEBHOOK_BASE_URL is not configured")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                str(webhook_url),
+                headers={"X-Telegram-Bot-Api-Secret-Token": str(webhook_secret)},
+                json={"update_id": 0},
+            )
+    except httpx.HTTPError as exc:
+        raise WebhookPreflightError("PUBLIC_WEBHOOK_BASE_URL is unreachable") from exc
+
+    if response.status_code != 200:
+        raise WebhookPreflightError(
+            f"PUBLIC_WEBHOOK_BASE_URL preflight returned HTTP {response.status_code}"
+        )
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise WebhookPreflightError("PUBLIC_WEBHOOK_BASE_URL preflight returned non-JSON response") from exc
+
+    if data.get("ok") is not True or data.get("reason") != "unsupported_update":
+        raise WebhookPreflightError("PUBLIC_WEBHOOK_BASE_URL does not reach the Telegram webhook route")
+
+
 async def sync_active_webhooks(*, json_output: bool = False) -> int:
     service = BotIntegrationService()
     results: list[dict[str, Any]] = []
@@ -39,13 +72,15 @@ async def sync_active_webhooks(*, json_output: bool = False) -> int:
     async with async_session_maker() as db:
         result = await db.execute(
             select(BotIntegration)
-            .where(BotIntegration.status == "active")
+            .where(BotIntegration.status.in_(("active", "error")))
             .order_by(BotIntegration.id.asc())
         )
         integrations = list(result.scalars().all())
 
         for integration in integrations:
             try:
+                integration.webhook_url = service._build_webhook_url(integration.id, integration.webhook_secret)
+                await _preflight_webhook_url(integration.webhook_url, integration.webhook_secret)
                 token = service.crypto_service.decrypt_token(integration.token_encrypted)
                 registered = await service.register_webhook(
                     integration,
@@ -60,6 +95,10 @@ async def sync_active_webhooks(*, json_output: bool = False) -> int:
                     integration.status = "active"
                     integration.last_error = None
                     results.append(_result_payload(integration, ok=True))
+            except WebhookPreflightError as exc:
+                integration.status = "error"
+                integration.last_error = str(exc)
+                results.append(_result_payload(integration, ok=False, error=str(exc)))
             except (SecretConfigurationError, TelegramAPIError) as exc:
                 integration.status = "error"
                 integration.last_error = str(exc)

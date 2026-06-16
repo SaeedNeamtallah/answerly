@@ -1,5 +1,6 @@
 """Telegram API service tests with mocked HTTP responses."""
 
+import logging
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -37,6 +38,10 @@ class FakeAsyncClient:
 
 
 class TelegramAPIServiceTests(unittest.IsolatedAsyncioTestCase):
+    def test_http_client_logs_are_not_info_level(self):
+        self.assertGreaterEqual(logging.getLogger("httpx").level, logging.WARNING)
+        self.assertGreaterEqual(logging.getLogger("httpcore").level, logging.WARNING)
+
     async def test_validate_token_returns_bot_identity(self):
         calls = []
         response = FakeResponse(payload={"ok": True, "result": {"id": 123, "username": "support_bot"}})
