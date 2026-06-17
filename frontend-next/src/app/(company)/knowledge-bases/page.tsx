@@ -53,17 +53,8 @@ export default function KnowledgeBasesPage() {
             </Button>
           }/>
           <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search knowledge bases..." 
-              className="h-10 w-64 rounded-xl border border-slate-200 pl-9 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-shadow"
-            />
+            {/* Search can be implemented later */}
           </div>
-          <Button variant="outline" className="h-10 rounded-xl px-3 border-slate-200 text-slate-600">
-            <Filter className="size-4 mr-2" />
-            Filters
-          </Button>
         </div>
       </div>
 
@@ -110,22 +101,9 @@ export default function KnowledgeBasesPage() {
         />
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
-              <button className="flex items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-900 shadow-sm">
-                <List className="size-4" />
-                Table view
-              </button>
-              <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">
-                <LayoutGrid className="size-4" />
-                Card view
-              </button>
-            </div>
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-3 text-sm text-slate-500">
               <span>{projects.length} knowledge bases</span>
-              <button className="p-1.5 hover:bg-slate-100 rounded-md transition-colors">
-                <RefreshCw className="size-4" />
-              </button>
             </div>
           </div>
 

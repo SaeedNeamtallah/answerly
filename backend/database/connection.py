@@ -333,6 +333,36 @@ async def init_db():
         logger.error(f"Failed to apply Alembic migrations: {str(migration_error)}")
         raise
 
+    async def ensure_default_owner():
+        """Ensure a default platform owner exists."""
+        from backend.database.models import User
+        from backend.security.auth import get_password_hash, ROLE_PLATFORM_OWNER
+        from sqlalchemy.future import select
+
+        async with async_session_maker() as session:
+            stmt = select(User).where(User.role == ROLE_PLATFORM_OWNER)
+            result = await session.execute(stmt)
+            owner = result.scalars().first()
+            if not owner:
+                owner_username = settings.platform_owner_username or "admin"
+                stmt_by_name = select(User).where(User.username == owner_username)
+                result_by_name = await session.execute(stmt_by_name)
+                existing_by_name = result_by_name.scalars().first()
+                if not existing_by_name:
+                    owner_user = User(
+                        username=owner_username,
+                        hashed_password=get_password_hash("admin_password"),
+                        role=ROLE_PLATFORM_OWNER,
+                        status="ACTIVE"
+                    )
+                    session.add(owner_user)
+                    await session.commit()
+                    logger.info(f"Created default platform owner account: {owner_username}")
+                else:
+                    existing_by_name.role = ROLE_PLATFORM_OWNER
+                    await session.commit()
+                    logger.info(f"Promoted existing user to platform owner: {owner_username}")
+
     # Keep startup resilient for legacy databases with partial historical schemas.
     try:
         async with engine.begin() as conn:
@@ -341,6 +371,7 @@ async def init_db():
             await ensure_audit_log_schema(conn)
             await ensure_telegram_outbox_schema(conn)
             logger.info("Legacy security schema compatibility checks completed")
+        await ensure_default_owner()
     except Exception as compatibility_error:
         logger.warning(f"Could not apply legacy compatibility schema checks: {str(compatibility_error)}")
 

@@ -71,14 +71,7 @@ export default function TelegramBotsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search bots..." 
-              className="h-10 w-full sm:w-64 rounded-xl border border-slate-200 pl-9 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-shadow"
-            />
-          </div>
+          {/* Search can be implemented later */}
           <BotFormDrawer 
             projects={projects} 
             isPending={createMutation.isPending} 
