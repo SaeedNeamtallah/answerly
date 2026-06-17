@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export function MetricCard({
@@ -9,38 +8,54 @@ export function MetricCard({
   icon,
   hint,
   trend,
+  trendDirection,
   tone = "default",
 }: {
   title: string;
   value: ReactNode;
   icon?: ReactNode;
   hint?: string;
-  trend?: ReactNode;
-  tone?: "default" | "success" | "warning" | "danger" | "info";
+  trend?: string;
+  trendDirection?: "up" | "down" | "neutral";
+  tone?: "default" | "success" | "warning" | "danger" | "info" | "purple";
 }) {
   const toneClass = {
-    default: "bg-primary/10 text-primary",
-    success: "bg-emerald-500/10 text-emerald-700",
-    warning: "bg-amber-500/10 text-amber-700",
-    danger: "bg-rose-500/10 text-rose-700",
-    info: "bg-cyan-500/10 text-cyan-700",
+    default: "bg-blue-50 text-blue-500",
+    success: "bg-emerald-50 text-emerald-500",
+    warning: "bg-orange-50 text-orange-500",
+    danger: "bg-rose-50 text-rose-500",
+    info: "bg-cyan-50 text-cyan-500",
+    purple: "bg-purple-50 text-purple-500",
   }[tone];
 
+  const isPositiveTrend = trendDirection === "up" || (trendDirection === "down" && tone === "danger");
+  const trendColor = isPositiveTrend ? "text-emerald-500" : "text-rose-500";
+  const TrendIcon = trendDirection === "up" ? ArrowUpRight : ArrowDownRight;
+
   return (
-    <Card className="border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
-        {icon ? <div className={cn("flex size-10 items-center justify-center rounded-xl", toneClass)}>{icon}</div> : null}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="text-3xl font-semibold tracking-tight text-foreground">{value}</div>
-        {trend || hint ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {trend ? <span className="font-medium text-emerald-600">{trend}</span> : null}
-            {hint ? <span>{hint}</span> : null}
+    <div className="flex flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between">
+        {icon ? (
+          <div className={cn("flex size-14 items-center justify-center rounded-2xl", toneClass)}>
+            <div className="[&>svg]:size-6">{icon}</div>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-sm font-medium text-slate-500">{title}</span>
+          <span className="text-3xl font-bold tracking-tight text-slate-900">{value}</span>
+        </div>
+      </div>
+      {(trend || hint) && (
+        <div className="mt-5 flex items-center gap-1.5 text-xs font-medium">
+          {trend ? (
+            <div className={cn("flex items-center gap-0.5", trendColor)}>
+              {trendDirection !== "neutral" && <TrendIcon className="size-3.5" />}
+              <span>{trend}</span>
+            </div>
+          ) : null}
+          <span className="text-slate-400">{hint || "vs yesterday"}</span>
+        </div>
+      )}
+    </div>
   );
 }

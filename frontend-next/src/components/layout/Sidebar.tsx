@@ -19,6 +19,7 @@ import {
 
 import { cn } from "@/lib/utils/cn";
 import { useAuthStore } from "@/store/auth-store";
+import { AnswerlyLogo } from "@/components/shared/AnswerlyLogo";
 
 export interface NavItem {
   href: string;
@@ -38,13 +39,13 @@ export const companyNav: NavItem[] = [
 ];
 
 export const adminNav: NavItem[] = [
-  { href: "/admin", label: "Overview", icon: Shield },
+  { href: "/admin", label: "Admin Overview", icon: Shield },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
-  { href: "/admin/conversations", label: "Conversations", icon: MessageSquareText },
+  { href: "/admin/conversations", label: "Global Conversations", icon: MessageSquareText },
   { href: "/admin/bots", label: "Bots", icon: Bot },
   { href: "/admin/errors", label: "Errors", icon: Shield },
   { href: "/admin/stats", label: "Stats", icon: LayoutDashboard },
-  { href: "/admin/observability", label: "Observability", icon: Activity },
+  { href: "/admin/observability", label: "AI Settings", icon: Activity },
 ];
 
 export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedded?: boolean }) {
@@ -55,24 +56,16 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
   return (
     <aside
       className={cn(
-        "w-72 shrink-0 border-r border-white/10 bg-[#020a18] text-white",
+        "w-64 shrink-0 bg-[#0B132B] text-slate-300 shadow-[4px_0_24px_rgba(0,0,0,0.05)]",
         embedded ? "flex min-h-full flex-col" : "hidden min-h-screen lg:flex lg:flex-col",
       )}
     >
-      <div className="px-5 py-6">
-        <div className="flex items-center gap-3">
-          <div className="grid size-10 grid-cols-3 gap-1 rounded-xl bg-primary/15 p-2 ring-1 ring-primary/25">
-            {Array.from({ length: 9 }).map((_, index) => (
-              <span key={index} className="rounded-full bg-primary" />
-            ))}
-          </div>
-          <div>
-            <p className="text-xl font-semibold leading-none">Answerly</p>
-            <p className="mt-1 text-xs text-white/50">{platformMode ? "Platform console" : "Company workspace"}</p>
-          </div>
-        </div>
+      <div className="px-5 py-8">
+        <Link href={platformMode ? "/admin" : "/dashboard"} className="flex items-center">
+          <AnswerlyLogo variant="light" className="h-8" />
+        </Link>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+      <nav className="flex flex-1 flex-col gap-1.5 px-3">
         {items.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -81,38 +74,47 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition",
+                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
                 active
-                  ? "border-primary/60 bg-primary/20 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.04)]"
-                  : "border-transparent text-white/72 hover:bg-white/8 hover:text-white",
+                  ? "bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 shadow-[inset_0px_0px_12px_rgba(79,70,229,0.1)]"
+                  : "border border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200",
               )}
             >
-              <Icon className="size-4" aria-hidden="true" />
+              <Icon className={cn("size-[18px]", active ? "text-indigo-400" : "text-slate-500")} aria-hidden="true" />
               <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="flex flex-col gap-3 p-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+      <div className="flex flex-col gap-3 p-4">
+        <div className="rounded-xl border border-slate-800 bg-[#0f172a] p-3 shadow-md transition-colors hover:border-slate-700 cursor-pointer">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-white/10 text-sm font-semibold">
-              {(user?.company_name || user?.username || "R").slice(0, 2).toUpperCase()}
+            <div className="flex size-9 items-center justify-center rounded-lg bg-slate-800 text-sm font-semibold text-slate-200 ring-1 ring-slate-700">
+              <Building2 className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user?.company_name || user?.username || "Answerly"}</p>
-              <p className="text-xs text-white/50">{platformMode ? "Platform owner" : "Enterprise plan"}</p>
+              <p className="truncate text-sm font-medium text-slate-200">{user?.company_name || user?.username || "Acme Support Co."}</p>
+              <p className="text-xs text-indigo-400 font-medium">{platformMode ? "Platform Owner" : "Enterprise Plan"}</p>
             </div>
-            <ChevronDown className="size-4 text-white/50" aria-hidden="true" />
+            <ChevronDown className="size-4 text-slate-500" aria-hidden="true" />
           </div>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-xs text-white/70">
-          <div className="mb-2 flex items-center justify-between text-white">
-            <span>{platformMode ? "Platform usage" : "Workspace usage"}</span>
-            <span>Live</span>
+        <div className="rounded-xl border border-slate-800 bg-[#0f172a] p-4 text-xs shadow-md">
+          <div className="mb-2 flex items-center justify-between text-slate-300 font-medium">
+            <span>{platformMode ? "Platform usage" : "Monthly message usage"}</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-2/5 rounded-full bg-primary" />
+          <div className="mb-2 flex items-end justify-between font-semibold">
+            <div className="text-sm">
+              <span className="text-slate-200">42,680</span>
+              <span className="text-slate-500"> / 100,000</span>
+            </div>
+            <span className="text-slate-400 text-xs font-medium">42%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+            <div className="h-full w-[42%] rounded-full bg-indigo-500" />
+          </div>
+          <div className="mt-3 text-[11px] text-slate-500">
+            Resets in 12 days
           </div>
         </div>
       </div>

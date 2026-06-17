@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bot, FolderKanban, MessageSquareText, UserRoundCheck } from "lucide-react";
+import { Bot, MessageSquareText, UserRound, Send, BookOpen, FileWarning } from "lucide-react";
 
 import { listBotIntegrations } from "@/lib/api/botIntegrations";
 import { ApiError } from "@/lib/api/client";
@@ -59,32 +59,45 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Dashboard"
-        description="Overview of your bots, conversations, and knowledge assets. All values come from the current backend APIs."
+        description="Overview of your bots, conversations, and knowledge assets."
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard title="Active Bots" value={formatNumber(activeBots)} hint={`${formatNumber(bots.length)} total bots`} tone="info" icon={<Bot />} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <MetricCard
-          title="Open Conversations"
+          title="Active Bots"
+          value={formatNumber(activeBots)}
+          tone="success"
+          icon={<Bot fill="currentColor" />}
+        />
+        <MetricCard
+          title="Bot Issues"
+          value={formatNumber(botIssues)}
+          tone="danger"
+          icon={<FileWarning fill="currentColor" />}
+        />
+        <MetricCard
+          title="Open Chats"
           value={formatNumber(openConversations)}
-          hint={`${formatNumber(conversations.length)} total loaded`}
-          tone="default"
-          icon={<MessageSquareText />}
+          tone="info"
+          icon={<MessageSquareText fill="currentColor" />}
         />
         <MetricCard
           title="Needs Human"
           value={formatNumber(needsHuman)}
-          hint="Escalated from live data"
-          tone={needsHuman > 0 ? "warning" : "success"}
-          icon={<UserRoundCheck />}
+          tone="warning"
+          icon={<UserRound fill="currentColor" />}
         />
-        <MetricCard title="Knowledge Bases" value={formatNumber(projects.length)} hint="Backend projects" tone="default" icon={<FolderKanban />} />
         <MetricCard
-          title="Bot Issues"
-          value={formatNumber(botIssues)}
-          hint="Reported by integrations"
-          tone={botIssues > 0 ? "danger" : "success"}
-          icon={<AlertTriangle />}
+          title="Total Chats"
+          value={formatNumber(conversations.length)}
+          tone="default"
+          icon={<Send fill="currentColor" className="ml-1" />}
+        />
+        <MetricCard
+          title="Knowledge Bases"
+          value={formatNumber(projects.length)}
+          tone="purple"
+          icon={<BookOpen fill="currentColor" />}
         />
       </div>
 
