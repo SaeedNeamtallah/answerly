@@ -71,7 +71,8 @@ class QueryController:
         query: str,
         top_k: int = 5,
         language: str = "ar",
-        asset_id: Optional[int] = None
+        asset_id: Optional[int] = None,
+        custom_system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process query and generate answer.
@@ -156,7 +157,8 @@ class QueryController:
                 query=query,
                 context_chunks=similar_chunks,
                 language=language,
-                include_sources=True
+                include_sources=True,
+                custom_system_prompt=custom_system_prompt
             )
             
             logger.info(f"Generated answer for query (used {result['context_used']} chunks)")

@@ -35,22 +35,22 @@ class SecurityDashboardService:
     def normalize_limit(limit: int) -> int:
         return 50 if int(limit) == 50 else 20
 
-    def get_stats(self) -> Dict[str, int]:
-        return get_security_stats()
+    async def get_stats(self, *, db: AsyncSession) -> Dict[str, int]:
+        return await get_security_stats(db)
 
-    def get_events(self, *, limit: int = 20) -> List[Dict[str, Any]]:
+    async def get_events(self, *, db: AsyncSession, limit: int = 20) -> List[Dict[str, Any]]:
         safe_limit = self.normalize_limit(limit)
-        return [event.model_dump(mode="json") for event in list_events(limit=safe_limit)]
+        return await list_events(db=db, limit=safe_limit)
 
-    def get_events_for_export(self, *, limit: int = 1000) -> List[Dict[str, Any]]:
+    async def get_events_for_export(self, *, db: AsyncSession, limit: int = 1000) -> List[Dict[str, Any]]:
         safe_limit = max(1, min(int(limit or 1000), self._MAX_EXPORT_EVENTS))
-        return [event.model_dump(mode="json") for event in list_events(limit=safe_limit)]
+        return await list_events(db=db, limit=safe_limit)
 
-    def get_dashboard_payload(self, *, limit: int = 20) -> Dict[str, Any]:
+    async def get_dashboard_payload(self, *, db: AsyncSession, limit: int = 20) -> Dict[str, Any]:
         safe_limit = self.normalize_limit(limit)
         return {
-            "stats": self.get_stats(),
-            "events": self.get_events(limit=safe_limit),
+            "stats": await self.get_stats(db=db),
+            "events": await self.get_events(db=db, limit=safe_limit),
         }
 
     @staticmethod
@@ -94,18 +94,18 @@ class SecurityDashboardService:
 
         return summary
 
-    def get_user_status_events(self, *, limit: int = 20) -> List[Dict[str, Any]]:
+    async def get_user_status_events(self, *, db: AsyncSession, limit: int = 20) -> List[Dict[str, Any]]:
         """Return recent account status change events for dashboard activity feed."""
         safe_limit = max(1, min(int(limit or 20), 100))
         candidate_limit = min(1000, max(200, safe_limit * 12))
-        candidate_events = list_events(limit=candidate_limit)
+        candidate_events = await list_events(db=db, limit=candidate_limit)
 
         payload_events: List[Dict[str, Any]] = []
         for event in candidate_events:
-            if event.event_type not in self._USER_STATUS_EVENT_TYPES:
+            if event["event_type"] not in self._USER_STATUS_EVENT_TYPES:
                 continue
 
-            payload = event.model_dump(mode="json")
+            payload = event
             metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
             actor = str(metadata.get("actor") or payload.get("username") or "system").strip() or "system"
             reason = str(metadata.get("reason") or "").strip()
@@ -261,6 +261,7 @@ class SecurityDashboardService:
         self,
         *,
         request: Request,
+        db: AsyncSession,
         limit: int = 20,
     ) -> AsyncIterator[str]:
         """Yield SSE chunks containing dashboard payload updates from the event system."""
@@ -272,7 +273,7 @@ class SecurityDashboardService:
             if await request.is_disconnected():
                 break
 
-            payload = self.get_dashboard_payload(limit=safe_limit)
+            payload = await self.get_dashboard_payload(db=db, limit=safe_limit)
             stats = payload["stats"]
             events = payload["events"]
 

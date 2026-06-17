@@ -12,6 +12,24 @@ _SCRIPT_TAG_RE = re.compile(r"(?is)<\s*script[^>]*>.*?<\s*/\s*script\s*>")
 _HTML_TAG_RE = re.compile(r"(?is)<[^>]+>")
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
 
+_SUSPICIOUS_PATTERNS = [
+    re.compile(r"(?is)<script[^>]*>.*?</script>"),
+    re.compile(r"(?i)javascript:"),
+    re.compile(r"(?i)\b(onload|onerror|onmouseover|alert)\s*="),
+    re.compile(r"(?i)\bUNION\s+ALL\s+SELECT\b"),
+    re.compile(r"(?i)\bDROP\s+(TABLE|DATABASE)\b"),
+    re.compile(r"(?i)\bOR\s+1\s*=\s*1\b"),
+]
+
+def contains_suspicious_input(value: Any) -> bool:
+    """Check if the given payload matches common XSS/SQLi patterns."""
+    if not isinstance(value, str):
+        return False
+    for pattern in _SUSPICIOUS_PATTERNS:
+        if pattern.search(value):
+            return True
+    return False
+
 
 def sanitize_text(
     value: Any,
@@ -40,6 +58,19 @@ def sanitize_text(
 
     if max_length > 0 and len(text) > max_length:
         text = text[:max_length]
+
+    if contains_suspicious_input(text):
+        try:
+            from backend.security.event_service import log_event
+            from backend.security.security_event import SecurityEventType
+            log_event({
+                "event_type": SecurityEventType.SUSPICIOUS_INPUT,
+                "severity": "HIGH",
+                "message": "Suspicious input pattern detected during sanitization",
+                "metadata": {"snippet": text[:100]}
+            })
+        except Exception:
+            pass
 
     return text
 

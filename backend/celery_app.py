@@ -88,6 +88,7 @@ celery_app = Celery(
         "backend.tasks.maintenance",
         "backend.tasks.telegram_outbox",
         "backend.tasks.telegram_query",
+        "backend.tasks.security",
     ],
 )
 
@@ -137,6 +138,9 @@ task_routes = {
         "queue": "default"
     },
     "backend.tasks.telegram_query.generate_bot_reply": {
+        "queue": "default"
+    },
+    "backend.tasks.security.persist_security_event_task": {
         "queue": "default"
     },
     

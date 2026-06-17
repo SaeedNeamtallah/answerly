@@ -28,6 +28,7 @@ const schema = z.object({
       const trimmed = String(value || "").trim();
       return trimmed ? trimmed : null;
     }),
+  system_prompt: z.string().optional().transform((value) => { const trimmed = String(value || "").trim(); return trimmed ? trimmed : null; }),
   show_sources_to_customer: z.boolean().default(false),
   human_handoff_enabled: z.boolean().default(true),
 });
@@ -57,6 +58,7 @@ export function BotFormDrawer({
       project_id: initialValues?.project_id || 0,
       bot_token: "",
       fallback_message: initialValues?.fallback_message || "",
+      system_prompt: initialValues?.system_prompt || "",
       show_sources_to_customer: initialValues?.show_sources_to_customer || false,
       human_handoff_enabled: initialValues?.human_handoff_enabled ?? true,
     },
@@ -72,6 +74,7 @@ export function BotFormDrawer({
       project_id: initialValues.project_id,
       bot_token: "",
       fallback_message: initialValues.fallback_message || "",
+      system_prompt: initialValues.system_prompt || "",
       show_sources_to_customer: initialValues.show_sources_to_customer || false,
       human_handoff_enabled: initialValues.human_handoff_enabled ?? true,
     });
@@ -127,6 +130,10 @@ export function BotFormDrawer({
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bot-system-prompt">System Prompt / Persona</Label>
+            <Textarea id="bot-system-prompt" rows={4} placeholder="e.g. You are a legal expert bot..." {...form.register("system_prompt")} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="bot-fallback-message">Fallback message</Label>

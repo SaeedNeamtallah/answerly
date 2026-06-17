@@ -4,7 +4,7 @@ import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -33,6 +33,8 @@ export default function LoginPage() {
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaToken, setMfaToken] = useState("");
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { username: "", password: "" },
@@ -53,7 +55,11 @@ export default function LoginPage() {
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: async (payload) => {
-      setAccessToken(payload.access_token);
+      if (payload.mfa_required) {
+        setMfaRequired(true);
+        return;
+      }
+      setAccessToken(payload.access_token as string);
       const user = await refreshCurrentUser();
       toast.success(`Welcome back, ${user.username}`);
       handleAuthenticatedRedirect();
@@ -117,9 +123,21 @@ export default function LoginPage() {
             </div>
             <p className="text-xs text-rose-600">{form.formState.errors.password?.message}</p>
           </div>
-          <Button type="submit" className="h-11 w-full rounded-lg bg-blue-600 hover:bg-blue-700" disabled={mutation.isPending}>
+          {mfaRequired && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">MFA Token</label>
+              <Input
+                placeholder="123456"
+                className="h-11"
+                value={mfaToken}
+                onChange={(e) => setMfaToken(e.target.value)}
+              />
+            </div>
+          )}
+
+          <Button type="button" onClick={() => mutation.mutate({ ...form.getValues(), mfa_token: mfaToken || undefined })} className="h-11 w-full rounded-lg bg-blue-600 hover:bg-blue-700" disabled={mutation.isPending}>
             {mutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-            Login
+            {mfaRequired ? "Verify MFA" : "Login"}
           </Button>
           
           <div className="relative py-2">
@@ -138,7 +156,11 @@ export default function LoginPage() {
                   if (credentialResponse.credential) {
                     try {
                       const payload = await googleLogin(credentialResponse.credential);
-                      setAccessToken(payload.access_token);
+                      if (payload.mfa_required) {
+                          toast.error("Google login currently does not support MFA");
+                          return;
+                      }
+                      setAccessToken(payload.access_token as string);
                       const user = await refreshCurrentUser();
                       toast.success(`Welcome back, ${user.username}`);
                       handleAuthenticatedRedirect();

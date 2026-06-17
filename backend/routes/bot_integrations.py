@@ -34,6 +34,7 @@ class BotIntegrationCreate(BaseModel):
     show_sources_to_customer: bool = False
     human_handoff_enabled: bool = True
     fallback_message: Optional[str] = Field(None, max_length=1000)
+    system_prompt: Optional[str] = Field(None, max_length=4000)
 
 
 class BotIntegrationUpdate(BaseModel):
@@ -44,6 +45,7 @@ class BotIntegrationUpdate(BaseModel):
     show_sources_to_customer: Optional[bool] = None
     human_handoff_enabled: Optional[bool] = None
     fallback_message: Optional[str] = Field(None, max_length=1000)
+    system_prompt: Optional[str] = Field(None, max_length=4000)
 
 
 class BotTokenRotateRequest(BaseModel):
@@ -64,6 +66,7 @@ class BotIntegrationResponse(BaseModel):
     show_sources_to_customer: bool
     human_handoff_enabled: bool
     fallback_message: Optional[str]
+    system_prompt: Optional[str]
     last_error: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -82,6 +85,7 @@ def _serialize_integration(integration: BotIntegration) -> BotIntegrationRespons
         show_sources_to_customer=bool(integration.show_sources_to_customer),
         human_handoff_enabled=bool(integration.human_handoff_enabled),
         fallback_message=integration.fallback_message,
+        system_prompt=integration.system_prompt,
         last_error=integration.last_error,
         created_at=integration.created_at,
         updated_at=integration.updated_at,
@@ -131,6 +135,7 @@ async def create_bot_integration(
             show_sources_to_customer=payload.show_sources_to_customer,
             human_handoff_enabled=payload.human_handoff_enabled,
             fallback_message=payload.fallback_message,
+            system_prompt=payload.system_prompt,
             created_by_user_id=current_user.id,
         )
         return _serialize_integration(integration)
@@ -175,7 +180,9 @@ async def update_bot_integration(
             show_sources_to_customer=payload.show_sources_to_customer,
             human_handoff_enabled=payload.human_handoff_enabled,
             fallback_message=payload.fallback_message,
+            system_prompt=payload.system_prompt,
             fallback_message_provided="fallback_message" in payload.model_fields_set,
+            system_prompt_provided="system_prompt" in payload.model_fields_set,
         )
         return _serialize_integration(integration)
     except Exception as exc:

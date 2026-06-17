@@ -10,6 +10,7 @@ export interface BotIntegration {
   show_sources_to_customer?: boolean;
   human_handoff_enabled?: boolean;
   fallback_message?: string | null;
+  system_prompt?: string | null;
   last_error?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -22,6 +23,7 @@ export interface BotIntegrationCreatePayload {
   show_sources_to_customer?: boolean;
   human_handoff_enabled?: boolean;
   fallback_message?: string | null;
+  system_prompt?: string | null;
 }
 
 export interface BotIntegrationUpdatePayload {
@@ -30,6 +32,7 @@ export interface BotIntegrationUpdatePayload {
   show_sources_to_customer?: boolean;
   human_handoff_enabled?: boolean;
   fallback_message?: string | null;
+  system_prompt?: string | null;
 }
 
 export interface RotateBotTokenPayload {

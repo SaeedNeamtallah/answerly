@@ -1,9 +1,7 @@
 """Centralized in-memory security event service."""
 from __future__ import annotations
 
-from collections import deque
-from threading import Lock
-from typing import Any, Deque, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from backend.security.security_event import (
     SecurityEvent,
@@ -22,9 +20,7 @@ _ALLOWED_SEVERITIES = {
     SecuritySeverity.CRITICAL,
 }
 
-_EVENTS: Deque[SecurityEvent] = deque(maxlen=_MAX_EVENTS)
-_EVENTS_LOCK = Lock()
-_USERNAME_BY_USER_ID: Dict[int, str] = {}
+
 
 
 def _normalize_severity(value: str) -> str:
@@ -70,11 +66,8 @@ def log_event(event_data: SecurityEventCreate | Dict[str, Any]) -> SecurityEvent
     normalized_username = _normalize_username(payload.username or metadata_username)
 
     if payload.user_id is not None:
-        user_id_key = int(payload.user_id)
-        if normalized_username:
-            _USERNAME_BY_USER_ID[user_id_key] = normalized_username
-        else:
-            normalized_username = _USERNAME_BY_USER_ID.get(user_id_key) or f"user_{user_id_key}"
+        if not normalized_username:
+            normalized_username = f"user_{payload.user_id}"
 
     event = SecurityEvent(
         event_type=_normalize_event_type(payload.event_type),
@@ -86,8 +79,9 @@ def log_event(event_data: SecurityEventCreate | Dict[str, Any]) -> SecurityEvent
         metadata=payload.metadata or {},
     )
 
-    with _EVENTS_LOCK:
-        _EVENTS.append(event)
+    # Trigger Celery task to persist event
+    from backend.tasks.security import persist_security_event_task
+    persist_security_event_task.delay(event.model_dump(mode="json"))
 
     # Detection -> incident automation for actionable abuse events.
     incident_service.trigger_auto_creation(event)
@@ -95,47 +89,59 @@ def log_event(event_data: SecurityEventCreate | Dict[str, Any]) -> SecurityEvent
     return event
 
 
-def list_events(
+async def list_events(
     *,
+    db: Any,  # AsyncSession
     limit: int = 200,
     event_type: Optional[str] = None,
     severity: Optional[str] = None,
-) -> List[SecurityEvent]:
-    """Return recent security events (most recent first)."""
+) -> List[Dict[str, Any]]:
+    """Return recent security events (most recent first) from DB."""
+    from sqlalchemy import select
+    from backend.database.models import SecurityEventRecord
+    
     normalized_type = _normalize_event_type(event_type) if event_type else None
     normalized_severity = _normalize_severity(severity) if severity else None
     safe_limit = max(1, min(int(limit or 200), _MAX_EVENTS))
 
-    with _EVENTS_LOCK:
-        items: Iterable[SecurityEvent] = reversed(_EVENTS)
-        filtered = []
-        for event in items:
-            if normalized_type and event.event_type != normalized_type:
-                continue
-            if normalized_severity and event.severity != normalized_severity:
-                continue
-            filtered.append(event)
-            if len(filtered) >= safe_limit:
-                break
+    stmt = select(SecurityEventRecord).order_by(SecurityEventRecord.created_at.desc(), SecurityEventRecord.id.desc()).limit(safe_limit)
+    if normalized_type:
+        stmt = stmt.where(SecurityEventRecord.event_type == normalized_type)
+    if normalized_severity:
+        stmt = stmt.where(SecurityEventRecord.severity == normalized_severity)
 
-    return filtered
+    result = await db.execute(stmt)
+    records = result.scalars().all()
+    
+    events = []
+    for r in records:
+        events.append({
+            "id": str(r.id), # UUID expected by frontend? Wait, id is integer.
+            "timestamp": r.created_at.isoformat(),
+            "event_type": r.event_type,
+            "severity": r.severity,
+            "user_id": r.user_id,
+            "username": r.username,
+            "ip_address": r.ip_address,
+            "message": r.message,
+            "metadata": r.metadata_
+        })
+    return events
 
 
-def clear_events() -> None:
-    """Clear all in-memory events (for demos/tests)."""
-    with _EVENTS_LOCK:
-        _EVENTS.clear()
-        _USERNAME_BY_USER_ID.clear()
-
-
-def get_security_stats() -> Dict[str, int]:
+async def get_security_stats(db: Any) -> Dict[str, int]:
     """Compute aggregate counters used by the security dashboard."""
-    with _EVENTS_LOCK:
-        events = list(_EVENTS)
+    from sqlalchemy import select, func
+    from backend.database.models import SecurityEventRecord
+    
+    total_events = await db.scalar(select(func.count(SecurityEventRecord.id)))
+    login_failures = await db.scalar(select(func.count(SecurityEventRecord.id)).where(SecurityEventRecord.event_type == SecurityEventType.LOGIN_FAIL))
+    brute_force_attempts = await db.scalar(select(func.count(SecurityEventRecord.id)).where(SecurityEventRecord.event_type == SecurityEventType.BRUTE_FORCE))
+    blocked_uploads = await db.scalar(select(func.count(SecurityEventRecord.id)).where(SecurityEventRecord.event_type == SecurityEventType.FILE_UPLOAD_BLOCKED))
 
     return {
-        "total_events": len(events),
-        "login_failures": sum(1 for e in events if e.event_type == SecurityEventType.LOGIN_FAIL),
-        "brute_force_attempts": sum(1 for e in events if e.event_type == SecurityEventType.BRUTE_FORCE),
-        "blocked_uploads": sum(1 for e in events if e.event_type == SecurityEventType.FILE_UPLOAD_BLOCKED),
+        "total_events": total_events or 0,
+        "login_failures": login_failures or 0,
+        "brute_force_attempts": brute_force_attempts or 0,
+        "blocked_uploads": blocked_uploads or 0,
     }

@@ -167,29 +167,32 @@ async def _resolve_simulation_target_user_id(
 
 @router.get("/stats", response_model=SecurityStatsResponse)
 async def security_stats(
+    db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(require_security_center_access),
 ):
     """Return aggregated security counters for dashboard cards."""
-    return SecurityStatsResponse(**security_dashboard_service.get_stats())
+    return SecurityStatsResponse(**await security_dashboard_service.get_stats(db=db))
 
 
 @router.get("/events", response_model=List[SecurityEventResponse])
 async def security_events(
     limit: int = Query(default=20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(require_security_center_access),
 ):
     """Return latest security events for feed widgets."""
-    payload = security_dashboard_service.get_dashboard_payload(limit=limit)
+    payload = await security_dashboard_service.get_dashboard_payload(db=db, limit=limit)
     return _to_event_responses(payload["events"])
 
 
 @router.get("/events/export")
 async def security_events_export(
     limit: int = Query(default=1000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(require_security_center_access),
 ):
     """Download security events as a CSV file for SOC reporting and evidence retention."""
-    events = security_dashboard_service.get_events_for_export(limit=limit)
+    events = await security_dashboard_service.get_events_for_export(db=db, limit=limit)
     csv_payload = _to_events_export_csv(events)
     filename = f"security-events-{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
 
@@ -216,10 +219,11 @@ async def security_users_status_summary(
 @router.get("/users/events", response_model=List[SecurityUserStatusEventResponse])
 async def security_users_events(
     limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(require_security_center_access),
 ):
     """Return latest user account status change events (suspend/block/restore)."""
-    events = security_dashboard_service.get_user_status_events(limit=limit)
+    events = await security_dashboard_service.get_user_status_events(db=db, limit=limit)
     return [SecurityUserStatusEventResponse(**event) for event in events]
 
 
@@ -261,7 +265,7 @@ async def simulate_security_attack(
     )
     await db.commit()
 
-    payload = security_dashboard_service.get_dashboard_payload(limit=20)
+    payload = await security_dashboard_service.get_dashboard_payload(db=db, limit=20)
 
     return SecuritySimulationResponse(
         generated_count=int(simulation_result.get("generated_count", 0)),
@@ -277,12 +281,14 @@ async def simulate_security_attack(
 async def security_events_stream(
     request: Request,
     limit: int = Query(default=20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(require_security_center_access),
 ):
     """Stream security dashboard updates via SSE (events + aggregate stats)."""
     return StreamingResponse(
         security_dashboard_service.stream_dashboard_updates(
             request=request,
+            db=db,
             limit=limit,
         ),
         media_type="text/event-stream",

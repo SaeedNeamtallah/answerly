@@ -40,6 +40,7 @@ class CustomerBotQueryService:
                 ),
             ),
             language=language,
+            custom_system_prompt=integration.system_prompt,
         )
         sources = result.get("sources") or []
         customer_answer = str(result.get("answer") or "").strip()

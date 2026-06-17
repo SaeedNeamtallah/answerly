@@ -3,6 +3,7 @@ export type ProductRole = "company_admin" | "platform_owner" | string;
 export interface LoginPayload {
   username: string;
   password: string;
+  mfa_token?: string;
 }
 
 export interface SignupPayload {
@@ -17,7 +18,8 @@ export interface ChangePasswordPayload {
 }
 
 export interface AuthTokenResponse {
-  access_token: string;
+  access_token: string | null;
+  mfa_required?: boolean;
 }
 
 export interface CurrentUser {

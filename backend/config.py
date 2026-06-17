@@ -141,6 +141,7 @@ class Settings(BaseSettings):
     auth_admin_username: str = Field(default="admin", alias="AUTH_ADMIN_USERNAME")
     auth_admin_password: str = Field(default="admin123", alias="AUTH_ADMIN_PASSWORD")
     auth_admin_password_hash: str = Field(default="", alias="AUTH_ADMIN_PASSWORD_HASH")
+    auth_mfa_issuer: str = Field(default="RAGMind", alias="AUTH_MFA_ISSUER")
     security_require_auth_for_mutations: bool = Field(default=True, alias="SECURITY_REQUIRE_AUTH_FOR_MUTATIONS")
     security_user_suspension_default_minutes: int = Field(
         default=30,

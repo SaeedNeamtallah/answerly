@@ -181,6 +181,7 @@ class BotIntegrationService:
         show_sources_to_customer: bool = False,
         human_handoff_enabled: bool = True,
         fallback_message: str | None = None,
+        system_prompt: str | None = None,
         created_by_user_id: int | None = None,
     ) -> BotIntegration:
         await self._get_owned_project(db, owner_id=owner_id, project_id=project_id)
@@ -200,6 +201,7 @@ class BotIntegrationService:
             show_sources_to_customer=bool(show_sources_to_customer),
             human_handoff_enabled=bool(human_handoff_enabled),
             fallback_message=sanitize_optional_text(fallback_message, 1000),
+            system_prompt=sanitize_optional_text(system_prompt, 4000),
             created_by_user_id=created_by_user_id,
         )
         db.add(integration)
@@ -233,7 +235,9 @@ class BotIntegrationService:
         show_sources_to_customer: bool | None = None,
         human_handoff_enabled: bool | None = None,
         fallback_message: str | None = None,
+        system_prompt: str | None = None,
         fallback_message_provided: bool = False,
+        system_prompt_provided: bool = False,
     ) -> BotIntegration:
         integration = await self.get_integration(db, owner_id=owner_id, integration_id=integration_id)
         if integration is None:
@@ -250,6 +254,8 @@ class BotIntegrationService:
             integration.human_handoff_enabled = bool(human_handoff_enabled)
         if fallback_message_provided:
             integration.fallback_message = sanitize_optional_text(fallback_message, 1000)
+        if system_prompt_provided:
+            integration.system_prompt = sanitize_optional_text(system_prompt, 4000)
 
         integration.webhook_url = self._build_webhook_url(integration.id, integration.webhook_secret)
         db.add(integration)

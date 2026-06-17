@@ -52,9 +52,11 @@ from backend.database import init_db, close_db
 from backend.routes import (
     admin_console,
     admin_observability,
+    admin_roles,
     admin_users,
     app_config,
     auth,
+    auth_mfa,
     auth_oauth,
     bot_config,
     bot_integrations,
@@ -172,6 +174,7 @@ app.include_router(incidents.router)
 app.include_router(admin_users.router)
 app.include_router(admin_console.router)
 app.include_router(admin_observability.router)
+app.include_router(admin_roles.router)
 app.include_router(bot_integrations.router)
 app.include_router(conversations.router)
 app.include_router(telegram_webhook.router)
@@ -179,6 +182,7 @@ app.include_router(bot_config.router)
 app.include_router(app_config.router)
 app.include_router(auth.router)
 app.include_router(auth_oauth.router)
+app.include_router(auth_mfa.router)
 
 
 if __name__ == "__main__":

@@ -29,7 +29,8 @@ class AnswerService:
         query: str,
         context_chunks: List[Dict[str, Any]],
         language: str = "ar",  # Default to Arabic
-        include_sources: bool = True
+        include_sources: bool = True,
+        custom_system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate answer from query and context.
@@ -48,7 +49,7 @@ class AnswerService:
             context = self._build_context(context_chunks)
             
             # Build system + user prompts
-            system_prompt = self._build_system_prompt(language)
+            system_prompt = self._build_system_prompt(language, custom_system_prompt)
             prompt = self._build_prompt(query, context, language)
             
             # Generate answer
@@ -141,7 +142,7 @@ class AnswerService:
         
         return "\n\n".join(context_parts)
     
-    def _build_system_prompt(self, language: str) -> str:
+    def _build_system_prompt(self, language: str, custom_system_prompt: Optional[str] = None) -> str:
         """
         Build system instruction for LLM.
 

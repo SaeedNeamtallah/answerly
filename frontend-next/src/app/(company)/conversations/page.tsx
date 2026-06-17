@@ -65,10 +65,6 @@ export default function ConversationsPage() {
               <h3 className="text-sm font-medium">Total Conversations</h3>
             </div>
             <div className="text-3xl font-bold text-slate-900">{formatNumber(conversations.length)}</div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-              <span className="text-emerald-500 font-medium">↑ 12%</span>
-              <span>from last week</span>
-            </div>
           </div>
         </div>
 
@@ -82,10 +78,6 @@ export default function ConversationsPage() {
               <h3 className="text-sm font-medium">Open Tickets</h3>
             </div>
             <div className="text-3xl font-bold text-slate-900">{formatNumber(open)}</div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-              <span className="text-emerald-500 font-medium">↑ 5%</span>
-              <span>from last week</span>
-            </div>
           </div>
         </div>
 

@@ -63,6 +63,11 @@ class User(Base):
     auth_provider = Column(String(50), nullable=False, default="local", server_default="local")
     google_id = Column(String(255), unique=True, index=True, nullable=True)
 
+    # MFA Fields
+    mfa_secret = Column(String(255), nullable=True)
+    mfa_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    mfa_recovery_codes = Column(JSON, nullable=True)
+
     role = Column(String(30), nullable=False, default=UserRole.COMPANY_ADMIN.value, server_default=UserRole.COMPANY_ADMIN.value, index=True)
     company_name = Column(String(255), nullable=True)
     company_website = Column(String(500), nullable=True)
@@ -211,6 +216,7 @@ class BotIntegration(Base):
     show_sources_to_customer = Column(Boolean, nullable=False, default=False, server_default="false")
     human_handoff_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     fallback_message = Column(Text, nullable=True)
+    system_prompt = Column(Text, nullable=True)
     last_error = Column(Text, nullable=True)
     last_update_at = Column(DateTime(timezone=True), nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -476,3 +482,40 @@ class AuditLog(Base):
 
     def __repr__(self):
         return f"<AuditLog(id={self.id}, action='{self.action}', target_user_id={self.target_user_id})>"
+
+
+class RoleAssignmentHistory(Base):
+    """Audit trail for role changes applied to users."""
+
+    __tablename__ = "role_assignment_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    actor_username = Column(String(150), nullable=True)
+    old_role = Column(String(30), nullable=True)
+    new_role = Column(String(30), nullable=False)
+    reason = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    target_user = relationship("User", foreign_keys=[target_user_id], backref="role_history")
+    actor_user = relationship("User", foreign_keys=[actor_user_id])
+
+class SecurityEventRecord(Base):
+    """Database record for security events to persist them."""
+
+    __tablename__ = "security_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    severity = Column(String(32), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    username = Column(String(150), nullable=True, index=True)
+    ip_address = Column(String(128), nullable=True, index=True)
+    message = Column(String, nullable=False)
+    metadata_ = Column("metadata", JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    __table_args__ = (
+        Index("ix_security_events_type_created", "event_type", "created_at"),
+    )

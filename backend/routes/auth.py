@@ -105,6 +105,7 @@ async def _apply_progressive_login_delay(failure_state: FailureRegistration) -> 
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=128)
     password: str = Field(..., min_length=1, max_length=256)
+    mfa_token: str | None = None
 
 
 class SignupRequest(BaseModel):
@@ -119,7 +120,8 @@ class ChangePasswordRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
+    access_token: str | None = None
+    mfa_required: bool = False
 
 
 class IdentityResponse(BaseModel):
@@ -388,6 +390,16 @@ async def login(
             username=user.username,
             ip_address=tracking_ip,
         )
+
+        if user.mfa_enabled:
+            from backend.services.mfa_service import mfa_service
+            if not payload.mfa_token:
+                return TokenResponse(access_token=None, mfa_required=True)
+            if not mfa_service.verify_totp(user.mfa_secret, payload.mfa_token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid MFA token",
+                )
 
         token = create_jwt_access_token(
             subject=user.username,
