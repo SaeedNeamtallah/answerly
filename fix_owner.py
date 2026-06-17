@@ -1,14 +1,18 @@
 import asyncio
 import os
 import sys
+import bcrypt
 
 # Add the app path
 sys.path.append("/app")
 
 from backend.database.connection import async_session_maker
 from backend.database.models import User
-from backend.security.auth import get_password_hash, ROLE_PLATFORM_OWNER
+from backend.security.auth import ROLE_PLATFORM_OWNER
 from sqlalchemy.future import select
+
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 async def main():
     async with async_session_maker() as session:

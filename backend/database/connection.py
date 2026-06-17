@@ -335,9 +335,13 @@ async def init_db():
 
     async def ensure_default_owner():
         """Ensure a default platform owner exists."""
+        import bcrypt
         from backend.database.models import User
-        from backend.security.auth import get_password_hash, ROLE_PLATFORM_OWNER
+        from backend.security.auth import ROLE_PLATFORM_OWNER
         from sqlalchemy.future import select
+
+        def get_password_hash(password: str) -> str:
+            return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
         async with async_session_maker() as session:
             owner_username = "OWNERPLATFORM"
