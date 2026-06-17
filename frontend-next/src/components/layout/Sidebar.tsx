@@ -44,8 +44,9 @@ export const adminNav: NavItem[] = [
   { href: "/admin/conversations", label: "Global Conversations", icon: MessageSquareText },
   { href: "/admin/bots", label: "Bots", icon: Bot },
   { href: "/admin/errors", label: "Errors", icon: Shield },
+  { href: "/admin/observability", label: "Observability", icon: Activity },
   { href: "/admin/stats", label: "Stats", icon: LayoutDashboard },
-  { href: "/admin/observability", label: "AI Settings", icon: Activity },
+  { href: "/admin/settings", label: "Platform Settings", icon: Settings2 },
 ];
 
 export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedded?: boolean }) {
@@ -97,24 +98,6 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
               <p className="text-xs text-indigo-600 font-medium">{platformMode ? "Platform Owner" : "Enterprise Plan"}</p>
             </div>
             <ChevronDown className="size-4 text-slate-400" aria-hidden="true" />
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs shadow-sm">
-          <div className="mb-2 flex items-center justify-between text-slate-700 font-medium">
-            <span>{platformMode ? "Platform usage" : "Monthly message usage"}</span>
-          </div>
-          <div className="mb-2 flex items-end justify-between font-semibold">
-            <div className="text-sm">
-              <span className="text-slate-900">42,680</span>
-              <span className="text-slate-500"> / 100,000</span>
-            </div>
-            <span className="text-slate-500 text-xs font-medium">42%</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full w-[42%] rounded-full bg-indigo-500" />
-          </div>
-          <div className="mt-3 text-[11px] text-slate-500">
-            Resets in 12 days
           </div>
         </div>
       </div>
