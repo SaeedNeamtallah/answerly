@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, Hand, ShieldAlert, UserRoundCheck, ArrowLeft, MoreHorizontal, MessageSquareText } from "lucide-react";
+import { CheckCircle2, Hand, ShieldAlert, UserRoundCheck, ArrowLeft, MoreHorizontal, MessageSquareText, Hash } from "lucide-react";
 
 import {
   assignConversation,
