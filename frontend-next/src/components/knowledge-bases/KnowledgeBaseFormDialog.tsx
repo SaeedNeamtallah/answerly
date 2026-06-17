@@ -30,7 +30,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export function KnowledgeBaseFormDialog() {
+export function KnowledgeBaseFormDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const form = useForm<FormValues>({
@@ -54,10 +54,12 @@ export function KnowledgeBaseFormDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="size-4" />
-          New knowledge base
-        </Button>
+        {trigger || (
+          <Button>
+            <Plus className="size-4" />
+            New knowledge base
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
