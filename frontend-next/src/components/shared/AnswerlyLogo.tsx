@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-export function AnswerlyLogo({ className = "" }: { className?: string }) {
+export function AnswerlyLogo({ className = "", variant = "dark" }: { className?: string; variant?: "light" | "dark" | string }) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <Image
