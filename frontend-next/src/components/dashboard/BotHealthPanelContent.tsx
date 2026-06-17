@@ -32,11 +32,6 @@ export function BotHealthPanelContent({ bots }: { bots: BotIntegration[] }) {
   ];
 
   const errorBots = bots.filter(b => b.last_error).slice(0, 3);
-  const topIssues = errorBots.map(b => ({
-    label: b.last_error?.substring(0, 30) || "Error",
-    count: 1,
-    tone: "danger"
-  }));
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-100 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
@@ -96,23 +91,25 @@ export function BotHealthPanelContent({ bots }: { bots: BotIntegration[] }) {
           ))}
         </div>
 
-        {/* Top Issues */}
+        {/* Bots with Issues */}
         <div className="flex flex-col rounded-xl bg-slate-50/50 p-4 relative">
           <Activity className="absolute top-4 right-4 size-5 text-emerald-500 opacity-50" />
-          <h4 className="mb-4 text-sm font-semibold text-slate-900">Top Issues</h4>
-          {topIssues.length > 0 ? (
+          <h4 className="mb-4 text-sm font-semibold text-slate-900">Bots with Issues</h4>
+          {errorBots.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {topIssues.map((issue, idx) => (
-                <div key={idx} className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600 truncate max-w-[120px]" title={issue.label}>{issue.label}</span>
-                  <span className="rounded-md px-2 py-0.5 text-xs font-medium bg-red-100 text-red-600">
-                    {issue.count}
+              {errorBots.map((bot) => (
+                <div key={bot.id} className="flex items-center justify-between">
+                  <Link href={`/telegram-bots/${bot.id}`} className="text-sm font-medium text-slate-700 hover:text-blue-600 truncate max-w-[120px]" title={bot.name}>
+                    {bot.name}
+                  </Link>
+                  <span className="rounded-md px-2 py-0.5 text-xs font-medium bg-red-100 text-red-600 truncate max-w-[80px]" title={bot.last_error || "Error"}>
+                    {bot.last_error}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex items-center justify-center py-4 text-sm text-slate-500">
+            <div className="flex flex-1 flex-col items-center justify-center text-center text-sm text-slate-500">
               No issues detected.
             </div>
           )}

@@ -43,36 +43,12 @@ export function SetupChecklist({
       status: getStatus(hasBot, hasProject && !hasBot) 
     },
     { 
-      label: "Add team members", 
-      description: "Invite your colleagues to collaborate.",
-      href: "/admin/users", 
+      label: "Review bot conversations", 
+      description: "Read customer chats and step in if needed.",
+      href: "/conversations", 
       icon: <Users className="size-4 text-indigo-500" />,
       bg: "bg-indigo-50",
-      status: getStatus(false, hasProject && hasBot) 
-    },
-    { 
-      label: "Configure bot behavior", 
-      description: "Set personas, tone, and response rules.",
-      href: "/ai-settings", 
-      icon: <Settings className="size-4 text-slate-500" />,
-      bg: "bg-slate-100",
-      status: "pending" 
-    },
-    { 
-      label: "Set up human handoff", 
-      description: "Route complex cases to your team.",
-      href: "/admin/conversations", 
-      icon: <PhoneForwarded className="size-4 text-slate-500" />,
-      bg: "bg-slate-100",
-      status: "pending" 
-    },
-    { 
-      label: "Review analytics", 
-      description: "Track performance and optimize.",
-      href: "/admin/stats", 
-      icon: <BarChart3 className="size-4 text-slate-500" />,
-      bg: "bg-slate-100",
-      status: "pending" 
+      status: getStatus(conversations.length > 0, hasBot && conversations.length === 0) 
     },
   ];
 

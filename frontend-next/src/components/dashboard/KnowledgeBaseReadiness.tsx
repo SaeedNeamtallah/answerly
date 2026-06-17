@@ -41,48 +41,40 @@ export function KnowledgeBaseReadiness({ projects, bots }: { projects: Project[]
             <tr className="border-b border-slate-100 text-slate-500">
               <th className="pb-3 font-medium w-[250px]">Knowledge Base</th>
               <th className="pb-3 font-medium text-center">Linked Bots</th>
-              <th className="pb-3 font-medium w-[150px]">Readiness</th>
               <th className="pb-3 font-medium text-right">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {projects.slice(0, 5).map((project, idx) => {
               const linkedBots = bots.filter((bot) => bot.project_id === project.id).length;
-              const readiness = linkedBots > 0 ? 100 : 50;
-              const status = linkedBots > 0 ? "Ready" : "Attention";
+              const status = linkedBots > 0 ? "Ready" : "Needs Bot";
               const statusColor = linkedBots > 0 ? "text-emerald-500" : "text-orange-500";
-              const progressColor = linkedBots > 0 ? "bg-emerald-500" : "bg-orange-500";
               const bg = bgColors[idx % bgColors.length];
               const initials = project.name.substring(0, 1).toUpperCase();
 
               return (
                 <tr key={project.id} className="group transition-colors hover:bg-slate-50/50">
                   <td className="py-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${bg}`}>
+                    <Link href={`/knowledge-bases/${project.id}`} className="flex items-center gap-3 group-hover:opacity-80">
+                      <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${bg}`}>
                         {initials}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-semibold text-slate-900 truncate max-w-[150px]">{project.name}</span>
-                        <span className="text-xs text-slate-500 truncate max-w-[150px]">{project.description || "No description"}</span>
+                        <span className="font-semibold text-slate-900 truncate max-w-[150px]" title={project.name}>{project.name}</span>
+                        <span className="text-xs text-slate-500">{project.created_at ? new Date(project.created_at).toLocaleDateString() : 'New'}</span>
                       </div>
-                    </div>
+                    </Link>
                   </td>
-                  <td className="py-3 text-center text-slate-600 font-medium">
-                    {linkedBots}
-                  </td>
-                  <td className="py-3">
-                    <div className="flex flex-col gap-1.5 pr-6">
-                      <span className="text-xs font-semibold text-slate-900">{readiness}%</span>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div className={`h-full rounded-full ${progressColor}`} style={{ width: `${readiness}%` }} />
-                      </div>
-                    </div>
+                  <td className="py-3 text-center">
+                    <span className="inline-flex items-center justify-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                      {linkedBots}
+                    </span>
                   </td>
                   <td className="py-3 text-right">
-                    <span className={`text-xs font-semibold ${statusColor}`}>
-                      {status}
-                    </span>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <div className={`size-1.5 rounded-full ${statusColor === "text-emerald-500" ? "bg-emerald-500" : "bg-orange-500"}`} />
+                      <span className={`text-xs font-semibold ${statusColor}`}>{status}</span>
+                    </div>
                   </td>
                 </tr>
               );
