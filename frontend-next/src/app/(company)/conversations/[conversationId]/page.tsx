@@ -99,8 +99,8 @@ export default function ConversationDetailPage() {
             )}
           </div>
           <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-            <MessageSquareText className="size-4 text-slate-400" />
-            Conversation #{conversation.id} • Assigned to: {conversation.assignee_id ? "You" : "Unassigned"}
+            <Hash className="size-4 text-slate-400" />
+            Conversation #{conversation.id} • Assigned to: {conversation.assigned_to_user_id ? "You" : "Unassigned"}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
