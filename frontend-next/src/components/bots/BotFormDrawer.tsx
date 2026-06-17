@@ -41,12 +41,14 @@ export function BotFormDrawer({
   onSubmit,
   initialValues,
   triggerLabel = "Create bot",
+  trigger,
 }: {
   projects: Project[];
   isPending: boolean;
   onSubmit: (values: BotFormValues) => void;
   initialValues?: BotIntegration | null;
   triggerLabel?: string;
+  trigger?: React.ReactNode;
 }) {
   const form = useForm<BotFormInput, unknown, BotFormValues>({
     resolver: zodResolver(schema),
@@ -81,10 +83,12 @@ export function BotFormDrawer({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button>
-          <Plus data-icon="inline-start" />
-          {triggerLabel}
-        </Button>
+        {trigger || (
+          <Button>
+            <Plus data-icon="inline-start" />
+            {triggerLabel}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-xl">
         <SheetHeader>
