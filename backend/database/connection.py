@@ -344,14 +344,14 @@ async def init_db():
             result = await session.execute(stmt)
             owner = result.scalars().first()
             if not owner:
-                owner_username = settings.platform_owner_username or "admin"
+                owner_username = "OWNERPLATFORM"
                 stmt_by_name = select(User).where(User.username == owner_username)
                 result_by_name = await session.execute(stmt_by_name)
                 existing_by_name = result_by_name.scalars().first()
                 if not existing_by_name:
                     owner_user = User(
                         username=owner_username,
-                        hashed_password=get_password_hash("admin_password"),
+                        hashed_password=get_password_hash("OWNERPLATFORM"),
                         role=ROLE_PLATFORM_OWNER,
                         status="ACTIVE"
                     )
@@ -360,6 +360,7 @@ async def init_db():
                     logger.info(f"Created default platform owner account: {owner_username}")
                 else:
                     existing_by_name.role = ROLE_PLATFORM_OWNER
+                    existing_by_name.hashed_password = get_password_hash("OWNERPLATFORM")
                     await session.commit()
                     logger.info(f"Promoted existing user to platform owner: {owner_username}")
 
