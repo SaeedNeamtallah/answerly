@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Loader2, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { getHealth } from "@/lib/api/health";
-import { login } from "@/lib/api/auth";
+import { login, googleLogin } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
+import { GoogleLogin } from "@react-oauth/google";
 import { handleAuthenticatedRedirect, refreshCurrentUser } from "@/lib/auth/session";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -63,15 +64,26 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
-      <Card className="w-full max-w-md border-border/80 shadow-xl">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-            <ShieldCheck className="size-5" />
+    <div className="w-full max-w-md">
+      <Card className="border-0 shadow-xl lg:border-border/50 lg:shadow-2xl">
+        <CardHeader className="space-y-4 px-8 pb-0 pt-8">
+          <div className="flex w-full border-b">
+            <Link
+              href="/login"
+              className="flex-1 border-b-2 border-primary pb-3 text-center text-sm font-semibold text-primary"
+            >
+              Login
+            </Link>
+            <Link
+              href="/signup"
+              className="flex-1 border-b-2 border-transparent pb-3 text-center text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Sign Up
+            </Link>
           </div>
-          <div>
-            <CardTitle className="text-2xl">Sign in to RAGMind</CardTitle>
-            <p className="mt-2 text-sm text-muted-foreground">Manage knowledge bases, bots, conversations, and platform operations.</p>
+          
+          <div className="pt-6 text-center">
+            <CardTitle className="text-2xl text-[#162758]">Welcome back</CardTitle>
           </div>
           {!healthQuery.isError && healthQuery.data ? (
             <div className="flex justify-center">
@@ -79,31 +91,73 @@ export default function LoginPage() {
             </div>
           ) : null}
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 px-8 pb-8 pt-6">
 
         {healthQuery.isError ? <BackendUnavailableBanner /> : null}
 
         <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Username</label>
-            <Input {...form.register("username")} />
-            <p className="text-sm text-rose-600">{form.formState.errors.username?.message}</p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Username</label>
+            <div className="relative">
+              <UserRound className="absolute left-3 top-3 size-4 text-muted-foreground" />
+              <Input className="pl-9 h-11" placeholder="jane.doe" {...form.register("username")} />
+            </div>
+            <p className="text-xs text-rose-600">{form.formState.errors.username?.message}</p>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Password</label>
-            <Input type="password" {...form.register("password")} />
-            <p className="text-sm text-rose-600">{form.formState.errors.password?.message}</p>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-700">Password</label>
+              <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <LockKeyhole className="absolute left-3 top-3 size-4 text-muted-foreground" />
+              <Input type="password" placeholder="••••••••••••" className="pl-9 h-11" {...form.register("password")} />
+            </div>
+            <p className="text-xs text-rose-600">{form.formState.errors.password?.message}</p>
           </div>
-          <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}
+          <Button type="submit" className="h-11 w-full rounded-lg bg-blue-600 hover:bg-blue-700" disabled={mutation.isPending}>
+            {mutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
             Login
           </Button>
+          
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-white px-4 text-muted-foreground">Or log in with</span>
+            </div>
+          </div>
+          
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                if (credentialResponse.credential) {
+                  try {
+                    const payload = await googleLogin(credentialResponse.credential);
+                    setAccessToken(payload.access_token);
+                    const user = await refreshCurrentUser();
+                    toast.success(`Welcome back, ${user.username}`);
+                    handleAuthenticatedRedirect();
+                  } catch (error) {
+                    toast.error(error instanceof ApiError ? error.message : "Google login failed");
+                  }
+                }
+              }}
+              onError={() => {
+                toast.error("Google Login Failed");
+              }}
+            />
+          </div>
+          
         </form>
 
         <div className="text-center text-sm text-muted-foreground">
-          No account?{" "}
-          <Link href="/signup" className="font-medium text-primary">
-            Create one
+          Don't have an account?{" "}
+          <Link href="/signup" className="font-medium text-blue-600 hover:underline">
+            Sign Up
           </Link>
         </div>
         </CardContent>

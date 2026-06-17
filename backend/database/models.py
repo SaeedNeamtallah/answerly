@@ -56,7 +56,13 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(150), nullable=False, unique=True, index=True)
-    hashed_password = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    hashed_password = Column(String(255), nullable=True)  # nullable for OAuth users
+    
+    # OAuth Fields
+    auth_provider = Column(String(50), nullable=False, default="local", server_default="local")
+    google_id = Column(String(255), unique=True, index=True, nullable=True)
+
     role = Column(String(30), nullable=False, default=UserRole.COMPANY_ADMIN.value, server_default=UserRole.COMPANY_ADMIN.value, index=True)
     company_name = Column(String(255), nullable=True)
     company_website = Column(String(500), nullable=True)

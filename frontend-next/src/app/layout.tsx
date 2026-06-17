@@ -1,12 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { Providers } from "@/app/providers";
 
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "RAGMind Frontend",
-  description: "Next.js workspace for the RAGMind SaaS dashboard",
+  title: {
+    default: "Answerly",
+    template: "%s | Answerly",
+  },
+  description: "AI-powered knowledge base management and customer support platform",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

@@ -22,7 +22,7 @@ export function Topbar({ variant }: { variant: "company" | "admin" }) {
             <p className="text-xs font-medium text-muted-foreground">
               {variant === "admin" ? "Platform Console" : "Company Workspace"}
             </p>
-            <h2 className="text-lg font-semibold text-foreground">{user?.company_name || user?.username || "RAGMind"}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{user?.company_name || user?.username || "Answerly"}</h2>
           </div>
         </div>
         <div className="hidden min-w-0 flex-1 justify-center px-6 xl:flex">

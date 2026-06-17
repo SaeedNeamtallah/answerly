@@ -321,7 +321,7 @@ Monitoring:
 - Frontend URL: `http://localhost:3001/login`
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`
-- Azure production deploy: `scripts/deploy/azure-deploy.ps1 -ResourceGroup <rg> -RootDomain <domain>`
+- Azure production deploy: `scripts/deploy/azure-deploy.ps1 -ResourceGroup <rg>` for default Azure Container Apps hostnames, or add `-RootDomain <domain> -BindCustomDomains` after DNS is ready. Azure uses Managed Redis; pass `-RedisLocation <region>` if the app region does not support it.
 
 Validation commands:
 

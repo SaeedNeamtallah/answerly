@@ -33,7 +33,14 @@ export function getApiErrorMessage(error: unknown, fallback = "Request failed") 
 }
 
 function getApiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+  const url = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!url && typeof window !== "undefined") {
+    console.warn(
+      "[RAGMind] NEXT_PUBLIC_API_BASE_URL is not set. Falling back to localhost:8000. " +
+      "This should not happen in production."
+    );
+  }
+  return (url || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
 }
 
 function redirectToLogin() {

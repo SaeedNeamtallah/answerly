@@ -125,6 +125,17 @@ class Settings(BaseSettings):
 
     # Authentication and Security Configuration
     auth_jwt_secret_key: str = Field(default="change-me-in-env", alias="AUTH_JWT_SECRET_KEY")
+    
+    # OAuth
+    google_client_id: str = Field(default="", alias="GOOGLE_CLIENT_ID")
+    
+    # SMTP & Email
+    brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
+    smtp_server: str = Field(default="", alias="SMTP_SERVER")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str = Field(default="", alias="SMTP_USERNAME")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from_email: str = Field(default="noreply@ragmind.com", alias="SMTP_FROM_EMAIL")
     auth_jwt_algorithm: str = Field(default="HS256", alias="AUTH_JWT_ALGORITHM")
     auth_access_token_expire_minutes: int = Field(default=60, alias="AUTH_ACCESS_TOKEN_EXPIRE_MINUTES")
     auth_admin_username: str = Field(default="admin", alias="AUTH_ADMIN_USERNAME")

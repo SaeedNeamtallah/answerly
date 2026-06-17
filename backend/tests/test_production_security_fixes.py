@@ -24,11 +24,30 @@ class ProductionSecurityFixesTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             _validate_production_secrets(settings_obj)
 
+    def test_production_secret_validation_rejects_new_weak_jwt_secret(self):
+        settings_obj = Settings(
+            ENVIRONMENT="production",
+            AUTH_JWT_SECRET_KEY="change-me-to-a-strong-random-secret-at-least-32-chars",
+            AUTH_ADMIN_PASSWORD="change-me-to-a-strong-password",
+            BOT_TOKEN_ENCRYPTION_KEY="some-key",
+        )
+        with self.assertRaises(SystemExit):
+            _validate_production_secrets(settings_obj)
+
     def test_production_secret_validation_allows_weak_jwt_secret_in_development(self):
         settings_obj = Settings(
             ENVIRONMENT="development",
             AUTH_JWT_SECRET_KEY="change-me-in-env",
             AUTH_ADMIN_PASSWORD="admin123",
+            BOT_TOKEN_ENCRYPTION_KEY="",
+        )
+        _validate_production_secrets(settings_obj)
+
+    def test_production_secret_validation_allows_new_weak_jwt_secret_in_development(self):
+        settings_obj = Settings(
+            ENVIRONMENT="development",
+            AUTH_JWT_SECRET_KEY="change-me-to-a-strong-random-secret-at-least-32-chars",
+            AUTH_ADMIN_PASSWORD="change-me-to-a-strong-password",
             BOT_TOKEN_ENCRYPTION_KEY="",
         )
         _validate_production_secrets(settings_obj)

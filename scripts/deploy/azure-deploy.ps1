@@ -2,10 +2,10 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$ResourceGroup,
 
-  [Parameter(Mandatory = $true)]
-  [string]$RootDomain,
+  [string]$RootDomain = "",
 
   [string]$Location = "westeurope",
+  [string]$RedisLocation = "",
   [string]$NamePrefix = "ragmind",
   [string]$ImageTag = (Get-Date -Format "yyyyMMddHHmmss"),
   [string]$PlatformOwnerUsername = $env:PLATFORM_OWNER_USERNAME,
@@ -14,6 +14,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+$UseCustomDomainHostnames = -not [string]::IsNullOrWhiteSpace($RootDomain)
+$EffectiveRedisLocation = $Location
+if (-not [string]::IsNullOrWhiteSpace($RedisLocation)) {
+  $EffectiveRedisLocation = $RedisLocation.Trim()
+}
+$EffectiveRootDomain = "unused.invalid"
+if ($UseCustomDomainHostnames) {
+  $EffectiveRootDomain = $RootDomain.Trim()
+}
+if ($BindCustomDomains -and -not $UseCustomDomainHostnames) {
+  throw "-RootDomain is required when -BindCustomDomains is used."
+}
 
 function Require-Command {
   param([string]$Name)
@@ -31,10 +44,19 @@ function Require-Env {
   return $value
 }
 
+function Assert-LastCommandSucceeded {
+  param([string]$Message)
+  if ($LASTEXITCODE -ne 0) {
+    throw $Message
+  }
+}
+
 function New-ParameterFile {
   param(
     [string]$ApiImage,
-    [string]$WebImage
+    [string]$WebImage,
+    [string]$PublicApiBaseUrl = "",
+    [string]$PublicWebOrigin = ""
   )
 
   $platformOwnerValue = ""
@@ -48,7 +70,10 @@ function New-ParameterFile {
     parameters = [ordered]@{
       namePrefix = @{ value = $NamePrefix }
       location = @{ value = $Location }
-      rootDomain = @{ value = $RootDomain }
+      redisLocation = @{ value = $EffectiveRedisLocation }
+      rootDomain = @{ value = $EffectiveRootDomain }
+      publicApiBaseUrl = @{ value = $PublicApiBaseUrl }
+      publicWebOrigin = @{ value = $PublicWebOrigin }
       apiImage = @{ value = $ApiImage }
       webImage = @{ value = $WebImage }
       postgresAdminLogin = @{ value = "ragmindadmin" }
@@ -61,6 +86,8 @@ function New-ParameterFile {
       platformOwnerUsername = @{ value = $platformOwnerValue }
       llmProvider = @{ value = "groq-llama-3.3-70b-versatile" }
       embeddingProvider = @{ value = "cohere" }
+      googleClientId = @{ value = (Require-Env "GOOGLE_CLIENT_ID") }
+      brevoApiKey = @{ value = (Require-Env "BREVO_API_KEY") }
       answerMaxTokens = @{ value = 1024 }
       apiMaxReplicas = @{ value = 3 }
       workerMaxReplicas = @{ value = 3 }
@@ -75,17 +102,28 @@ function New-ParameterFile {
 function Deploy-Bicep {
   param(
     [string]$ApiImage,
-    [string]$WebImage
+    [string]$WebImage,
+    [string]$PublicApiBaseUrl = "",
+    [string]$PublicWebOrigin = ""
   )
 
-  $paramFile = New-ParameterFile -ApiImage $ApiImage -WebImage $WebImage
+  $paramFile = New-ParameterFile `
+    -ApiImage $ApiImage `
+    -WebImage $WebImage `
+    -PublicApiBaseUrl $PublicApiBaseUrl `
+    -PublicWebOrigin $PublicWebOrigin
   try {
-    $deployment = az deployment group create `
+    $deploymentJson = az deployment group create `
       --resource-group $ResourceGroup `
       --template-file "infra/azure/main.bicep" `
       --parameters "@$paramFile" `
       --query "properties.outputs" `
-      --output json | ConvertFrom-Json
+      --output json
+    Assert-LastCommandSucceeded "Azure Bicep deployment failed."
+    $deployment = $deploymentJson | ConvertFrom-Json
+    if ($null -eq $deployment) {
+      throw "Azure Bicep deployment did not return outputs."
+    }
     return $deployment
   }
   finally {
@@ -200,6 +238,7 @@ Require-Command "az"
 Require-Command "docker"
 
 az group create --name $ResourceGroup --location $Location --output none
+Assert-LastCommandSucceeded "Resource group create/update failed."
 
 $placeholderImage = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 Write-Host "Deploying Azure resources and placeholder Container Apps..."
@@ -217,27 +256,46 @@ $webCustomHostName = $initialOutputs.webCustomHostName.value
 $apiImage = "$acrLoginServer/ragmind-api:$ImageTag"
 $webImage = "$acrLoginServer/ragmind-web:$ImageTag"
 
+$finalPublicApiBaseUrl = "https://$apiCustomHostName"
+$finalPublicWebOrigin = "https://$webCustomHostName"
+if (-not $UseCustomDomainHostnames) {
+  $finalPublicApiBaseUrl = "https://$apiDefaultFqdn"
+  $finalPublicWebOrigin = "https://$webDefaultFqdn"
+}
+
 if (-not $SkipBuild) {
   $acrName = $acrLoginServer.Split(".")[0]
   az acr login --name $acrName --output none
+  Assert-LastCommandSucceeded "ACR login failed."
 
   Write-Host "Building backend image $apiImage..."
   docker build -f docker/backend.Dockerfile -t $apiImage .
+  Assert-LastCommandSucceeded "Backend image build failed."
   docker push $apiImage
+  Assert-LastCommandSucceeded "Backend image push failed."
 
   Write-Host "Building frontend image $webImage..."
   docker build `
     -f frontend-next/Dockerfile `
-    --build-arg "NEXT_PUBLIC_API_BASE_URL=https://$apiCustomHostName" `
-    -t $webImage .
+    --build-arg "NEXT_PUBLIC_API_BASE_URL=$finalPublicApiBaseUrl" `
+    --build-arg "NEXT_PUBLIC_GOOGLE_CLIENT_ID=$([Environment]::GetEnvironmentVariable('GOOGLE_CLIENT_ID'))" `
+    -t $webImage frontend-next
+  Assert-LastCommandSucceeded "Frontend image build failed."
   docker push $webImage
+  Assert-LastCommandSucceeded "Frontend image push failed."
 }
 
 Write-Host "Deploying Container Apps with production images..."
-$finalOutputs = Deploy-Bicep -ApiImage $apiImage -WebImage $webImage
+$finalOutputs = Deploy-Bicep `
+  -ApiImage $apiImage `
+  -WebImage $webImage `
+  -PublicApiBaseUrl $finalPublicApiBaseUrl `
+  -PublicWebOrigin $finalPublicWebOrigin
 
 $apiDefaultUrl = "https://$($finalOutputs.apiDefaultFqdn.value)"
 $webDefaultUrl = "https://$($finalOutputs.webDefaultFqdn.value)"
+$effectiveApiUrl = $finalOutputs.publicWebhookBaseUrl.value
+$effectiveWebUrl = $finalOutputs.effectiveWebOrigin.value
 
 if ($BindCustomDomains) {
   Try-BindHostName -AppName $apiAppName -HostName $apiCustomHostName -DefaultFqdn $apiDefaultFqdn -EnvironmentName $containerAppEnvironmentName
@@ -266,6 +324,9 @@ if ($BindCustomDomains) {
     -ResourceGroup $ResourceGroup `
     -ApiAppName $apiAppName
 }
+elseif (-not $UseCustomDomainHostnames) {
+  Write-Host "Using default Azure Container Apps hostnames. Pass -RootDomain <domain> -BindCustomDomains later to switch to custom domains."
+}
 else {
   Write-Warning "Custom domains were not bound. Telegram webhooks are configured for https://$apiCustomHostName and should be synced only after DNS/custom domain binding succeeds."
 }
@@ -274,5 +335,9 @@ Write-Host ""
 Write-Host "Deployment complete."
 Write-Host "API default URL: $apiDefaultUrl"
 Write-Host "Web default URL: $webDefaultUrl"
-Write-Host "Production API URL: https://$apiCustomHostName"
-Write-Host "Production web URL: https://$webCustomHostName"
+Write-Host "Effective API URL: $effectiveApiUrl"
+Write-Host "Effective web URL: $effectiveWebUrl"
+if ($UseCustomDomainHostnames) {
+  Write-Host "Production API URL: https://$apiCustomHostName"
+  Write-Host "Production web URL: https://$webCustomHostName"
+}

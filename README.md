@@ -154,8 +154,11 @@ Production Telegram bots should use a stable Azure HTTPS URL, not ngrok.
 The Azure deployment entrypoint is:
 
 ```powershell
-scripts\deploy\azure-deploy.ps1 -ResourceGroup ragmind-prod-rg -RootDomain yourdomain.com
+scripts\deploy\azure-deploy.ps1 -ResourceGroup ragmind-prod-rg
 ```
+
+Without `-RootDomain`, the deployment uses the default Azure Container Apps HTTPS hostnames for the API, frontend, CORS, and Telegram webhook base URL. To deploy directly for a custom domain, pass `-RootDomain yourdomain.com`.
+Redis is deployed as Azure Managed Redis. If the chosen app region does not support it, pass `-RedisLocation <region>` for a supported region.
 
 It provisions Azure Container Apps for:
 
@@ -164,7 +167,7 @@ It provisions Azure Container Apps for:
 - `ragmind-scheduler`
 - `ragmind-web` on port `3001`
 
-It also provisions ACR, PostgreSQL Flexible Server with pgvector allow-listed, Azure Cache for Redis, Log Analytics, and Azure Files mounted at `/app/uploads`.
+It also provisions ACR, PostgreSQL Flexible Server with pgvector allow-listed, Azure Managed Redis, Log Analytics, and Azure Files mounted at `/app/uploads`.
 
 Required secret environment variables before running:
 

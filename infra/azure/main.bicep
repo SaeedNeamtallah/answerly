@@ -6,8 +6,17 @@ param namePrefix string = 'ragmind'
 @description('Azure region for all resources.')
 param location string = 'westeurope'
 
+@description('Azure region for Redis. Defaults to location; set separately when a region blocks legacy Azure Cache for Redis creation.')
+param redisLocation string = location
+
 @description('Owned production root domain. The deployment uses api.<rootDomain> and app.<rootDomain>.')
 param rootDomain string
+
+@description('Optional public API base URL. Defaults to https://api.<rootDomain>; use the Container Apps default FQDN when no custom domain is bound.')
+param publicApiBaseUrl string = ''
+
+@description('Optional public web origin used for CORS. Defaults to https://app.<rootDomain>; use the Container Apps default FQDN when no custom domain is bound.')
+param publicWebOrigin string = ''
 
 @description('Backend image to run after it has been pushed to ACR.')
 param apiImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -41,6 +50,14 @@ param groqApiKey string
 @secure()
 @description('Cohere API key used by the default production embedding provider.')
 param cohereApiKey string
+
+@secure()
+@description('Brevo API key used by the default production SMTP provider.')
+param brevoApiKey string
+
+@secure()
+@description('Google Client ID for OAuth.')
+param googleClientId string
 
 @description('Platform owner username promoted after login.')
 param platformOwnerUsername string = ''
@@ -76,6 +93,10 @@ var workerAppName = '${normalizedPrefix}-worker'
 var schedulerAppName = '${normalizedPrefix}-scheduler'
 var webAppName = '${normalizedPrefix}-web'
 var uploadsShareName = 'uploads'
+var defaultApiBaseUrl = 'https://${apiHostName}'
+var defaultWebOrigin = 'https://${webHostName}'
+var effectivePublicApiBaseUrl = empty(publicApiBaseUrl) ? defaultApiBaseUrl : publicApiBaseUrl
+var effectivePublicWebOrigin = empty(publicWebOrigin) ? defaultWebOrigin : publicWebOrigin
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
@@ -95,6 +116,9 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
     name: 'Basic'
   }
   properties: {
+    // TODO: Switch to adminUserEnabled: false and use managed identity (AcrPull role assignment)
+    // for Container Apps registry access. Requires updating azure-deploy.ps1 which currently
+    // uses 'az acr login --name' with admin credentials.
     adminUserEnabled: true
   }
 }
@@ -141,12 +165,16 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview'
     }
     backup: {
       backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
+      geoRedundantBackup: 'Enabled'
     }
+    // Consider enabling 'ZoneRedundant' high availability for production workloads
     highAvailability: {
       mode: 'Disabled'
     }
     network: {
+      // TODO: Switch to 'Disabled' and use VNet integration or Private Endpoints for production
+      // hardening. Currently kept as 'Enabled' because Container Apps connect over the public
+      // endpoint and no VNet/Private Endpoint is configured in this template.
       publicNetworkAccess: 'Enabled'
     }
   }
@@ -179,17 +207,30 @@ resource postgresVectorExtension 'Microsoft.DBforPostgreSQL/flexibleServers/conf
   }
 }
 
-resource redis 'Microsoft.Cache/Redis@2024-11-01' = {
+resource redis 'Microsoft.Cache/redisEnterprise@2025-07-01' = {
   name: redisName
-  location: location
+  location: redisLocation
+  sku: {
+    name: 'Balanced_B0'
+  }
   properties: {
-    sku: {
-      name: 'Basic'
-      family: 'C'
-      capacity: 0
-    }
-    enableNonSslPort: false
+    encryption: {}
+    highAvailability: 'Disabled'
     minimumTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2025-07-01' = {
+  name: 'default'
+  parent: redis
+  properties: {
+    accessKeysAuthentication: 'Enabled'
+    clientProtocol: 'Encrypted'
+    clusteringPolicy: 'NoCluster'
+    evictionPolicy: 'VolatileLRU'
+    modules: []
+    port: 10000
   }
 }
 
@@ -221,11 +262,11 @@ resource uploadsMount 'Microsoft.App/managedEnvironments/storages@2024-03-01' = 
 }
 
 var acrCredentials = registry.listCredentials()
-var redisKey = redis.listKeys().primaryKey
+var redisKey = redisDatabase.listKeys().primaryKey
 var databaseUrl = 'postgresql+asyncpg://${postgresAdminLogin}:${uriComponent(postgresAdminPassword)}@${postgres.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?ssl=require'
-var redisCeleryUrl = 'rediss://:${uriComponent(redisKey)}@${redis.properties.hostName}:6380/0?ssl_cert_reqs=required'
-var corsOrigins = '["https://${webHostName}"]'
-var publicWebhookBaseUrl = 'https://${apiHostName}'
+var redisCeleryUrl = 'rediss://:${uriComponent(redisKey)}@${redis.properties.hostName}:${redisDatabase.properties.port}/0?ssl_cert_reqs=required'
+var corsOrigins = '["${effectivePublicWebOrigin}"]'
+var publicWebhookBaseUrl = effectivePublicApiBaseUrl
 
 var backendSecrets = [
   {
@@ -263,6 +304,14 @@ var backendSecrets = [
   {
     name: 'cohere-api-key'
     value: cohereApiKey
+  }
+  {
+    name: 'google-client-id'
+    value: googleClientId
+  }
+  {
+    name: 'brevo-api-key'
+    value: brevoApiKey
   }
 ]
 
@@ -302,6 +351,14 @@ var commonBackendEnv = [
   {
     name: 'COHERE_API_KEY'
     secretRef: 'cohere-api-key'
+  }
+  {
+    name: 'GOOGLE_CLIENT_ID'
+    secretRef: 'google-client-id'
+  }
+  {
+    name: 'BREVO_API_KEY'
+    secretRef: 'brevo-api-key'
   }
   {
     name: 'LLM_PROVIDER'
@@ -422,7 +479,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: apiImage
           env: commonBackendEnv
           resources: {
-            cpu: 0.5
+            cpu: json('0.5')
             memory: '1Gi'
           }
           volumeMounts: [
@@ -486,7 +543,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
           ]
           env: commonBackendEnv
           resources: {
-            cpu: 0.5
+            cpu: json('0.5')
             memory: '1Gi'
           }
           volumeMounts: [
@@ -549,7 +606,7 @@ resource schedulerApp 'Microsoft.App/containerApps@2024-03-01' = {
           ]
           env: commonBackendEnv
           resources: {
-            cpu: 0.25
+            cpu: json('0.25')
             memory: '0.5Gi'
           }
           volumeMounts: [
@@ -620,7 +677,7 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
           ]
           resources: {
-            cpu: 0.5
+            cpu: json('0.5')
             memory: '1Gi'
           }
         }
@@ -644,3 +701,4 @@ output webDefaultFqdn string = webApp.properties.configuration.ingress.fqdn
 output apiCustomHostName string = apiHostName
 output webCustomHostName string = webHostName
 output publicWebhookBaseUrl string = publicWebhookBaseUrl
+output effectiveWebOrigin string = effectivePublicWebOrigin

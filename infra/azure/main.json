@@ -1,0 +1,917 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "7915922360816934984"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "ragmind",
+      "metadata": {
+        "description": "Short lowercase deployment prefix used in resource names."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "redisLocation": {
+      "type": "string",
+      "defaultValue": "[parameters('location')]",
+      "metadata": {
+        "description": "Azure region for Redis. Defaults to location; set separately when a region blocks legacy Azure Cache for Redis creation."
+      }
+    },
+    "rootDomain": {
+      "type": "string",
+      "metadata": {
+        "description": "Owned production root domain. The deployment uses api.<rootDomain> and app.<rootDomain>."
+      }
+    },
+    "publicApiBaseUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional public API base URL. Defaults to https://api.<rootDomain>; use the Container Apps default FQDN when no custom domain is bound."
+      }
+    },
+    "publicWebOrigin": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional public web origin used for CORS. Defaults to https://app.<rootDomain>; use the Container Apps default FQDN when no custom domain is bound."
+      }
+    },
+    "apiImage": {
+      "type": "string",
+      "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+      "metadata": {
+        "description": "Backend image to run after it has been pushed to ACR."
+      }
+    },
+    "webImage": {
+      "type": "string",
+      "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+      "metadata": {
+        "description": "Frontend image to run after it has been pushed to ACR."
+      }
+    },
+    "postgresAdminLogin": {
+      "type": "string",
+      "defaultValue": "ragmindadmin",
+      "metadata": {
+        "description": "PostgreSQL administrator username."
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator password."
+      }
+    },
+    "authJwtSecretKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Strong JWT signing key for production."
+      }
+    },
+    "authAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Platform admin password for production bootstrap/login."
+      }
+    },
+    "botTokenEncryptionKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Fernet key used to encrypt Telegram bot tokens."
+      }
+    },
+    "groqApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Groq API key used by the default production LLM provider."
+      }
+    },
+    "cohereApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Cohere API key used by the default production embedding provider."
+      }
+    },
+    "platformOwnerUsername": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Platform owner username promoted after login."
+      }
+    },
+    "llmProvider": {
+      "type": "string",
+      "defaultValue": "groq-llama-3.3-70b-versatile",
+      "metadata": {
+        "description": "Default LLM provider for production runtime config/env."
+      }
+    },
+    "embeddingProvider": {
+      "type": "string",
+      "defaultValue": "cohere",
+      "metadata": {
+        "description": "Default embedding provider for production runtime config/env."
+      }
+    },
+    "answerMaxTokens": {
+      "type": "int",
+      "defaultValue": 1024,
+      "metadata": {
+        "description": "Default answer max token cap."
+      }
+    },
+    "apiMaxReplicas": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "Maximum API replicas."
+      }
+    },
+    "workerMaxReplicas": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "Maximum worker replicas."
+      }
+    }
+  },
+  "variables": {
+    "normalizedPrefix": "[toLower(replace(parameters('namePrefix'), '_', '-'))]",
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, variables('normalizedPrefix'))]",
+    "apiHostName": "[format('api.{0}', parameters('rootDomain'))]",
+    "webHostName": "[format('app.{0}', parameters('rootDomain'))]",
+    "acrName": "[take(toLower(replace(format('{0}{1}acr', variables('normalizedPrefix'), variables('uniqueSuffix')), '-', '')), 50)]",
+    "storageName": "[take(toLower(replace(format('{0}{1}st', variables('normalizedPrefix'), variables('uniqueSuffix')), '-', '')), 24)]",
+    "environmentName": "[format('{0}-aca-env', variables('normalizedPrefix'))]",
+    "logAnalyticsName": "[format('{0}-logs', variables('normalizedPrefix'))]",
+    "postgresName": "[format('{0}-pg-{1}', variables('normalizedPrefix'), variables('uniqueSuffix'))]",
+    "postgresDatabaseName": "ragmind",
+    "redisName": "[format('{0}-redis-{1}', variables('normalizedPrefix'), variables('uniqueSuffix'))]",
+    "apiAppName": "[format('{0}-api', variables('normalizedPrefix'))]",
+    "workerAppName": "[format('{0}-worker', variables('normalizedPrefix'))]",
+    "schedulerAppName": "[format('{0}-scheduler', variables('normalizedPrefix'))]",
+    "webAppName": "[format('{0}-web', variables('normalizedPrefix'))]",
+    "uploadsShareName": "uploads",
+    "defaultApiBaseUrl": "[format('https://{0}', variables('apiHostName'))]",
+    "defaultWebOrigin": "[format('https://{0}', variables('webHostName'))]",
+    "effectivePublicApiBaseUrl": "[if(empty(parameters('publicApiBaseUrl')), variables('defaultApiBaseUrl'), parameters('publicApiBaseUrl'))]",
+    "effectivePublicWebOrigin": "[if(empty(parameters('publicWebOrigin')), variables('defaultWebOrigin'), parameters('publicWebOrigin'))]",
+    "corsOrigins": "[format('[\"{0}\"]', variables('effectivePublicWebOrigin'))]",
+    "publicWebhookBaseUrl": "[variables('effectivePublicApiBaseUrl')]",
+    "commonBackendEnv": [
+      {
+        "name": "ENVIRONMENT",
+        "value": "production"
+      },
+      {
+        "name": "DATABASE_URL",
+        "secretRef": "database-url"
+      },
+      {
+        "name": "CELERY_BROKER_URL",
+        "secretRef": "celery-broker-url"
+      },
+      {
+        "name": "CELERY_RESULT_BACKEND",
+        "secretRef": "celery-result-backend"
+      },
+      {
+        "name": "AUTH_JWT_SECRET_KEY",
+        "secretRef": "auth-jwt-secret-key"
+      },
+      {
+        "name": "AUTH_ADMIN_PASSWORD",
+        "secretRef": "auth-admin-password"
+      },
+      {
+        "name": "BOT_TOKEN_ENCRYPTION_KEY",
+        "secretRef": "bot-token-encryption-key"
+      },
+      {
+        "name": "GROQ_API_KEY",
+        "secretRef": "groq-api-key"
+      },
+      {
+        "name": "COHERE_API_KEY",
+        "secretRef": "cohere-api-key"
+      },
+      {
+        "name": "LLM_PROVIDER",
+        "value": "[parameters('llmProvider')]"
+      },
+      {
+        "name": "EMBEDDING_PROVIDER",
+        "value": "[parameters('embeddingProvider')]"
+      },
+      {
+        "name": "VECTOR_DB_PROVIDER",
+        "value": "pgvector"
+      },
+      {
+        "name": "PUBLIC_WEBHOOK_BASE_URL",
+        "value": "[variables('publicWebhookBaseUrl')]"
+      },
+      {
+        "name": "TELEGRAM_WEBHOOK_REQUIRE_SECRET_HEADER",
+        "value": "true"
+      },
+      {
+        "name": "TELEGRAM_RATE_LIMIT_REDIS_URL",
+        "secretRef": "celery-result-backend"
+      },
+      {
+        "name": "CORS_ORIGINS",
+        "value": "[variables('corsOrigins')]"
+      },
+      {
+        "name": "ANSWER_MAX_TOKENS",
+        "value": "[string(parameters('answerMaxTokens'))]"
+      },
+      {
+        "name": "RAGMIND_SHARED_CONFIG_DIR",
+        "value": "/app/uploads/config"
+      },
+      {
+        "name": "UPLOAD_DIR",
+        "value": "/app/uploads"
+      },
+      {
+        "name": "PLATFORM_OWNER_USERNAME",
+        "value": "[parameters('platformOwnerUsername')]"
+      },
+      {
+        "name": "TELEGRAM_OUTBOX_POLL_INTERVAL_SECONDS",
+        "value": "2"
+      },
+      {
+        "name": "TELEGRAM_OUTBOX_MAX_DELIVERY_ATTEMPTS",
+        "value": "3"
+      },
+      {
+        "name": "TELEGRAM_OUTBOX_CLAIM_TIMEOUT_SECONDS",
+        "value": "120"
+      },
+      {
+        "name": "TELEGRAM_OUTBOX_RETRY_BASE_SECONDS",
+        "value": "30"
+      },
+      {
+        "name": "TELEGRAM_OUTBOX_RETRY_MAX_SECONDS",
+        "value": "900"
+      },
+      {
+        "name": "TELEGRAM_RAW_PAYLOAD_CLEANUP_INTERVAL_SECONDS",
+        "value": "21600"
+      },
+      {
+        "name": "TELEGRAM_REPLY_GENERATION_CLAIM_TIMEOUT_SECONDS",
+        "value": "600"
+      },
+      {
+        "name": "PROMETHEUS_BASE_URL",
+        "value": ""
+      },
+      {
+        "name": "GRAFANA_PUBLIC_URL",
+        "value": ""
+      },
+      {
+        "name": "GRAFANA_INTERNAL_URL",
+        "value": ""
+      },
+      {
+        "name": "GRAFANA_EMBED_ENABLED",
+        "value": "false"
+      }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('acrName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Basic"
+      },
+      "properties": {
+        "adminUserEnabled": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "allowBlobPublicAccess": false,
+        "minimumTlsVersion": "TLS1_2"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('storageName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageName'), 'default', variables('uploadsShareName'))]",
+      "properties": {
+        "shareQuota": 100
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[variables('postgresName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_B1ms",
+        "tier": "Burstable"
+      },
+      "properties": {
+        "version": "16",
+        "administratorLogin": "[parameters('postgresAdminLogin')]",
+        "administratorLoginPassword": "[parameters('postgresAdminPassword')]",
+        "storage": {
+          "storageSizeGB": 32
+        },
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Enabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        },
+        "network": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[format('{0}/{1}', variables('postgresName'), variables('postgresDatabaseName'))]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[format('{0}/{1}', variables('postgresName'), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[format('{0}/{1}', variables('postgresName'), 'azure.extensions')]",
+      "properties": {
+        "value": "VECTOR",
+        "source": "user-override"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Cache/redisEnterprise",
+      "apiVersion": "2025-07-01",
+      "name": "[variables('redisName')]",
+      "location": "[parameters('redisLocation')]",
+      "sku": {
+        "name": "Balanced_B0"
+      },
+      "properties": {
+        "encryption": {},
+        "highAvailability": "Disabled",
+        "minimumTlsVersion": "1.2",
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Cache/redisEnterprise/databases",
+      "apiVersion": "2025-07-01",
+      "name": "[format('{0}/{1}', variables('redisName'), 'default')]",
+      "properties": {
+        "accessKeysAuthentication": "Enabled",
+        "clientProtocol": "Encrypted",
+        "clusteringPolicy": "NoCluster",
+        "evictionPolicy": "VolatileLRU",
+        "modules": [],
+        "port": 10000
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cache/redisEnterprise', variables('redisName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('environmentName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2023-09-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', variables('environmentName'), 'uploads')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-05-01').keys[0].value]",
+          "shareName": "[variables('uploadsShareName')]",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('storageName'), 'default', variables('uploadsShareName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('apiAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "secrets": [
+            {
+              "name": "acr-password",
+              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+            },
+            {
+              "name": "database-url",
+              "value": "[format('postgresql+asyncpg://{0}:{1}@{2}:5432/{3}?ssl=require', parameters('postgresAdminLogin'), uriComponent(parameters('postgresAdminPassword')), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName')), '2023-12-01-preview').fullyQualifiedDomainName, variables('postgresDatabaseName'))]"
+            },
+            {
+              "name": "celery-broker-url",
+              "value": "[format('rediss://:{0}@{1}:{2}/0?ssl_cert_reqs=required', uriComponent(listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').primaryKey), reference(resourceId('Microsoft.Cache/redisEnterprise', variables('redisName')), '2025-07-01').hostName, reference(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').port)]"
+            },
+            {
+              "name": "celery-result-backend",
+              "value": "[format('rediss://:{0}@{1}:{2}/0?ssl_cert_reqs=required', uriComponent(listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').primaryKey), reference(resourceId('Microsoft.Cache/redisEnterprise', variables('redisName')), '2025-07-01').hostName, reference(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').port)]"
+            },
+            {
+              "name": "auth-jwt-secret-key",
+              "value": "[parameters('authJwtSecretKey')]"
+            },
+            {
+              "name": "auth-admin-password",
+              "value": "[parameters('authAdminPassword')]"
+            },
+            {
+              "name": "bot-token-encryption-key",
+              "value": "[parameters('botTokenEncryptionKey')]"
+            },
+            {
+              "name": "groq-api-key",
+              "value": "[parameters('groqApiKey')]"
+            },
+            {
+              "name": "cohere-api-key",
+              "value": "[parameters('cohereApiKey')]"
+            }
+          ],
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').loginServer]",
+              "username": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]",
+              "passwordSecretRef": "acr-password"
+            }
+          ],
+          "ingress": {
+            "external": true,
+            "targetPort": 8000,
+            "transport": "auto",
+            "allowInsecure": false
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "api",
+              "image": "[parameters('apiImage')]",
+              "env": "[variables('commonBackendEnv')]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              },
+              "volumeMounts": [
+                {
+                  "volumeName": "uploads",
+                  "mountPath": "/app/uploads"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": "[parameters('apiMaxReplicas')]"
+          },
+          "volumes": [
+            {
+              "name": "uploads",
+              "storageType": "AzureFile",
+              "storageName": "uploads"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', variables('postgresName'), 'AllowAzureServices')]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', variables('postgresName'), variables('postgresDatabaseName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', variables('postgresName'), 'azure.extensions')]",
+        "[resourceId('Microsoft.Cache/redisEnterprise', variables('redisName'))]",
+        "[resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default')]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', variables('environmentName'), 'uploads')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('workerAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "secrets": [
+            {
+              "name": "acr-password",
+              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+            },
+            {
+              "name": "database-url",
+              "value": "[format('postgresql+asyncpg://{0}:{1}@{2}:5432/{3}?ssl=require', parameters('postgresAdminLogin'), uriComponent(parameters('postgresAdminPassword')), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName')), '2023-12-01-preview').fullyQualifiedDomainName, variables('postgresDatabaseName'))]"
+            },
+            {
+              "name": "celery-broker-url",
+              "value": "[format('rediss://:{0}@{1}:{2}/0?ssl_cert_reqs=required', uriComponent(listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').primaryKey), reference(resourceId('Microsoft.Cache/redisEnterprise', variables('redisName')), '2025-07-01').hostName, reference(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').port)]"
+            },
+            {
+              "name": "celery-result-backend",
+              "value": "[format('rediss://:{0}@{1}:{2}/0?ssl_cert_reqs=required', uriComponent(listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').primaryKey), reference(resourceId('Microsoft.Cache/redisEnterprise', variables('redisName')), '2025-07-01').hostName, reference(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').port)]"
+            },
+            {
+              "name": "auth-jwt-secret-key",
+              "value": "[parameters('authJwtSecretKey')]"
+            },
+            {
+              "name": "auth-admin-password",
+              "value": "[parameters('authAdminPassword')]"
+            },
+            {
+              "name": "bot-token-encryption-key",
+              "value": "[parameters('botTokenEncryptionKey')]"
+            },
+            {
+              "name": "groq-api-key",
+              "value": "[parameters('groqApiKey')]"
+            },
+            {
+              "name": "cohere-api-key",
+              "value": "[parameters('cohereApiKey')]"
+            }
+          ],
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').loginServer]",
+              "username": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]",
+              "passwordSecretRef": "acr-password"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "worker",
+              "image": "[parameters('apiImage')]",
+              "command": [
+                "celery",
+                "-A",
+                "backend.celery_app",
+                "worker",
+                "--loglevel=info",
+                "-Q",
+                "default,file_processing"
+              ],
+              "env": "[variables('commonBackendEnv')]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              },
+              "volumeMounts": [
+                {
+                  "volumeName": "uploads",
+                  "mountPath": "/app/uploads"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": "[parameters('workerMaxReplicas')]"
+          },
+          "volumes": [
+            {
+              "name": "uploads",
+              "storageType": "AzureFile",
+              "storageName": "uploads"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', variables('postgresName'), 'AllowAzureServices')]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', variables('postgresName'), variables('postgresDatabaseName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', variables('postgresName'), 'azure.extensions')]",
+        "[resourceId('Microsoft.Cache/redisEnterprise', variables('redisName'))]",
+        "[resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default')]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', variables('environmentName'), 'uploads')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('schedulerAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "secrets": [
+            {
+              "name": "acr-password",
+              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+            },
+            {
+              "name": "database-url",
+              "value": "[format('postgresql+asyncpg://{0}:{1}@{2}:5432/{3}?ssl=require', parameters('postgresAdminLogin'), uriComponent(parameters('postgresAdminPassword')), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName')), '2023-12-01-preview').fullyQualifiedDomainName, variables('postgresDatabaseName'))]"
+            },
+            {
+              "name": "celery-broker-url",
+              "value": "[format('rediss://:{0}@{1}:{2}/0?ssl_cert_reqs=required', uriComponent(listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').primaryKey), reference(resourceId('Microsoft.Cache/redisEnterprise', variables('redisName')), '2025-07-01').hostName, reference(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').port)]"
+            },
+            {
+              "name": "celery-result-backend",
+              "value": "[format('rediss://:{0}@{1}:{2}/0?ssl_cert_reqs=required', uriComponent(listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').primaryKey), reference(resourceId('Microsoft.Cache/redisEnterprise', variables('redisName')), '2025-07-01').hostName, reference(resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default'), '2025-07-01').port)]"
+            },
+            {
+              "name": "auth-jwt-secret-key",
+              "value": "[parameters('authJwtSecretKey')]"
+            },
+            {
+              "name": "auth-admin-password",
+              "value": "[parameters('authAdminPassword')]"
+            },
+            {
+              "name": "bot-token-encryption-key",
+              "value": "[parameters('botTokenEncryptionKey')]"
+            },
+            {
+              "name": "groq-api-key",
+              "value": "[parameters('groqApiKey')]"
+            },
+            {
+              "name": "cohere-api-key",
+              "value": "[parameters('cohereApiKey')]"
+            }
+          ],
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').loginServer]",
+              "username": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]",
+              "passwordSecretRef": "acr-password"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "scheduler",
+              "image": "[parameters('apiImage')]",
+              "command": [
+                "celery",
+                "-A",
+                "backend.celery_app",
+                "beat",
+                "--loglevel=info",
+                "--schedule=/app/uploads/celerybeat-schedule"
+              ],
+              "env": "[variables('commonBackendEnv')]",
+              "resources": {
+                "cpu": "[json('0.25')]",
+                "memory": "0.5Gi"
+              },
+              "volumeMounts": [
+                {
+                  "volumeName": "uploads",
+                  "mountPath": "/app/uploads"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "uploads",
+              "storageType": "AzureFile",
+              "storageName": "uploads"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', variables('postgresName'), 'AllowAzureServices')]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', variables('postgresName'), variables('postgresDatabaseName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', variables('postgresName'), 'azure.extensions')]",
+        "[resourceId('Microsoft.Cache/redisEnterprise', variables('redisName'))]",
+        "[resourceId('Microsoft.Cache/redisEnterprise/databases', variables('redisName'), 'default')]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', variables('environmentName'), 'uploads')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('webAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "secrets": [
+            {
+              "name": "acr-password",
+              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+            }
+          ],
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').loginServer]",
+              "username": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]",
+              "passwordSecretRef": "acr-password"
+            }
+          ],
+          "ingress": {
+            "external": true,
+            "targetPort": 3001,
+            "transport": "auto",
+            "allowInsecure": false
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "web",
+              "image": "[parameters('webImage')]",
+              "env": [
+                {
+                  "name": "NEXT_PUBLIC_API_BASE_URL",
+                  "value": "[variables('publicWebhookBaseUrl')]"
+                }
+              ],
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              }
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 3
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "acrLoginServer": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').loginServer]"
+    },
+    "containerAppEnvironmentName": {
+      "type": "string",
+      "value": "[variables('environmentName')]"
+    },
+    "apiAppName": {
+      "type": "string",
+      "value": "[variables('apiAppName')]"
+    },
+    "webAppName": {
+      "type": "string",
+      "value": "[variables('webAppName')]"
+    },
+    "workerAppName": {
+      "type": "string",
+      "value": "[variables('workerAppName')]"
+    },
+    "schedulerAppName": {
+      "type": "string",
+      "value": "[variables('schedulerAppName')]"
+    },
+    "apiDefaultFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('apiAppName')), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "webDefaultFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('webAppName')), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "apiCustomHostName": {
+      "type": "string",
+      "value": "[variables('apiHostName')]"
+    },
+    "webCustomHostName": {
+      "type": "string",
+      "value": "[variables('webHostName')]"
+    },
+    "publicWebhookBaseUrl": {
+      "type": "string",
+      "value": "[variables('publicWebhookBaseUrl')]"
+    },
+    "effectiveWebOrigin": {
+      "type": "string",
+      "value": "[variables('effectivePublicWebOrigin')]"
+    }
+  }
+}

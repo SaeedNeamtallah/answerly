@@ -67,7 +67,7 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
             ))}
           </div>
           <div>
-            <p className="text-xl font-semibold leading-none">RAGMind</p>
+            <p className="text-xl font-semibold leading-none">Answerly</p>
             <p className="mt-1 text-xs text-white/50">{platformMode ? "Platform console" : "Company workspace"}</p>
           </div>
         </div>
@@ -100,7 +100,7 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
               {(user?.company_name || user?.username || "R").slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user?.company_name || user?.username || "RAGMind"}</p>
+              <p className="truncate text-sm font-medium">{user?.company_name || user?.username || "Answerly"}</p>
               <p className="text-xs text-white/50">{platformMode ? "Platform owner" : "Enterprise plan"}</p>
             </div>
             <ChevronDown className="size-4 text-white/50" aria-hidden="true" />

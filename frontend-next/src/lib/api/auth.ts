@@ -34,3 +34,27 @@ export function changePassword(payload: ChangePasswordPayload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function googleLogin(token: string) {
+  return apiRequest<AuthTokenResponse>("/auth/google/login", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function forgotPassword(email: string) {
+  return apiRequest<ApiMessageResponse>("/auth/forgot-password", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(payload: { token: string; new_password: string }) {
+  return apiRequest<ApiMessageResponse>("/auth/reset-password", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(payload),
+  });
+}

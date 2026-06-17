@@ -11,7 +11,7 @@ This folder contains the Bicep deployment for the production Telegram SaaS webho
 - `ragmind-worker` internal Container App
 - `ragmind-scheduler` internal Container App
 - Azure Database for PostgreSQL Flexible Server with `VECTOR` allow-listed
-- Azure Cache for Redis over TLS
+- Azure Managed Redis over TLS
 - Azure Files share mounted at `/app/uploads`
 - Log Analytics workspace
 
@@ -29,6 +29,9 @@ $env:COHERE_API_KEY = "<Cohere key>"
 
 scripts\deploy\azure-deploy.ps1 -ResourceGroup ragmind-prod-rg -RootDomain example.com
 ```
+
+Omit `-RootDomain` to deploy with the default Azure Container Apps HTTPS hostnames. In that mode the script feeds those default URLs back into the API, frontend, CORS, and Telegram webhook base URL.
+If the app region does not support Azure Managed Redis, keep the app region and pass `-RedisLocation <region>` for a supported Redis region.
 
 Create DNS CNAME records before binding custom domains:
 

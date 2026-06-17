@@ -234,6 +234,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional output file path. Defaults to tmp/all_project_code.txt or the profile output.",
     )
     parser.add_argument(
+        "--all-files",
+        action="store_true",
+        help="Collect absolutely all files, ignoring VALID_EXTENSIONS, SKIP_FILES, and EXCLUDE_PATH_TOKENS filters.",
+    )
+    parser.add_argument(
         "--list-profiles",
         action="store_true",
         help="List available focus profiles and exit.",
@@ -246,21 +251,23 @@ def list_profiles() -> None:
         print(f"{profile.name}: {profile.description}")
 
 
-def iter_source_files(root_dir: Path) -> Iterable[Path]:
+def iter_source_files(root_dir: Path, include_all: bool = False) -> Iterable[Path]:
     for dirpath, dirnames, filenames in os.walk(root_dir):
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
 
         for filename in sorted(filenames):
-            if filename != ".env.example" and (filename == ".env" or filename.startswith(".env.")):
-                continue
+            if not include_all:
+                if filename != ".env.example" and (filename == ".env" or filename.startswith(".env.")):
+                    continue
             ext = Path(filename).suffix.lower()
-            if ext not in VALID_EXTENSIONS and filename not in SPECIAL_FILES:
-                continue
-            if filename in SKIP_FILES:
-                continue
+            if not include_all:
+                if ext not in VALID_EXTENSIONS and filename not in SPECIAL_FILES:
+                    continue
+                if filename in SKIP_FILES:
+                    continue
             path = Path(dirpath) / filename
             rel_posix = path.relative_to(root_dir).as_posix()
-            if any(token in rel_posix for token in EXCLUDE_PATH_TOKENS):
+            if not include_all and any(token in rel_posix for token in EXCLUDE_PATH_TOKENS):
                 continue
             try:
                 if path.stat().st_size > MAX_FILE_BYTES and filename not in SPECIAL_FILES:
@@ -270,17 +277,18 @@ def iter_source_files(root_dir: Path) -> Iterable[Path]:
             yield path
 
 
-def get_default_bundle_files(root_dir: Path) -> list[Path]:
+def get_default_bundle_files(root_dir: Path, include_all: bool = False) -> list[Path]:
     ordered: list[Path] = []
     seen: set[Path] = set()
 
-    for rel_path in DEFAULT_IMPORTANT_FILES:
-        full_path = root_dir / rel_path
-        if full_path.exists() and full_path.is_file():
-            ordered.append(full_path)
-            seen.add(full_path.resolve())
+    if not include_all:
+        for rel_path in DEFAULT_IMPORTANT_FILES:
+            full_path = root_dir / rel_path
+            if full_path.exists() and full_path.is_file():
+                ordered.append(full_path)
+                seen.add(full_path.resolve())
 
-    for path in iter_source_files(root_dir):
+    for path in iter_source_files(root_dir, include_all=include_all):
         resolved = path.resolve()
         if resolved in seen:
             continue
@@ -367,7 +375,7 @@ def write_snippet_file(
     outfile.write("\n")
 
 
-def combine_code(root_dir: Path, output_file: Path) -> int:
+def combine_code(root_dir: Path, output_file: Path, include_all: bool = False) -> int:
     combined_files = 0
 
     with output_file.open("w", encoding="utf-8") as outfile:
@@ -377,7 +385,7 @@ def combine_code(root_dir: Path, output_file: Path) -> int:
         outfile.write("- Includes the current Next.js frontend under frontend-next/.\n")
         outfile.write("- Includes important project context files and Windows startup scripts first.\n\n")
 
-        for filepath in get_default_bundle_files(root_dir):
+        for filepath in get_default_bundle_files(root_dir, include_all=include_all):
             rel_path = filepath.relative_to(root_dir)
 
             try:
@@ -400,6 +408,7 @@ def combine_focus_code(
     extra_patterns: Sequence[str],
     context_lines: int | None,
     max_matches_per_file: int | None,
+    include_all: bool = False,
 ) -> int:
     combined_files = 0
     patterns = compile_patterns([*profile.patterns, *extra_patterns])
@@ -415,7 +424,7 @@ def combine_focus_code(
             outfile.write(f"Extra patterns: {', '.join(extra_patterns)}\n")
         outfile.write("\n")
 
-        for filepath in iter_source_files(root_dir):
+        for filepath in iter_source_files(root_dir, include_all=include_all):
             rel_path = filepath.relative_to(root_dir)
             if not path_matches_profile(rel_path, profile):
                 continue
@@ -459,12 +468,13 @@ def main() -> None:
             extra_patterns=args.query,
             context_lines=args.context,
             max_matches_per_file=args.max_matches_per_file,
+            include_all=args.all_files,
         )
         print(f"Focused code combined into {output_file} ({total} files)")
         return
 
     output_file = Path(args.output) if args.output else output_dir / "all_project_code.txt"
-    total = combine_code(root_dir, output_file)
+    total = combine_code(root_dir, output_file, include_all=args.all_files)
     print(f"Code combined successfully into {output_file} ({total} files)")
 
 

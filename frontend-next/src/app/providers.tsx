@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { useHydrateAuthSession } from "@/lib/auth/session";
 
+import { GoogleOAuthProvider } from "@react-oauth/google";
+
 export function Providers({ children }: { children: React.ReactNode }) {
   useHydrateAuthSession();
 
@@ -23,9 +25,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster richColors position="top-right" />
-    </QueryClientProvider>
+    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toaster richColors position="top-right" />
+      </QueryClientProvider>
+    </GoogleOAuthProvider>
   );
 }

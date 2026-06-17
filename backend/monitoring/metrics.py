@@ -5,12 +5,16 @@ cannot change auth, retrieval, indexing, or startup behavior.
 """
 from __future__ import annotations
 
+import ipaddress
+import os
 import time
 
 from fastapi import FastAPI, Request
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
+from backend.config import settings
 
 
 HTTP_REQUESTS_TOTAL = Counter(
@@ -64,6 +68,25 @@ INCIDENTS_CREATED_TOTAL = Counter(
 )
 
 
+# Internal/trusted networks for /metrics access control
+_TRUSTED_NETWORKS = (
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+)
+
+
+def _is_trusted_ip(ip_str: str) -> bool:
+    """Return True if *ip_str* belongs to a trusted internal network."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+        return any(addr in net for net in _TRUSTED_NETWORKS)
+    except ValueError:
+        return False
+
+
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """Record request count and latency without touching response bodies."""
 
@@ -78,7 +101,10 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         finally:
             if request.url.path != "/metrics":
                 route = request.scope.get("route")
-                endpoint = getattr(route, "path", request.url.path)
+                if route:
+                    endpoint = getattr(route, "path", "__unknown__")
+                else:
+                    endpoint = "__unknown__"
                 HTTP_REQUESTS_TOTAL.labels(
                     method=request.method,
                     endpoint=endpoint,
@@ -96,5 +122,19 @@ def register_metrics(app: FastAPI) -> None:
     app.add_middleware(PrometheusMiddleware)
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics() -> Response:
-        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    async def metrics(request: Request) -> Response:
+        metrics_token = os.environ.get("METRICS_AUTH_TOKEN", "").strip()
+        auth_header = request.headers.get("Authorization", "")
+        has_valid_token = bool(metrics_token and auth_header == f"Bearer {metrics_token}")
+
+        if settings.environment.lower() == "production":
+            # In production, require the auth token strictly, ignoring client IPs
+            if has_valid_token:
+                return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+            return Response("Forbidden", status_code=403)
+        else:
+            # In other environments, allow trusted internal IPs or valid token
+            client_ip = request.client.host if request.client else ""
+            if _is_trusted_ip(client_ip) or has_valid_token:
+                return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+            return Response("Forbidden", status_code=403)

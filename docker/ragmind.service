@@ -1,0 +1,22 @@
+[Unit]
+Description=RAGMind Application Stack (Docker Compose)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ragmind/docker
+
+# Remove old containers, images and volumes
+ExecStartPre=/usr/local/bin/docker-compose -f docker-compose.yml down -v
+ExecStartPre=/usr/local/bin/docker-compose -f docker-compose.yml rm -f
+
+# Compose up
+ExecStart=/usr/local/bin/docker-compose -f docker-compose.yml up -d --build
+
+# Compose down, remove containers and volumes
+ExecStop=/usr/local/bin/docker-compose -f docker-compose.yml down -v
+
+[Install]
+WantedBy=multi-user.target
