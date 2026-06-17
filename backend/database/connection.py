@@ -340,29 +340,25 @@ async def init_db():
         from sqlalchemy.future import select
 
         async with async_session_maker() as session:
-            stmt = select(User).where(User.role == ROLE_PLATFORM_OWNER)
-            result = await session.execute(stmt)
-            owner = result.scalars().first()
-            if not owner:
-                owner_username = "OWNERPLATFORM"
-                stmt_by_name = select(User).where(User.username == owner_username)
-                result_by_name = await session.execute(stmt_by_name)
-                existing_by_name = result_by_name.scalars().first()
-                if not existing_by_name:
-                    owner_user = User(
-                        username=owner_username,
-                        hashed_password=get_password_hash("OWNERPLATFORM"),
-                        role=ROLE_PLATFORM_OWNER,
-                        status="ACTIVE"
-                    )
-                    session.add(owner_user)
-                    await session.commit()
-                    logger.info(f"Created default platform owner account: {owner_username}")
-                else:
-                    existing_by_name.role = ROLE_PLATFORM_OWNER
-                    existing_by_name.hashed_password = get_password_hash("OWNERPLATFORM")
-                    await session.commit()
-                    logger.info(f"Promoted existing user to platform owner: {owner_username}")
+            owner_username = "OWNERPLATFORM"
+            stmt_by_name = select(User).where(User.username == owner_username)
+            result_by_name = await session.execute(stmt_by_name)
+            existing_by_name = result_by_name.scalars().first()
+            if not existing_by_name:
+                owner_user = User(
+                    username=owner_username,
+                    hashed_password=get_password_hash("OWNERPLATFORM"),
+                    role=ROLE_PLATFORM_OWNER,
+                    status="ACTIVE"
+                )
+                session.add(owner_user)
+                await session.commit()
+                logger.info(f"Created default platform owner account: {owner_username}")
+            else:
+                existing_by_name.role = ROLE_PLATFORM_OWNER
+                existing_by_name.hashed_password = get_password_hash("OWNERPLATFORM")
+                await session.commit()
+                logger.info(f"Promoted existing user to platform owner: {owner_username}")
 
     # Keep startup resilient for legacy databases with partial historical schemas.
     try:
