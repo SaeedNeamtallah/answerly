@@ -20,6 +20,7 @@ export interface ChangePasswordPayload {
 export interface AuthTokenResponse {
   access_token: string | null;
   mfa_required?: boolean;
+  mfa_setup_required?: boolean;
 }
 
 export interface CurrentUser {

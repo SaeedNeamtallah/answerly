@@ -26,7 +26,12 @@ from backend.services.login_security_service import (
     login_security_service,
 )
 from backend.security.event_service import log_event
-from backend.security.auth import get_current_db_user, get_product_role_for_user, resolve_roles_for_username
+from backend.security.auth import (
+    get_current_db_user,
+    get_product_role_for_user,
+    resolve_roles_for_username,
+    user_requires_privileged_mfa,
+)
 from backend.security.client_ip import get_optional_client_ip
 from backend.security.jwt_utils import create_jwt_access_token
 from backend.security.security_event import SecurityEventType, SecuritySeverity
@@ -122,6 +127,7 @@ class ChangePasswordRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str | None = None
     mfa_required: bool = False
+    mfa_setup_required: bool = False
 
 
 class IdentityResponse(BaseModel):
@@ -391,20 +397,79 @@ async def login(
             ip_address=tracking_ip,
         )
 
+        resolved_roles = resolve_roles_for_username(user.username)
+        privileged_mfa_required = user_requires_privileged_mfa(user)
+        mfa_verified = False
+
         if user.mfa_enabled:
             from backend.services.mfa_service import mfa_service
             if not payload.mfa_token:
                 return TokenResponse(access_token=None, mfa_required=True)
-            if not mfa_service.verify_totp(user.mfa_secret, payload.mfa_token):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid MFA token",
+            if mfa_service.verify_totp(user.mfa_secret, payload.mfa_token):
+                mfa_verified = True
+            else:
+                recovery_accepted, remaining_codes = mfa_service.consume_recovery_code(
+                    user.mfa_recovery_codes,
+                    payload.mfa_token,
                 )
+                if recovery_accepted:
+                    user.mfa_recovery_codes = remaining_codes
+                    db.add(user)
+                    await db.commit()
+                    mfa_verified = True
+                    log_event(
+                        {
+                            "event_type": SecurityEventType.LOGIN_SUCCESS,
+                            "severity": SecuritySeverity.MEDIUM,
+                            "user_id": user.id,
+                            "username": user.username,
+                            "ip_address": tracking_ip,
+                            "message": "MFA recovery code accepted during login",
+                            "metadata": {"username": user.username, "mfa_method": "recovery_code"},
+                        }
+                    )
+                else:
+                    log_event(
+                        {
+                            "event_type": SecurityEventType.LOGIN_FAIL,
+                            "severity": SecuritySeverity.HIGH,
+                            "user_id": user.id,
+                            "username": user.username,
+                            "ip_address": tracking_ip,
+                            "message": "Login failed: invalid MFA token",
+                            "metadata": {"username": user.username, "reason": "invalid_mfa"},
+                        }
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid MFA token",
+                    )
+
+        if privileged_mfa_required and not user.mfa_enabled:
+            setup_token = create_jwt_access_token(
+                subject=user.username,
+                roles=resolved_roles,
+                expires_minutes=settings.auth_access_token_expire_minutes,
+                extra_claims={"mfa_verified": False, "mfa_setup_pending": True},
+            )
+            log_event(
+                {
+                    "event_type": SecurityEventType.LOGIN_SUCCESS,
+                    "severity": SecuritySeverity.MEDIUM,
+                    "user_id": user.id,
+                    "username": user.username,
+                    "ip_address": tracking_ip,
+                    "message": "Privileged login requires MFA setup before privileged access",
+                    "metadata": {"username": user.username, "mfa_setup_required": True},
+                }
+            )
+            return TokenResponse(access_token=setup_token, mfa_setup_required=True)
 
         token = create_jwt_access_token(
             subject=user.username,
-            roles=resolve_roles_for_username(user.username),
+            roles=resolved_roles,
             expires_minutes=settings.auth_access_token_expire_minutes,
+            extra_claims={"mfa_verified": mfa_verified},
         )
         log_event(
             {

@@ -30,6 +30,9 @@ class SecurityEventType:
     USER_SUSPENDED = "USER_SUSPENDED"
     USER_BLOCKED = "USER_BLOCKED"
     USER_RESTORED = "USER_RESTORED"
+    MFA_RECOVERY_USED = "MFA_RECOVERY_USED"
+    MFA_RECOVERY_REGENERATED = "MFA_RECOVERY_REGENERATED"
+    ROLE_ASSIGNMENT_CHANGED = "ROLE_ASSIGNMENT_CHANGED"
 
 
 class SecuritySeverity:
@@ -51,6 +54,8 @@ class SecurityEventCreate(BaseModel):
     ip_address: Optional[str] = Field(default=None, max_length=128)
     message: str = Field(..., min_length=1, max_length=255)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    is_simulation: bool = False
+    delivery_status: str = Field(default="PENDING", min_length=1, max_length=32)
 
 
 class SecurityEvent(BaseModel):
@@ -65,3 +70,5 @@ class SecurityEvent(BaseModel):
     ip_address: Optional[str] = Field(default=None, max_length=128)
     message: str = Field(..., min_length=1, max_length=255)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    is_simulation: bool = False
+    delivery_status: str = Field(default="PENDING", min_length=1, max_length=32)

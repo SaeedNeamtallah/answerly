@@ -1,6 +1,7 @@
 """Input sanitization helpers for API request payloads."""
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 import re
 from typing import Any, Dict, Optional
@@ -13,22 +14,46 @@ _HTML_TAG_RE = re.compile(r"(?is)<[^>]+>")
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
 
 _SUSPICIOUS_PATTERNS = [
-    re.compile(r"(?is)<script[^>]*>.*?</script>"),
-    re.compile(r"(?i)javascript:"),
-    re.compile(r"(?i)\b(onload|onerror|onmouseover|alert)\s*="),
-    re.compile(r"(?i)\bUNION\s+ALL\s+SELECT\b"),
-    re.compile(r"(?i)\bDROP\s+(TABLE|DATABASE)\b"),
-    re.compile(r"(?i)\bOR\s+1\s*=\s*1\b"),
+    ("xss_script_tag", re.compile(r"(?is)<script[^>]*>.*?</script>")),
+    ("xss_javascript_url", re.compile(r"(?i)javascript:")),
+    ("xss_event_handler", re.compile(r"(?i)\bon(?:load|error|mouseover|click)\s*=")),
+    ("sqli_union_select", re.compile(r"(?i)\bUNION\s+(?:ALL\s+)?SELECT\b")),
+    ("sqli_destructive_statement", re.compile(r"(?i)\bDROP\s+(TABLE|DATABASE)\b")),
+    ("sqli_boolean_bypass", re.compile(r"(?i)(?:'|\")?\s*\bOR\s+1\s*=\s*1\b")),
 ]
+
+def suspicious_input_finding(value: Any) -> Dict[str, Any] | None:
+    """Return a redacted finding for common XSS/SQLi patterns."""
+    if not isinstance(value, str):
+        return None
+    for category, pattern in _SUSPICIOUS_PATTERNS:
+        if pattern.search(value):
+            return {
+                "category": category,
+                "evidence_sha256": hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest(),
+                "length": len(value),
+                "redacted": True,
+            }
+    return None
+
 
 def contains_suspicious_input(value: Any) -> bool:
     """Check if the given payload matches common XSS/SQLi patterns."""
-    if not isinstance(value, str):
-        return False
-    for pattern in _SUSPICIOUS_PATTERNS:
-        if pattern.search(value):
-            return True
-    return False
+    return suspicious_input_finding(value) is not None
+
+
+def _log_suspicious_input(finding: Dict[str, Any]) -> None:
+    try:
+        from backend.security.event_service import log_event
+        from backend.security.security_event import SecurityEventType, SecuritySeverity
+        log_event({
+            "event_type": SecurityEventType.SUSPICIOUS_INPUT,
+            "severity": SecuritySeverity.HIGH,
+            "message": "Suspicious input pattern detected during sanitization",
+            "metadata": finding,
+        })
+    except Exception:
+        pass
 
 
 def sanitize_text(
@@ -43,6 +68,10 @@ def sanitize_text(
         return ""
 
     text = str(value)
+    finding = suspicious_input_finding(text)
+    if finding is not None:
+        _log_suspicious_input(finding)
+
     text = _CONTROL_CHARS_RE.sub("", text)
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
@@ -58,19 +87,6 @@ def sanitize_text(
 
     if max_length > 0 and len(text) > max_length:
         text = text[:max_length]
-
-    if contains_suspicious_input(text):
-        try:
-            from backend.security.event_service import log_event
-            from backend.security.security_event import SecurityEventType
-            log_event({
-                "event_type": SecurityEventType.SUSPICIOUS_INPUT,
-                "severity": "HIGH",
-                "message": "Suspicious input pattern detected during sanitization",
-                "metadata": {"snippet": text[:100]}
-            })
-        except Exception:
-            pass
 
     return text
 

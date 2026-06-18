@@ -133,6 +133,7 @@ class SecurityDashboardService:
                     "username": username,
                     "ip_address": ip_address,
                     "message": f"Invalid password attempt #{attempt} (simulation)",
+                    "is_simulation": True,
                     "metadata": {
                         "simulation": True,
                         "attack": "credential_stuffing",
@@ -150,6 +151,7 @@ class SecurityDashboardService:
                 "username": username,
                 "ip_address": ip_address,
                 "message": "Multiple attempts detected (simulation)",
+                "is_simulation": True,
                 "metadata": {
                     "simulation": True,
                     "attack": "brute_force",
@@ -166,6 +168,7 @@ class SecurityDashboardService:
                 "username": username,
                 "ip_address": ip_address,
                 "message": "Reflected XSS payload detected (simulation)",
+                "is_simulation": True,
                 "metadata": {
                     "simulation": True,
                     "attack": "xss",
@@ -183,6 +186,7 @@ class SecurityDashboardService:
                 "username": username,
                 "ip_address": ip_address,
                 "message": "SQL injection pattern detected (simulation)",
+                "is_simulation": True,
                 "metadata": {
                     "simulation": True,
                     "attack": "sql_injection",
@@ -241,6 +245,7 @@ class SecurityDashboardService:
                     "username": actor_username,
                     "ip_address": ip_address,
                     "message": "Attack simulation escalated to account block",
+                    "is_simulation": True,
                     "metadata": {
                         "simulation": True,
                         "escalation": escalation_result,

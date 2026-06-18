@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from typing import List, Optional
 
 from backend.database import get_db
-from backend.database.models import User, RoleAssignmentHistory, UserRole
+from backend.database.models import AuditLog, User, RoleAssignmentHistory, UserRole
 from backend.security.auth import require_platform_owner_access
+from backend.security.event_service import log_event
+from backend.security.sanitization import sanitize_text
+from backend.security.security_event import SecurityEventType, SecuritySeverity
 
 router = APIRouter(
     prefix="/admin/roles",
@@ -22,6 +25,27 @@ class RoleAssignmentResponse(BaseModel):
     user_id: int
     new_role: str
     message: str
+
+
+async def _reject_last_platform_owner_demotion(
+    *,
+    db: AsyncSession,
+    target_user: User,
+    new_role: str,
+) -> None:
+    if target_user.role != UserRole.PLATFORM_OWNER.value:
+        return
+    if new_role == UserRole.PLATFORM_OWNER.value:
+        return
+
+    platform_owner_count = await db.scalar(
+        select(func.count(User.id)).where(User.role == UserRole.PLATFORM_OWNER.value)
+    )
+    if int(platform_owner_count or 0) <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot remove the last platform_owner role",
+        )
 
 @router.post("/users/{user_id}", response_model=RoleAssignmentResponse)
 async def assign_user_role(
@@ -46,7 +70,14 @@ async def assign_user_role(
     if user.id == current_admin.id:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
 
+    await _reject_last_platform_owner_demotion(
+        db=db,
+        target_user=user,
+        new_role=payload.role,
+    )
+
     old_role = user.role
+    reason = sanitize_text(payload.reason, max_length=500, strip_html=True, allow_newlines=False)
     user.role = payload.role
     
     # Log to history
@@ -56,9 +87,38 @@ async def assign_user_role(
         actor_username=current_admin.username,
         old_role=old_role,
         new_role=payload.role,
-        reason=payload.reason
+        reason=reason
     )
     db.add(history)
+    db.add(AuditLog(
+        actor_id=current_admin.id,
+        actor=current_admin.username,
+        action="role_assignment_changed",
+        target=user.id,
+        target_user_id=user.id,
+        extra_metadata={
+            "target_username": user.username,
+            "old_role": old_role,
+            "new_role": payload.role,
+            "reason": reason,
+        },
+    ))
+    log_event({
+        "event_type": SecurityEventType.ROLE_ASSIGNMENT_CHANGED,
+        "severity": SecuritySeverity.MEDIUM,
+        "user_id": user.id,
+        "username": user.username,
+        "message": "User role assignment changed",
+        "metadata": {
+            "actor_user_id": current_admin.id,
+            "actor_username": current_admin.username,
+            "target_user_id": user.id,
+            "target_username": user.username,
+            "old_role": old_role,
+            "new_role": payload.role,
+            "reason": reason,
+        },
+    })
     await db.commit()
     
     return RoleAssignmentResponse(

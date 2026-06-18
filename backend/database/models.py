@@ -514,8 +514,14 @@ class SecurityEventRecord(Base):
     ip_address = Column(String(128), nullable=True, index=True)
     message = Column(String, nullable=False)
     metadata_ = Column("metadata", JSON, default=dict)
+    is_simulation = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
+    delivery_status = Column(String(32), nullable=False, default="PENDING", server_default="PENDING", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     __table_args__ = (
         Index("ix_security_events_type_created", "event_type", "created_at"),
+        Index("ix_security_events_severity_created", "severity", "created_at"),
+        Index("ix_security_events_user_created", "user_id", "created_at"),
+        Index("ix_security_events_simulation_created", "is_simulation", "created_at"),
+        Index("ix_security_events_delivery_created", "delivery_status", "created_at"),
     )

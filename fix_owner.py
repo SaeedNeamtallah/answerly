@@ -16,25 +16,16 @@ def get_password_hash(password: str) -> str:
 
 async def main():
     async with async_session_maker() as session:
-        owner_username = "OWNERPLATFORM"
+        owner_username = "OWNERSAEED"
         stmt_by_name = select(User).where(User.username == owner_username)
         result_by_name = await session.execute(stmt_by_name)
         existing_by_name = result_by_name.scalars().first()
-        if not existing_by_name:
-            owner_user = User(
-                username=owner_username,
-                hashed_password=get_password_hash("OWNERPLATFORM"),
-                role=ROLE_PLATFORM_OWNER,
-                status="ACTIVE"
-            )
-            session.add(owner_user)
+        if existing_by_name:
+            existing_by_name.hashed_password = get_password_hash("OWNERSAEED")
             await session.commit()
-            print(f"Created default platform owner account: {owner_username}")
+            print(f"Reset password for user: {owner_username}")
         else:
-            existing_by_name.role = ROLE_PLATFORM_OWNER
-            existing_by_name.hashed_password = get_password_hash("OWNERPLATFORM")
-            await session.commit()
-            print(f"Promoted existing user to platform owner: {owner_username}")
+            print(f"User not found: {owner_username}")
 
 if __name__ == "__main__":
     asyncio.run(main())

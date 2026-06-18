@@ -15,7 +15,9 @@ async def _persist_security_event(event_dict: dict):
             username=event_dict.get("username"),
             ip_address=event_dict.get("ip_address"),
             message=event_dict["message"],
-            metadata_=event_dict.get("metadata", {})
+            metadata_=event_dict.get("metadata", {}),
+            is_simulation=bool(event_dict.get("is_simulation", False)),
+            delivery_status=str(event_dict.get("delivery_status") or "PENDING")[:32],
         )
         db.add(record)
         await db.commit()

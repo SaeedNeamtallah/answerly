@@ -18,6 +18,7 @@ def create_jwt_access_token(
     subject: str,
     roles: Optional[List[str]] = None,
     expires_minutes: Optional[int] = None,
+    extra_claims: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Create a signed JWT access token with configurable expiration."""
     ttl_minutes = int(expires_minutes or settings.auth_access_token_expire_minutes or 60)
@@ -30,6 +31,10 @@ def create_jwt_access_token(
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
+    if extra_claims:
+        for key, value in extra_claims.items():
+            if key not in {"sub", "roles", "iat", "exp"}:
+                payload[key] = value
 
     return jwt.encode(
         payload,

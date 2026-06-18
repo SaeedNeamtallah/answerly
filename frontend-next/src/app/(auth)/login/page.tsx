@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
@@ -30,6 +31,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
+  const router = useRouter();
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
@@ -57,6 +59,12 @@ export default function LoginPage() {
     onSuccess: async (payload) => {
       if (payload.mfa_required) {
         setMfaRequired(true);
+        return;
+      }
+      if (payload.mfa_setup_required) {
+        setAccessToken(payload.access_token as string);
+        toast.message("MFA setup is required before privileged access");
+        router.push("/mfa/setup");
         return;
       }
       setAccessToken(payload.access_token as string);
@@ -158,6 +166,11 @@ export default function LoginPage() {
                       const payload = await googleLogin(credentialResponse.credential);
                       if (payload.mfa_required) {
                           toast.error("Google login currently does not support MFA");
+                          return;
+                      }
+                      if (payload.mfa_setup_required) {
+                          setAccessToken(payload.access_token as string);
+                          router.push("/mfa/setup");
                           return;
                       }
                       setAccessToken(payload.access_token as string);

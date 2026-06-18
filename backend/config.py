@@ -238,6 +238,7 @@ class Settings(BaseSettings):
 
     security_upload_validate_magic: bool = Field(default=True, alias="SECURITY_UPLOAD_VALIDATE_MAGIC")
     security_upload_max_scan_bytes: int = Field(default=8192, alias="SECURITY_UPLOAD_MAX_SCAN_BYTES")
+    security_event_retention_days: int = Field(default=180, alias="SECURITY_EVENT_RETENTION_DAYS")
 
     # Product role bootstrap
     platform_owner_username: str = Field(default="", alias="PLATFORM_OWNER_USERNAME")
@@ -384,8 +385,14 @@ def _validate_production_secrets(s: Settings) -> None:
     cors_origins = [str(origin).lower() for origin in (s.cors_origins or [])]
     if not cors_origins:
         reasons.append("CORS_ORIGINS must include the production frontend origin")
+    if any(origin.strip() == "*" for origin in cors_origins):
+        reasons.append("CORS_ORIGINS must not include wildcard origins in production")
     if any("localhost" in origin or "127.0.0.1" in origin for origin in cors_origins):
         reasons.append("CORS_ORIGINS must not include localhost origins in production")
+    if any(not (origin.startswith("https://") or origin.startswith("http://")) for origin in cors_origins):
+        reasons.append("CORS_ORIGINS must contain absolute HTTP(S) origins")
+    if any(origin.startswith("http://") for origin in cors_origins):
+        reasons.append("CORS_ORIGINS must use HTTPS origins in production")
 
     llm_provider = (s.llm_provider or "").strip().lower()
     if llm_provider.startswith("groq") and not (s.groq_api_key or "").strip():

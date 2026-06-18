@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,9 @@ from backend.config import settings
 from backend.database.connection import get_db
 from backend.database.models import Project, User
 from backend.security.auth import get_current_db_user
+from backend.security.client_ip import get_optional_client_ip
+from backend.security.event_service import log_event
+from backend.security.security_event import SecurityEventType, SecuritySeverity
 from backend.security.sanitization import sanitize_text
 from backend.shared_config_paths import get_bot_config_path
 from telegram_bot.config import bot_settings
@@ -58,12 +61,51 @@ _LEGACY_BOT_CONFIG_WARNING = (
 
 
 @router.get("/config")
-async def get_bot_config():
-    """Get deprecated legacy bot configuration."""
+async def get_bot_config(
+    request: Request,
+    current_user: User = Depends(get_current_db_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get deprecated legacy bot configuration with owner-aware access control."""
     config = _load_config(get_bot_config_path())
-    config["legacy"] = True
-    config["warning"] = _LEGACY_BOT_CONFIG_WARNING
-    return config
+    active_project_id = config.get("active_project_id")
+
+    if active_project_id is not None:
+        try:
+            normalized_project_id = int(active_project_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid active_project_id in legacy bot config") from exc
+
+        stmt = select(Project.id).where(
+            Project.id == normalized_project_id,
+            Project.owner_id == current_user.id,
+        )
+        result = await db.execute(stmt)
+        if result.scalar_one_or_none() is None:
+            log_event(
+                {
+                    "event_type": SecurityEventType.AUTHZ_DENIED,
+                    "severity": SecuritySeverity.HIGH,
+                    "user_id": current_user.id,
+                    "username": current_user.username,
+                    "ip_address": get_optional_client_ip(request),
+                    "message": "Legacy bot config read denied",
+                    "metadata": {
+                        "path": request.url.path,
+                        "method": request.method,
+                        "active_project_id": normalized_project_id,
+                    },
+                }
+            )
+            raise HTTPException(status_code=403, detail="Forbidden")
+    else:
+        normalized_project_id = None
+
+    return {
+        "active_project_id": normalized_project_id,
+        "legacy": True,
+        "warning": _LEGACY_BOT_CONFIG_WARNING,
+    }
 
 
 @router.post("/config")

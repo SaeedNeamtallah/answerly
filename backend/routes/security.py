@@ -5,7 +5,6 @@ import csv
 import io
 import json
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -36,7 +35,7 @@ class SecurityStatsResponse(BaseModel):
 
 
 class SecurityEventResponse(BaseModel):
-    id: UUID
+    id: int
     timestamp: datetime
     event_type: str
     severity: str
@@ -45,6 +44,8 @@ class SecurityEventResponse(BaseModel):
     ip_address: Optional[str] = None
     message: str
     metadata: Dict[str, Any]
+    is_simulation: bool = False
+    delivery_status: str = "PENDING"
 
 
 class SecuritySimulationResponse(BaseModel):
@@ -63,13 +64,15 @@ class SecurityUserStatusSummaryResponse(BaseModel):
 
 
 class SecurityUserStatusEventResponse(BaseModel):
-    id: UUID
+    id: int
     timestamp: datetime
     event_type: str
     user_id: Optional[int] = None
     actor: Optional[str] = None
     reason: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    is_simulation: bool = False
+    delivery_status: str = "PENDING"
 
 
 def _extract_client_ip(request: Request) -> Optional[str]:
@@ -93,6 +96,8 @@ def _to_events_export_csv(events: List[Dict[str, Any]]) -> str:
         "username",
         "ip_address",
         "message",
+        "is_simulation",
+        "delivery_status",
         "metadata_json",
     ])
 
@@ -108,6 +113,8 @@ def _to_events_export_csv(events: List[Dict[str, Any]]) -> str:
             str(event.get("username") or ""),
             str(event.get("ip_address") or ""),
             str(event.get("message") or ""),
+            "true" if bool(event.get("is_simulation")) else "false",
+            str(event.get("delivery_status") or ""),
             json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
         ])
 
@@ -243,6 +250,11 @@ async def simulate_security_attack(
     )
 
     if escalate_to_block:
+        if target_user_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Destructive simulation requires an explicit target_user_id",
+            )
         if not settings.security_simulation_destructive_enabled:
             raise HTTPException(
                 status_code=403,
