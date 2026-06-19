@@ -15,10 +15,10 @@ export interface UpdateRoleResponse {
 }
 
 export const adminRolesApi = {
-  listUsers: () => 
+  listUsers: () =>
     apiRequest<AdminRoleUser[]>('/admin/roles/users'),
-    
-  updateUserRole: (userId: number, role: string, reason: string) => 
+
+  updateUserRole: (userId: number, role: string, reason: string) =>
     apiRequest<UpdateRoleResponse>(`/admin/roles/users/${userId}`, {
       method: 'POST',
       body: JSON.stringify({ role, reason }),

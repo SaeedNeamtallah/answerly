@@ -1,8 +1,13 @@
+"use client";
+
 import { ReactNode } from "react";
+import { Shield } from "lucide-react";
 
 import { RoleGuard } from "@/components/layout/RoleGuard";
 import { Sidebar, adminNav, companyNav } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { useAuthStore } from "@/store/auth-store";
+import { canAccessSecurityCenter } from "@/lib/auth/permissions";
 
 export function AppShell({
   variant,
@@ -11,7 +16,19 @@ export function AppShell({
   variant: "company" | "admin";
   children: ReactNode;
 }) {
-  const items = variant === "admin" ? adminNav : companyNav;
+  const currentUser = useAuthStore((state) => state.currentUser);
+  let items = variant === "admin" ? adminNav : companyNav;
+
+  if (variant === "company" && canAccessSecurityCenter(currentUser)) {
+    // Insert after Dashboard or at the end
+    const hasSecurity = items.some(item => item.href === "/security");
+    if (!hasSecurity) {
+      items = [
+        ...items,
+        { href: "/security", label: "Security Center", icon: Shield },
+      ];
+    }
+  }
 
   return (
     <RoleGuard variant={variant}>

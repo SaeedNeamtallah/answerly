@@ -68,3 +68,16 @@
 
 ## Final Phase: Polish & Cross-Cutting Concerns
 - [x] T047 Perform End-to-End deployment smoke test on the VM with the new features.
+- [x] T048 Protect `GET /bot/config` with authentication or return only public-safe fields.
+- [x] T049 Add anonymous-access tests for bot configuration endpoints.
+- [x] T050 Enforce MFA during login for admin/security-engineer roles, not only setup/verify endpoints.
+- [x] T051 Add MFA recovery-code verification, one-time-use invalidation, and tests.
+- [x] T052 Add database indexes and retention configuration for persisted security events.
+- [x] T053 Update Security Center dashboard, CSV export, and SSE stream to read from PostgreSQL.
+- [x] T054 Add `SUSPICIOUS_INPUT` event type and safe XSS/SQLi suspicious-pattern logging.
+- [x] T055 Prevent last-admin self-lockout in role management.
+- [x] T056 Add audit logs for every role assignment/removal.
+- [x] T057 Verify production CORS allows only trusted frontend origins.
+- [x] T058 Add remediation tasks for every failed validation item from T003-T033.
+- [x] T059 Add regression/integration tests for every remediated security issue.
+- [x] T060 Produce final security validation report with evidence for all 31 points.

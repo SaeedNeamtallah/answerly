@@ -100,12 +100,18 @@ export async function apiRequest<T>(
         typeof payload === "object" && payload && "detail" in payload
           ? (payload as { detail?: string }).detail
           : undefined;
-      const message =
-        typeof detail === "string" && detail.trim()
-          ? detail
-          : response.status >= 500
-            ? "Backend service unavailable"
-            : response.statusText || "Request failed";
+
+      let message = typeof detail === "string" && detail.trim() ? detail : "";
+
+      if (!message) {
+        if (response.status >= 500) {
+          message = `Backend Server Error (${response.status}): ${response.statusText || 'Internal Server Error'}`;
+        } else {
+          message = `Request failed (${response.status}): ${response.statusText || 'Unknown Error'}`;
+        }
+      } else {
+         message = `${message} (${response.status})`;
+      }
       throw new ApiError(response.status, message, payload);
     }
 
@@ -115,6 +121,7 @@ export async function apiRequest<T>(
       throw error;
     }
 
-    throw new ApiError(0, "Backend unavailable", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    throw new ApiError(0, `Network/Connection Error: ${errorMessage}`, error);
   }
 }

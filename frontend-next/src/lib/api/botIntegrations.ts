@@ -8,11 +8,11 @@ import type {
 } from "@/lib/types/bot";
 
 export function listBotIntegrations() {
-  return apiRequest<BotIntegration[]>("/bot-integrations/");
+  return apiRequest<BotIntegration[]>("/bot-integrations");
 }
 
 export function createBotIntegration(payload: BotIntegrationCreatePayload) {
-  return apiRequest<BotIntegration>("/bot-integrations/", {
+  return apiRequest<BotIntegration>("/bot-integrations", {
     method: "POST",
     body: JSON.stringify(payload),
   });

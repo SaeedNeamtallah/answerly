@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
+import { Loader2, LockKeyhole, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -35,8 +35,6 @@ export default function LoginPage() {
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
-  const [mfaRequired, setMfaRequired] = useState(false);
-  const [mfaToken, setMfaToken] = useState("");
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { username: "", password: "" },
@@ -46,7 +44,7 @@ export default function LoginPage() {
     if (isHydrated && accessToken) {
       handleAuthenticatedRedirect().catch(() => undefined);
     }
-  }, [accessToken, isHydrated]);
+  }, [accessToken, isHydrated, router]);
 
   const healthQuery = useQuery({
     queryKey: ["health"],
@@ -57,16 +55,6 @@ export default function LoginPage() {
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: async (payload) => {
-      if (payload.mfa_required) {
-        setMfaRequired(true);
-        return;
-      }
-      if (payload.mfa_setup_required) {
-        setAccessToken(payload.access_token as string);
-        toast.message("MFA setup is required before privileged access");
-        router.push("/mfa/setup");
-        return;
-      }
       setAccessToken(payload.access_token as string);
       const user = await refreshCurrentUser();
       toast.success(`Welcome back, ${user.username}`);
@@ -95,7 +83,7 @@ export default function LoginPage() {
               Sign Up
             </Link>
           </div>
-          
+
           <div className="pt-6 text-center">
             <CardTitle className="text-2xl text-[#162758]">Welcome back</CardTitle>
           </div>
@@ -131,23 +119,11 @@ export default function LoginPage() {
             </div>
             <p className="text-xs text-rose-600">{form.formState.errors.password?.message}</p>
           </div>
-          {mfaRequired && (
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">MFA Token</label>
-              <Input
-                placeholder="123456"
-                className="h-11"
-                value={mfaToken}
-                onChange={(e) => setMfaToken(e.target.value)}
-              />
-            </div>
-          )}
-
-          <Button type="button" onClick={() => mutation.mutate({ ...form.getValues(), mfa_token: mfaToken || undefined })} className="h-11 w-full rounded-lg bg-blue-600 hover:bg-blue-700" disabled={mutation.isPending}>
+          <Button type="submit" className="h-11 w-full rounded-lg bg-blue-600 hover:bg-blue-700" disabled={mutation.isPending}>
             {mutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-            {mfaRequired ? "Verify MFA" : "Login"}
+            Login
           </Button>
-          
+
           <div className="relative py-2">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t" />
@@ -156,7 +132,7 @@ export default function LoginPage() {
               <span className="bg-white px-4 text-muted-foreground">Or log in with</span>
             </div>
           </div>
-          
+
           <div className="flex justify-center">
             {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
               <GoogleLogin
@@ -164,15 +140,6 @@ export default function LoginPage() {
                   if (credentialResponse.credential) {
                     try {
                       const payload = await googleLogin(credentialResponse.credential);
-                      if (payload.mfa_required) {
-                          toast.error("Google login currently does not support MFA");
-                          return;
-                      }
-                      if (payload.mfa_setup_required) {
-                          setAccessToken(payload.access_token as string);
-                          router.push("/mfa/setup");
-                          return;
-                      }
                       setAccessToken(payload.access_token as string);
                       const user = await refreshCurrentUser();
                       toast.success(`Welcome back, ${user.username}`);
@@ -195,11 +162,11 @@ export default function LoginPage() {
               </Button>
             )}
           </div>
-          
+
         </form>
 
         <div className="text-center text-sm text-muted-foreground">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/signup" className="font-medium text-blue-600 hover:underline">
             Sign Up
           </Link>

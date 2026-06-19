@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -106,6 +107,18 @@ def _redact_metadata(metadata: Dict[str, Any] | None) -> Dict[str, Any]:
     return redacted
 
 
+def _enqueue_persistence(event: SecurityEvent) -> None:
+    """Enqueue persistence without blocking request handling on broker availability."""
+    def _send() -> None:
+        try:
+            from backend.tasks.security import persist_security_event_task
+            persist_security_event_task.delay(event.model_dump(mode="json"))
+        except Exception:
+            logger.exception("Failed to enqueue security event persistence")
+
+    threading.Thread(target=_send, name="security-event-persist", daemon=True).start()
+
+
 def security_event_retention_days() -> int:
     return max(1, int(getattr(settings, "security_event_retention_days", 180) or 180))
 
@@ -147,11 +160,7 @@ def log_event(event_data: SecurityEventCreate | Dict[str, Any]) -> SecurityEvent
         delivery_status=_normalize_delivery_status(payload.delivery_status),
     )
 
-    try:
-        from backend.tasks.security import persist_security_event_task
-        persist_security_event_task.delay(event.model_dump(mode="json"))
-    except Exception:
-        logger.exception("Failed to enqueue security event persistence")
+    _enqueue_persistence(event)
 
     # Detection -> incident automation for actionable abuse events.
     incident_service.trigger_auto_creation(event)

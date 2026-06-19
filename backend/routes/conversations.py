@@ -116,7 +116,7 @@ def _map_conversation_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/", response_model=list[ConversationResponse])
+@router.get("", response_model=list[ConversationResponse])
 async def list_conversations(
     status: Optional[str] = None,
     needs_human: Optional[bool] = None,

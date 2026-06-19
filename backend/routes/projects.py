@@ -80,7 +80,7 @@ def _log_project_denied(*, user_id: int, project_id: int, action: str, message: 
     )
 
 
-@router.post("/", response_model=ProjectResponse, status_code=201)
+@router.post("", response_model=ProjectResponse, status_code=201)
 async def create_project(
     project_data: ProjectCreate,
     current_user: User = Depends(get_current_db_user),
@@ -111,7 +111,7 @@ async def create_project(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/", response_model=PaginatedProjectsResponse)
+@router.get("", response_model=PaginatedProjectsResponse)
 async def list_projects(
     skip: int = 0,
     limit: int = 100,

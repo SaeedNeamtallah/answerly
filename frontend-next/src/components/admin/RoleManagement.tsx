@@ -31,19 +31,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/auth-store';
-import { EmptyState } from '@/components/ui/empty';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Shield } from 'lucide-react';
 
 const AVAILABLE_ROLES = [
   'platform_owner',
-  'security_engineer',
   'company_admin',
-  'customer_agent',
+  'security_engineer',
+  'cybersecurity_engineer',
+  'admin',
+  'user',
 ];
 
 export function RoleManagement() {
   const queryClient = useQueryClient();
-  const { user: currentUser } = useAuthStore();
+  const currentUser = useAuthStore((state) => state.currentUser);
   const [selectedUser, setSelectedUser] = useState<AdminRoleUser | null>(null);
   const [newRole, setNewRole] = useState<string>('');
   const [reason, setReason] = useState<string>('');
@@ -101,11 +103,15 @@ export function RoleManagement() {
 
   if (!users || users.length === 0) {
     return (
-      <EmptyState
-        icon={Shield}
-        title="No Users Found"
-        description="There are no users available to manage roles."
-      />
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Shield />
+          </EmptyMedia>
+          <EmptyTitle>No Users Found</EmptyTitle>
+          <EmptyDescription>There are no users available to manage roles.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -166,7 +172,7 @@ export function RoleManagement() {
               <strong>{selectedUser?.role}</strong> to <strong>{newRole}</strong>.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="reason">Reason for Change (Required)</Label>

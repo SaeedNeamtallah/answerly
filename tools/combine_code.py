@@ -43,11 +43,17 @@ VALID_EXTENSIONS = {
     ".sql",
     ".sh",
     ".bat",
+    ".cmd",
+    ".ps1",
     ".json",
     ".md",
     ".yml",
+    ".yaml",
     ".ini",
     ".mako",
+    ".toml",
+    ".cfg",
+    ".conf",
 }
 
 SPECIAL_FILES = {"Dockerfile", ".env.example", "README", "README.md", "AGENTS.md"}
@@ -261,7 +267,8 @@ def iter_source_files(root_dir: Path, include_all: bool = False) -> Iterable[Pat
                     continue
             ext = Path(filename).suffix.lower()
             if not include_all:
-                if ext not in VALID_EXTENSIONS and filename not in SPECIAL_FILES:
+                is_docker = "dockerfile" in filename.lower()
+                if ext not in VALID_EXTENSIONS and filename not in SPECIAL_FILES and not is_docker:
                     continue
                 if filename in SKIP_FILES:
                     continue

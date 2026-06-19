@@ -16,11 +16,11 @@ export function normalizeProjectListResponse(payload: ApiListResponse<Project> |
 }
 
 export function listProjects() {
-  return apiRequest<ApiListResponse<Project>>("/projects/");
+  return apiRequest<ApiListResponse<Project>>("/projects");
 }
 
 export function createProject(payload: ProjectCreatePayload) {
-  return apiRequest<Project>("/projects/", {
+  return apiRequest<Project>("/projects", {
     method: "POST",
     body: JSON.stringify(payload),
   });

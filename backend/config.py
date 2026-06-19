@@ -9,13 +9,13 @@ from typing import List
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
-    
+
     # Database Configuration (Docker on port 5435)
     database_url: str = Field(
         default="postgresql+asyncpg://ragmind:ragmind123@localhost:5435/ragmind",
         alias="DATABASE_URL"
     )
-    
+
     # LLM Provider Configuration
     gemini_api_key: str = Field(
         default="",
@@ -87,17 +87,17 @@ class Settings(BaseSettings):
     )
     embedding_batch_size: int = Field(default=96, alias="EMBEDDING_BATCH_SIZE")
     embedding_concurrency: int = Field(default=4, alias="EMBEDDING_CONCURRENCY")
-    
+
     # Vector DB Configuration
     vector_db_provider: str = Field(default="pgvector", alias="VECTOR_DB_PROVIDER")
     qdrant_url: str = Field(default="http://localhost:6333", alias="QDRANT_URL")
     qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
     qdrant_upsert_batch_size: int = Field(default=256, alias="QDRANT_UPSERT_BATCH_SIZE")
-    
+
     # Storage Configuration
     upload_dir: str = Field(default="./uploads", alias="UPLOAD_DIR")
     max_file_size_mb: int = Field(default=50, alias="MAX_FILE_SIZE_MB")
-    
+
     # Chunking Configuration
     chunk_size: int = Field(default=1000, alias="CHUNK_SIZE")
     chunk_overlap: int = Field(default=200, alias="CHUNK_OVERLAP")
@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     query_rewrite_enabled: bool = Field(default=False, alias="QUERY_REWRITE_ENABLED")
     retrieval_hnsw_ef_search: int = Field(default=40, alias="RETRIEVAL_HNSW_EF_SEARCH")
     answer_max_tokens: int = Field(default=1024, alias="ANSWER_MAX_TOKENS")
-    
+
     # API Configuration
     api_host: str = Field(default="127.0.0.1", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
@@ -125,10 +125,10 @@ class Settings(BaseSettings):
 
     # Authentication and Security Configuration
     auth_jwt_secret_key: str = Field(default="change-me-in-env", alias="AUTH_JWT_SECRET_KEY")
-    
+
     # OAuth
     google_client_id: str = Field(default="", alias="GOOGLE_CLIENT_ID")
-    
+
     # SMTP & Email
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
     smtp_server: str = Field(default="", alias="SMTP_SERVER")
@@ -141,7 +141,6 @@ class Settings(BaseSettings):
     auth_admin_username: str = Field(default="admin", alias="AUTH_ADMIN_USERNAME")
     auth_admin_password: str = Field(default="admin123", alias="AUTH_ADMIN_PASSWORD")
     auth_admin_password_hash: str = Field(default="", alias="AUTH_ADMIN_PASSWORD_HASH")
-    auth_mfa_issuer: str = Field(default="RAGMind", alias="AUTH_MFA_ISSUER")
     security_require_auth_for_mutations: bool = Field(default=True, alias="SECURITY_REQUIRE_AUTH_FOR_MUTATIONS")
     security_user_suspension_default_minutes: int = Field(
         default=30,
@@ -242,7 +241,7 @@ class Settings(BaseSettings):
 
     # Product role bootstrap
     platform_owner_username: str = Field(default="", alias="PLATFORM_OWNER_USERNAME")
-    
+
     # Legacy Telegram Bot Configuration
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_admin_id: str = Field(default="", alias="TELEGRAM_ADMIN_ID")
@@ -274,7 +273,7 @@ class Settings(BaseSettings):
         default=6 * 3600,
         alias="TELEGRAM_RAW_PAYLOAD_CLEANUP_INTERVAL_SECONDS",
     )
-    
+
     # CORS Configuration
     cors_origins: List[str] = Field(
         default=[
@@ -287,7 +286,7 @@ class Settings(BaseSettings):
         ],
         alias="CORS_ORIGINS"
     )
-    
+
     # Celery Configuration
     celery_broker_url: str = Field(
         default="amqp://minirag_user:minirag_rabbitmq_2222@localhost:5729/minirag_vhost",

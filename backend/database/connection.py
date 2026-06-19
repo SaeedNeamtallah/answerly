@@ -18,6 +18,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_ALEMBIC_ADVISORY_LOCK_ID = 721_942_013
+
 # Create async engine
 engine = create_async_engine(
     settings.database_url,
@@ -60,46 +62,73 @@ async def init_db():
     """Initialize database extensions and apply Alembic migrations."""
     from sqlalchemy import text
 
+    def get_sync_database_url() -> str:
+        return settings.database_url.replace(
+            "postgresql+asyncpg://",
+            "postgresql+psycopg2://",
+            1,
+        )
+
     def run_alembic_upgrade() -> None:
         project_root = Path(__file__).resolve().parents[2]
         alembic_cfg = Config(str(project_root / "backend" / "alembic" / "alembic.ini"))
         alembic_cfg.set_main_option("script_location", str(project_root / "backend" / "alembic"))
-        try:
-            command.upgrade(alembic_cfg, "head")
-        except CommandError as exc:
-            if "Can't locate revision identified by" not in str(exc):
-                raise
+        sync_database_url = get_sync_database_url()
 
-            if settings.environment.lower() == "production":
-                logger.error(
-                    "Database is stamped with an unknown Alembic revision in production; "
-                    "refusing automatic recovery."
-                )
-                raise
-
-            logger.warning(
-                "Database is stamped with an unknown Alembic revision. "
-                "Stamping current schema to head before retrying migrations: %s",
-                exc,
-            )
-            script = ScriptDirectory.from_config(alembic_cfg)
-            current_head = script.get_current_head()
-            sync_database_url = settings.database_url.replace(
-                "postgresql+asyncpg://",
-                "postgresql+psycopg2://",
-                1,
-            )
-            sync_engine = create_engine(sync_database_url)
+        def upgrade_to_head() -> None:
             try:
-                with sync_engine.begin() as conn:
-                    conn.execute(text("DELETE FROM alembic_version"))
-                    conn.execute(
-                        text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"),
-                        {"version_num": current_head},
+                command.upgrade(alembic_cfg, "head")
+            except CommandError as exc:
+                if "Can't locate revision identified by" not in str(exc):
+                    raise
+
+                if settings.environment.lower() == "production":
+                    logger.error(
+                        "Database is stamped with an unknown Alembic revision in production; "
+                        "refusing automatic recovery."
                     )
-            finally:
-                sync_engine.dispose()
-            command.upgrade(alembic_cfg, "head")
+                    raise
+
+                logger.warning(
+                    "Database is stamped with an unknown Alembic revision. "
+                    "Stamping current schema to head before retrying migrations: %s",
+                    exc,
+                )
+                script = ScriptDirectory.from_config(alembic_cfg)
+                current_head = script.get_current_head()
+                recovery_engine = create_engine(sync_database_url)
+                try:
+                    with recovery_engine.begin() as conn:
+                        conn.execute(text("DELETE FROM alembic_version"))
+                        conn.execute(
+                            text("INSERT INTO alembic_version (version_num) VALUES (:version_num)"),
+                            {"version_num": current_head},
+                        )
+                finally:
+                    recovery_engine.dispose()
+                command.upgrade(alembic_cfg, "head")
+
+        if not sync_database_url.startswith("postgresql"):
+            upgrade_to_head()
+            return
+
+        sync_engine = create_engine(sync_database_url)
+        try:
+            with sync_engine.connect() as conn:
+                logger.info("Waiting for Alembic migration advisory lock")
+                conn.execute(
+                    text("SELECT pg_advisory_lock(:lock_id)"),
+                    {"lock_id": _ALEMBIC_ADVISORY_LOCK_ID},
+                )
+                try:
+                    upgrade_to_head()
+                finally:
+                    conn.execute(
+                        text("SELECT pg_advisory_unlock(:lock_id)"),
+                        {"lock_id": _ALEMBIC_ADVISORY_LOCK_ID},
+                    )
+        finally:
+            sync_engine.dispose()
 
     async def ensure_user_account_status_schema(conn):
         """Backfill user account status column for legacy user tables."""

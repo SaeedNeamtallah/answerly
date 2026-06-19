@@ -58,16 +58,12 @@ class User(Base):
     username = Column(String(150), nullable=False, unique=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=True)  # nullable for OAuth users
-    
+
     # OAuth Fields
     auth_provider = Column(String(50), nullable=False, default="local", server_default="local")
     google_id = Column(String(255), unique=True, index=True, nullable=True)
 
-    # MFA Fields
-    mfa_secret = Column(String(255), nullable=True)
-    mfa_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
-    mfa_recovery_codes = Column(JSON, nullable=True)
-
+    # Role and Status
     role = Column(String(30), nullable=False, default=UserRole.COMPANY_ADMIN.value, server_default=UserRole.COMPANY_ADMIN.value, index=True)
     company_name = Column(String(255), nullable=True)
     company_website = Column(String(500), nullable=True)
@@ -105,23 +101,23 @@ class User(Base):
 class Project(Base):
     """Project model for organizing documents."""
     __tablename__ = "projects"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Metadata (renamed to avoid conflict with SQLAlchemy metadata)
     extra_metadata = Column("metadata", JSON, default={})
-    
+
     # Relationships
     owner = relationship("User", back_populates="projects")
     assets = relationship("Asset", back_populates="project", cascade="all, delete-orphan")
     chunks = relationship("Chunk", back_populates="project", cascade="all, delete-orphan")
     bot_integrations = relationship("BotIntegration", back_populates="project", cascade="all, delete-orphan")
-    
+
     def __repr__(self):
         return f"<Project(id={self.id}, owner_id={self.owner_id}, name='{self.name}')>"
 
@@ -129,28 +125,28 @@ class Project(Base):
 class Asset(Base):
     """Asset model for uploaded documents."""
     __tablename__ = "assets"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    
+
     # File information
     filename = Column(String(500), nullable=False)
     original_filename = Column(String(500), nullable=False)
     file_path = Column(String(1000), nullable=False)
     file_size = Column(Integer, nullable=False)  # in bytes
     file_type = Column(String(50), nullable=False)  # pdf, txt, docx
-    
+
     # Status
     status = Column(String(50), default="uploaded")  # uploaded, processing, completed, failed
     error_message = Column(Text, nullable=True)
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     processed_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Metadata (renamed to avoid conflict)
     extra_metadata = Column("metadata", JSON, default={})
-    
+
     # Relationships
     project = relationship("Project", back_populates="assets")
     chunks = relationship("Chunk", back_populates="asset", cascade="all, delete-orphan")
@@ -166,24 +162,24 @@ class Asset(Base):
 class Chunk(Base):
     """Chunk model for text chunks with vector embeddings."""
     __tablename__ = "chunks"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     asset_id = Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
-    
+
     # Content
     content = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)  # Position in document
-    
+
     # Native pgvector column. Dimension is left flexible to support multiple embedding providers.
     embedding = Column(Vector(), nullable=True)
-    
+
     # Metadata (renamed to avoid conflict)
     extra_metadata = Column("metadata", JSON, default={})  # page_number, section, etc.
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     project = relationship("Project", back_populates="chunks")
     asset = relationship("Asset", back_populates="chunks")

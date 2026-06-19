@@ -56,7 +56,6 @@ from backend.routes import (
     admin_users,
     app_config,
     auth,
-    auth_mfa,
     auth_oauth,
     bot_config,
     bot_integrations,
@@ -93,9 +92,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database: {str(e)}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Answerly API...")
     await close_db()
@@ -108,12 +107,12 @@ _app_kwargs = dict(
     version=settings.api_version,
     description="""
     Answerly - Retrieval Augmented Generation System
-    
+
     A powerful document processing and question-answering API using:
     - Google Gemini 2.5 Flash for LLM capabilities
     - PostgreSQL with pgvector for vector storage
     - LangChain for document processing
-    
+
     ## Features
     - Project-based document organization
     - Multi-format document support (PDF, TXT, DOCX)
@@ -182,7 +181,6 @@ app.include_router(bot_config.router)
 app.include_router(app_config.router)
 app.include_router(auth.router)
 app.include_router(auth_oauth.router)
-app.include_router(auth_mfa.router)
 
 
 if __name__ == "__main__":

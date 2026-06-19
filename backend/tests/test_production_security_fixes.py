@@ -34,6 +34,44 @@ class ProductionSecurityFixesTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             _validate_production_secrets(settings_obj)
 
+    def test_production_secret_validation_rejects_wildcard_cors_origin(self):
+        settings_obj = Settings(
+            ENVIRONMENT="production",
+            AUTH_JWT_SECRET_KEY="strong-production-jwt-secret-value-123456",
+            AUTH_ADMIN_PASSWORD="strong-admin-password",
+            BOT_TOKEN_ENCRYPTION_KEY="some-key",
+            PUBLIC_WEBHOOK_BASE_URL="https://api.example.com",
+            GEMINI_API_KEY="gemini-key",
+            CORS_ORIGINS=["*"],
+        )
+        with self.assertRaises(SystemExit):
+            _validate_production_secrets(settings_obj)
+
+    def test_production_secret_validation_rejects_http_cors_origin(self):
+        settings_obj = Settings(
+            ENVIRONMENT="production",
+            AUTH_JWT_SECRET_KEY="strong-production-jwt-secret-value-123456",
+            AUTH_ADMIN_PASSWORD="strong-admin-password",
+            BOT_TOKEN_ENCRYPTION_KEY="some-key",
+            PUBLIC_WEBHOOK_BASE_URL="https://api.example.com",
+            GEMINI_API_KEY="gemini-key",
+            CORS_ORIGINS=["http://frontend.example.com"],
+        )
+        with self.assertRaises(SystemExit):
+            _validate_production_secrets(settings_obj)
+
+    def test_production_secret_validation_allows_https_frontend_cors_origin(self):
+        settings_obj = Settings(
+            ENVIRONMENT="production",
+            AUTH_JWT_SECRET_KEY="strong-production-jwt-secret-value-123456",
+            AUTH_ADMIN_PASSWORD="strong-admin-password",
+            BOT_TOKEN_ENCRYPTION_KEY="some-key",
+            PUBLIC_WEBHOOK_BASE_URL="https://api.example.com",
+            GEMINI_API_KEY="gemini-key",
+            CORS_ORIGINS=["https://frontend.example.com"],
+        )
+        _validate_production_secrets(settings_obj)
+
     def test_production_secret_validation_allows_weak_jwt_secret_in_development(self):
         settings_obj = Settings(
             ENVIRONMENT="development",

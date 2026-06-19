@@ -105,7 +105,7 @@ def _map_service_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/", response_model=list[BotIntegrationResponse])
+@router.get("", response_model=list[BotIntegrationResponse])
 async def list_bot_integrations(
     current_user: User = Depends(require_company_dashboard_access),
     db: AsyncSession = Depends(get_db),
@@ -118,7 +118,7 @@ async def list_bot_integrations(
         raise _map_service_error(exc) from exc
 
 
-@router.post("/", response_model=BotIntegrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=BotIntegrationResponse, status_code=status.HTTP_201_CREATED)
 async def create_bot_integration(
     payload: BotIntegrationCreate,
     current_user: User = Depends(require_company_dashboard_access),

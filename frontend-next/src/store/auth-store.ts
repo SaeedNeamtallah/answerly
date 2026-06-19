@@ -63,9 +63,9 @@ export const useAuthStore = create<AuthSessionState>((set, get) => ({
   role: null,
   isHydrated: false,
   setAccessToken: (token) => {
-    const currentUser = get().currentUser;
+    const currentUser = token === get().accessToken ? get().currentUser : null;
     persistSession({ accessToken: token, currentUser });
-    set({ accessToken: token });
+    set({ accessToken: token, currentUser, role: currentUser?.role ?? null });
   },
   setCurrentUser: (user) => {
     const accessToken = get().accessToken;

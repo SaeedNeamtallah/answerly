@@ -27,21 +27,24 @@ class CustomerBotQueryService:
         language: str = "ar",
     ) -> dict[str, Any]:
         clean_query = sanitize_text(query, max_length=4000, strip_html=True, allow_newlines=True)
-        result = await self.query_controller.answer_query(
-            db=db,
-            owner_id=integration.owner_id,
-            project_id=integration.project_id,
-            query=clean_query,
-            top_k=max(
+        query_kwargs = {
+            "db": db,
+            "owner_id": integration.owner_id,
+            "project_id": integration.project_id,
+            "query": clean_query,
+            "top_k": max(
                 1,
                 min(
                     int(get_runtime_value("retrieval_top_k", settings.retrieval_top_k)),
                     settings.retrieval_top_k_max,
                 ),
             ),
-            language=language,
-            custom_system_prompt=integration.system_prompt,
-        )
+            "language": language,
+        }
+        if integration.system_prompt:
+            query_kwargs["custom_system_prompt"] = integration.system_prompt
+
+        result = await self.query_controller.answer_query(**query_kwargs)
         sources = result.get("sources") or []
         customer_answer = str(result.get("answer") or "").strip()
         if integration.show_sources_to_customer and sources:

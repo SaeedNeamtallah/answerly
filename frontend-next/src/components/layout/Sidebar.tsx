@@ -54,6 +54,13 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
   const user = useAuthStore((state) => state.currentUser);
   const platformMode = items.some((item) => item.href.startsWith("/admin"));
 
+  const showSecurityNav = !platformMode && user && (user.role === "security_engineer" || user.role === "cybersecurity_engineer" || user.role === "admin" || user.role === "platform_owner");
+
+  const finalItems = [...items];
+  if (showSecurityNav && !finalItems.some(i => i.href === "/security")) {
+    finalItems.push({ href: "/security", label: "Security Center", icon: Shield });
+  }
+
   return (
     <aside
       className={cn(
@@ -67,7 +74,7 @@ export function Sidebar({ items, embedded = false }: { items: NavItem[]; embedde
         </Link>
       </div>
       <nav className="flex flex-1 flex-col gap-1.5 px-3">
-        {items.map((item) => {
+        {finalItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (

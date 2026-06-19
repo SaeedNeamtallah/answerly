@@ -6,7 +6,7 @@ This is the working map for agents in this repository. Read it before broad expl
 
 Primary goal: save tokens by searching first, using the code-review graph for structure, and recording durable repo knowledge here instead of rediscovering it every turn.
 
-Last refreshed: 2026-06-16 after Telegram production-hardening changes and `code-review-graph update --repo .`.
+Last refreshed: 2026-06-19 after local runtime availability fixes and `code-review-graph status --repo .`.
 
 ## Workflow
 
@@ -41,7 +41,7 @@ Last refreshed: 2026-06-16 after Telegram production-hardening changes and `code
 - Frontend API bindings:
   - `rg -n "apiRequest|queryKeys|useQuery|useMutation|localStorage|Authorization" frontend-next/src`
 - Runtime flags/config:
-  - `rg -n "get_runtime_value|settings\\.|ENVIRONMENT|CONTEXT_TOKEN_BUDGET|SECURITY_SIMULATION_DESTRUCTIVE_ENABLED|TELEGRAM_OUTBOX|TELEGRAM_WEBHOOK|TELEGRAM_RATE_LIMIT|TELEGRAM_REPLY_GENERATION|PROMETHEUS_BASE_URL|GRAFANA_" backend .env.example docker/docker-compose.yml infra/azure`
+  - `rg -n "get_runtime_value|settings\\.|ENVIRONMENT|CONTEXT_TOKEN_BUDGET|AUTH_MFA|SECURITY_EVENT_RETENTION_DAYS|SECURITY_SIMULATION_DESTRUCTIVE_ENABLED|TELEGRAM_OUTBOX|TELEGRAM_WEBHOOK|TELEGRAM_RATE_LIMIT|TELEGRAM_REPLY_GENERATION|PROMETHEUS_BASE_URL|GRAFANA_|CORS_ORIGINS" backend .env.example docker/docker-compose.yml infra/azure`
 
 ## Code Review Graph
 
@@ -61,12 +61,20 @@ MCP tools to use after refresh:
 - `list_communities_tool(detail_level="minimal", min_size=3, sort_by="size")`
 - `get_knowledge_gaps_tool()`
 
-Fresh graph communities from the latest 2026-06-16 update:
+Fresh graph status from the latest 2026-06-18 update:
 
-- `ui-admin` (263 nodes): `frontend-next` TSX app routes/components.
-- `services-service` (223): backend services.
-- `routes-admin` (178): FastAPI routes.
-- `tests-tests` (153): backend tests.
+- Nodes: 1820.
+- Edges: 13485.
+- Files: 322.
+- Languages: python, javascript, typescript, tsx, powershell.
+- Branch: `secuirity-layer`.
+
+Recent graph communities from the 2026-06-18 security update:
+
+- `ui-admin` (327 nodes): `frontend-next` TSX app routes/components.
+- `services-service` (251): backend services.
+- `routes-admin` (191): FastAPI routes.
+- `tests-tests` (188): backend tests.
 - `llm-provider` (110): LLM, embedding, and vector providers.
 - `security-access` (84): auth, access control, rate limiting, security events.
 - `database-repr` (35): database connection/models.
@@ -152,6 +160,8 @@ Frontend:
 - API base: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`.
 - Production container image builds from `frontend-next/Dockerfile` and binds Next.js to `0.0.0.0:3001`.
 - Auth is still Bearer-token compatible and stored by the current frontend store; HttpOnly cookie migration is planned/historical, not current runtime.
+- Privileged login can return `mfa_required` or `mfa_setup_required`; the Next login page stores the setup token and sends users to `/mfa/setup`.
+- Setup-pending MFA tokens are detected client-side and redirected to `/mfa/setup`; they must not hydrate into admin/company shells and trigger privileged API `403` errors.
 - `frontend-next/AGENTS.md` warns that local Next.js docs under `node_modules/next/dist/docs/` must be checked before Next.js API changes.
 
 ## Critical Flows
@@ -226,13 +236,16 @@ Rules:
 - Product role is DB-backed on `users.role`; default role is `company_admin`.
 - `PLATFORM_OWNER_USERNAME` promotes a matching DB user to `platform_owner` after login.
 - `/admin/*` and `/admin/observability/*` require `require_platform_owner_access()`.
+- Privileged dependencies (`require_platform_owner_access`, `require_admin_access`, `require_security_center_access`, and `require_incident_access`) also enforce MFA enrollment and an `mfa_verified` JWT claim.
+- MFA recovery codes are returned once, stored as hashes, and consumed/invalidated on use.
 - Company SaaS routes must filter by `owner_id == current_user.id`.
 - Any route calling `ProjectController.get_project()` or `DocumentController.get_document()` must pass `owner_id`.
 - `/stats/` is tenant-scoped in code; platform-wide stats are under `/admin/stats`.
 - `GET /config/providers` and `POST /config/providers` require JWT-backed DB users.
-- `/bot/config` is legacy/demo only, requires auth, validates owned `active_project_id`, and returns deprecation context.
+- `GET /bot/config` is legacy/demo only, requires auth, validates owned `active_project_id`, and returns only public-safe fields plus deprecation context. Mutations also require auth.
 - `BOT_API_*` and `AUTH_ADMIN_*` usernames are reserved service accounts and must not be available for normal signup/password rotation.
-- Security simulation is non-destructive by default; destructive simulation requires `SECURITY_SIMULATION_DESTRUCTIVE_ENABLED=true` and platform-owner access.
+- Security simulation is non-destructive by default; destructive simulation requires `SECURITY_SIMULATION_DESTRUCTIVE_ENABLED=true`, platform-owner access, and an explicit `target_user_id`.
+- Production CORS validation rejects wildcard, localhost, non-HTTP(S), and plain HTTP origins.
 - Client IP extraction honors `X-Forwarded-For` only from configured trusted proxies.
 - Unknown Alembic revision auto-stamping is local/dev recovery only; production must fail closed.
 - Local compose should publish backend/local tooling on `127.0.0.1` unless deliberately deployed behind auth/proxy.
@@ -284,6 +297,7 @@ Main SQLAlchemy models in `backend/database/models.py`:
 - `Conversation`
 - `ConversationMessage`
 - `CeleryTaskExecution`
+- `SecurityEventRecord`
 
 Storage notes:
 
@@ -292,6 +306,7 @@ Storage notes:
 - Qdrant remains an optional vector backend.
 - `celery_task_executions` tracks durable ownership/workflow metadata by `celery_task_id`.
 - Runtime config lives under `uploads/config/`; root `app_config.json` and `bot_config.json` are legacy/bootstrap copies.
+- Persisted security events live in `security_events`; records include `is_simulation`, `delivery_status`, retention-aware indexes, and redacted metadata in dashboard/export responses. Retention defaults to `SECURITY_EVENT_RETENTION_DAYS=180`.
 - Alembic runtime files live under `backend/alembic/`.
 
 ## Provider And Monitoring Map
@@ -322,6 +337,9 @@ Monitoring:
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`
 - Azure production deploy: `scripts/deploy/azure-deploy.ps1 -ResourceGroup <rg>` for default Azure Container Apps hostnames, or add `-RootDomain <domain> -BindCustomDomains` after DNS is ready. Azure uses Managed Redis; pass `-RedisLocation <region>` if the app region does not support it.
+- Local compose nginx is HTTP-only on `127.0.0.1:80`; it no longer requires local Let's Encrypt files or redirects to HTTPS.
+- Compose health gates Redis, backend, frontend, and nginx startup so `/api` proxying waits for backend readiness.
+- FastAPI startup Alembic migrations are serialized with a PostgreSQL advisory lock in `backend/database/connection.py` to avoid multi-worker migration races.
 
 Validation commands:
 

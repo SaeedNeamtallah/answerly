@@ -47,8 +47,6 @@ _ENGINEER_USERNAMES_CACHE_TTL_SECONDS = 2.0
 class AuthUser(BaseModel):
     username: str
     roles: List[str]
-    mfa_verified: bool = False
-    mfa_setup_pending: bool = False
 
 
 @dataclass(frozen=True)
@@ -77,7 +75,9 @@ def get_product_role_for_user(user: User | None) -> str:
     role = _normalize_role(str(getattr(user, "role", "") or ""))
     if role == ROLE_PLATFORM_OWNER:
         return ROLE_PLATFORM_OWNER
-    return ROLE_COMPANY_ADMIN
+    if role == "security_engineer" or role == "cybersecurity_engineer":
+        return role
+    return role or ROLE_COMPANY_ADMIN
 
 
 async def _sync_bootstrap_platform_owner_role(db: AsyncSession, user: User) -> User:
@@ -206,72 +206,9 @@ def has_security_engineer_role(roles: List[str]) -> bool:
     return has_role(roles, ROLE_SECURITY_ENGINEER) or has_role(roles, ROLE_CYBERSECURITY_ENGINEER)
 
 
-def user_requires_privileged_mfa(user: User | None) -> bool:
-    """Return whether a user has a role that must pass MFA before privileged access."""
-    if user is None:
-        return False
-    product_role = get_product_role_for_user(user)
-    if product_role == ROLE_PLATFORM_OWNER:
-        return True
-    roles = resolve_roles_for_username(str(getattr(user, "username", "") or ""))
-    return (
-        has_role(roles, ROLE_ADMIN)
-        or has_security_engineer_role(roles)
-        or has_role(roles, ROLE_PLATFORM_OWNER)
-    )
-
-
 def _get_request_auth_user(request: Request) -> AuthUser | None:
     auth_user = getattr(getattr(request, "state", None), "auth_user", None)
     return auth_user if isinstance(auth_user, AuthUser) else None
-
-
-def _enforce_privileged_mfa_policy(*, request: Request, user: User) -> None:
-    if not user_requires_privileged_mfa(user):
-        return
-
-    auth_user = _get_request_auth_user(request)
-    if not bool(getattr(user, "mfa_enabled", False)):
-        log_event(
-            {
-                "event_type": SecurityEventType.AUTHZ_DENIED,
-                "severity": SecuritySeverity.HIGH,
-                "user_id": user.id,
-                "username": user.username,
-                "ip_address": _extract_client_ip(request),
-                "message": "Privileged access denied: MFA setup required",
-                "metadata": {
-                    "path": request.url.path,
-                    "method": request.method,
-                    "reason": "mfa_setup_required",
-                },
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="MFA setup required before privileged access",
-        )
-
-    if not bool(getattr(auth_user, "mfa_verified", False)):
-        log_event(
-            {
-                "event_type": SecurityEventType.AUTHZ_DENIED,
-                "severity": SecuritySeverity.HIGH,
-                "user_id": user.id,
-                "username": user.username,
-                "ip_address": _extract_client_ip(request),
-                "message": "Privileged access denied: MFA verification required",
-                "metadata": {
-                    "path": request.url.path,
-                    "method": request.method,
-                    "reason": "mfa_verification_required",
-                },
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="MFA verification required before privileged access",
-        )
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -455,8 +392,6 @@ def _decode_access_token(token: str) -> AuthUser:
     return AuthUser(
         username=username,
         roles=resolved_roles,
-        mfa_verified=bool(payload.get("mfa_verified")),
-        mfa_setup_pending=bool(payload.get("mfa_setup_pending")),
     )
 
 
@@ -688,8 +623,11 @@ async def require_security_center_access(
     current_user: User = Depends(get_current_db_user),
 ) -> User:
     """Allow Security Center access only for Cybersecurity Engineer users."""
-    _enforce_privileged_mfa_policy(request=request, user=current_user)
     roles = resolve_roles_for_username(current_user.username)
+    product_role = get_product_role_for_user(current_user)
+    if product_role not in roles:
+        roles.append(product_role)
+
     if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN):
         return current_user
 
@@ -720,8 +658,11 @@ async def require_incident_access(
     current_user: User = Depends(get_current_db_user),
 ) -> User:
     """Allow incidents access only for security_engineer and admin roles."""
-    _enforce_privileged_mfa_policy(request=request, user=current_user)
     roles = resolve_roles_for_username(current_user.username)
+    product_role = get_product_role_for_user(current_user)
+    if product_role not in roles:
+        roles.append(product_role)
+
     if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN):
         return current_user
 
@@ -752,8 +693,11 @@ async def require_admin_access(
     current_user: User = Depends(get_current_db_user),
 ) -> User:
     """Allow admin endpoints only for admin role users."""
-    _enforce_privileged_mfa_policy(request=request, user=current_user)
     roles = resolve_roles_for_username(current_user.username)
+    product_role = get_product_role_for_user(current_user)
+    if product_role not in roles:
+        roles.append(product_role)
+
     if has_role(roles, ROLE_ADMIN):
         return current_user
 
@@ -784,7 +728,6 @@ async def require_platform_owner_access(
     current_user: User = Depends(get_current_db_user),
 ) -> User:
     """Allow /admin product endpoints only for platform_owner users."""
-    _enforce_privileged_mfa_policy(request=request, user=current_user)
     product_role = get_product_role_for_user(current_user)
     if product_role == ROLE_PLATFORM_OWNER:
         return current_user
