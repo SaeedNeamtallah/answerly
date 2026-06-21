@@ -630,13 +630,13 @@ async def require_security_center_access(
     request: Request,
     current_user: User = Depends(get_current_db_user),
 ) -> User:
-    """Allow Security Center access only for Cybersecurity Engineer users."""
+    """Allow Security Center access only for Cybersecurity Engineer, Admin, and Platform Owner users."""
     roles = resolve_roles_for_username(current_user.username)
     product_role = get_product_role_for_user(current_user)
     if product_role not in roles:
         roles.append(product_role)
 
-    if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN):
+    if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN) or has_role(roles, ROLE_PLATFORM_OWNER):
         return current_user
 
     log_event(
@@ -650,14 +650,14 @@ async def require_security_center_access(
             "metadata": {
                 "path": request.url.path,
                 "method": request.method,
-                "required_roles": [ROLE_SECURITY_ENGINEER, ROLE_ADMIN],
+                "required_roles": [ROLE_SECURITY_ENGINEER, ROLE_ADMIN, ROLE_PLATFORM_OWNER],
                 "user_roles": roles,
             },
         }
     )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Security Center access is restricted to security_engineer and admin roles",
+        detail="Security Center access is restricted to security_engineer, admin, and platform_owner roles",
     )
 
 
@@ -665,13 +665,13 @@ async def require_incident_access(
     request: Request,
     current_user: User = Depends(get_current_db_user),
 ) -> User:
-    """Allow incidents access only for security_engineer and admin roles."""
+    """Allow incidents access only for security_engineer, admin, and platform_owner roles."""
     roles = resolve_roles_for_username(current_user.username)
     product_role = get_product_role_for_user(current_user)
     if product_role not in roles:
         roles.append(product_role)
 
-    if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN):
+    if has_security_engineer_role(roles) or has_role(roles, ROLE_ADMIN) or has_role(roles, ROLE_PLATFORM_OWNER):
         return current_user
 
     log_event(
@@ -685,14 +685,14 @@ async def require_incident_access(
             "metadata": {
                 "path": request.url.path,
                 "method": request.method,
-                "required_roles": [ROLE_SECURITY_ENGINEER, ROLE_ADMIN],
+                "required_roles": [ROLE_SECURITY_ENGINEER, ROLE_ADMIN, ROLE_PLATFORM_OWNER],
                 "user_roles": roles,
             },
         }
     )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Incidents access is restricted to security_engineer and admin roles",
+        detail="Incidents access is restricted to security_engineer, admin, and platform_owner roles",
     )
 
 

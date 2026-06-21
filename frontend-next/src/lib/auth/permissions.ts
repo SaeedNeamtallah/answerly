@@ -9,16 +9,27 @@ export function isCompanyAdmin(user: CurrentUser | null) {
 }
 
 export function isSecurityEngineer(user: CurrentUser | null) {
-  const role = String(user?.role || "").toLowerCase();
-  return role === "security_engineer" || role === "cybersecurity_engineer";
+  const roles = user?.roles || [];
+  const hasEngineerRole = roles.some(role => {
+    const r = String(role || "").toLowerCase();
+    return r === "security_engineer" || r === "cybersecurity_engineer";
+  });
+  const singleRole = String(user?.role || "").toLowerCase();
+  return hasEngineerRole || singleRole === "security_engineer" || singleRole === "cybersecurity_engineer";
 }
 
 export function isAdmin(user: CurrentUser | null) {
-  return String(user?.role || "").toLowerCase() === "admin";
+  const roles = user?.roles || [];
+  const hasAdminRole = roles.some(role => String(role || "").toLowerCase() === "admin");
+  const singleRole = String(user?.role || "").toLowerCase();
+  return hasAdminRole || singleRole === "admin";
 }
 
 export function isUser(user: CurrentUser | null) {
-  return String(user?.role || "").toLowerCase() === "user";
+  const roles = user?.roles || [];
+  const hasUserRole = roles.some(role => String(role || "").toLowerCase() === "user");
+  const singleRole = String(user?.role || "").toLowerCase();
+  return hasUserRole || singleRole === "user";
 }
 
 export function canAccessAdmin(user: CurrentUser | null) {

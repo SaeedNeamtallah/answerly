@@ -49,7 +49,19 @@ class SecurityRoutesTests(unittest.IsolatedAsyncioTestCase):
             await require_security_center_access(request=request, current_user=user)
             
         self.assertEqual(exc.exception.status_code, 403)
-        self.assertEqual(exc.exception.detail, "Security Center access is restricted to security_engineer and admin roles")
+        self.assertEqual(exc.exception.detail, "Security Center access is restricted to security_engineer, admin, and platform_owner roles")
+
+    async def test_require_security_center_access_allows_platform_owner(self):
+        user = User(id=4, username="owner", role=UserRole.PLATFORM_OWNER.value)
+        request = SimpleNamespace(
+            state=SimpleNamespace(auth_user=AuthUser(username="owner", roles=[])),
+            url=SimpleNamespace(path="/security/events"),
+            method="GET",
+            headers={},
+            client=SimpleNamespace(host="127.0.0.1"),
+        )
+        result = await require_security_center_access(request=request, current_user=user)
+        self.assertEqual(result.id, 4)
 
 if __name__ == "__main__":
     unittest.main()
