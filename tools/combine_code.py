@@ -76,6 +76,10 @@ SKIP_FILES = {
     "database_code.txt",
     "runtime_code.txt",
     "tempCodeRunnerFile.bat",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "poetry.lock",
 }
 
 MAX_FILE_BYTES = 512 * 1024
@@ -97,7 +101,7 @@ DATABASE_PROFILE = FocusProfile(
     name="database",
     description=(
         "Extract the important database, storage, and SaaS support paths for the backend, "
-        "vector store, Telegram bot integrations, and Docker wiring."
+        "vector store, Telegram bot integrations, WhatsApp bot integrations, and Docker wiring."
     ),
     output_name="database_code.txt",
     path_tokens=(
@@ -109,16 +113,22 @@ DATABASE_PROFILE = FocusProfile(
         "backend/routes/documents.py",
         "backend/routes/query.py",
         "backend/routes/bot_integrations.py",
+        "backend/routes/whatsapp_integrations.py",
         "backend/routes/conversations.py",
         "backend/routes/telegram_webhook.py",
+        "backend/routes/whatsapp_webhook.py",
         "backend/routes/admin_console.py",
         "backend/tasks/file_processing.py",
         "backend/tasks/data_indexing.py",
         "backend/tasks/process_workflow.py",
         "backend/tasks/maintenance.py",
+        "backend/tasks/whatsapp_query.py",
+        "backend/tasks/whatsapp_outbox.py",
         "backend/services/bot_integration_service.py",
+        "backend/services/whatsapp_integration_service.py",
         "backend/services/conversation_service.py",
         "backend/services/telegram_webhook_service.py",
+        "backend/services/whatsapp_webhook_service.py",
         "backend/services/customer_bot_query_service.py",
         "backend/services/admin_service.py",
         "backend/services/telegram_api_service.py",
@@ -173,6 +183,10 @@ DATABASE_PROFILE = FocusProfile(
         r"\bconversations\b",
         r"\bconversation_messages\b",
         r"\btelegram_customers\b",
+        r"\bwhatsapp_integrations\b",
+        r"\bwhatsapp_webhook\b",
+        r"\bwhatsapp_bridge\b",
+        r"\bwhatsapp\b",
         r"\bplatform_owner\b",
         r"\bcompany_admin\b",
     ),
@@ -189,6 +203,7 @@ RUNTIME_PROFILE = FocusProfile(
         "backend/",
         "frontend-next/",
         "telegram_bot/",
+        "whatsapp-bridge/",
         "tools/",
         "docker/",
         "scripts/dev/setup.bat",
@@ -203,9 +218,37 @@ RUNTIME_PROFILE = FocusProfile(
     excluded_extensions=(".md",),
 )
 
+WHATSAPP_PROFILE = FocusProfile(
+    name="whatsapp",
+    description=(
+        "Extract WhatsApp integration backend code, webhook, tasks, services, frontend components, "
+        "and whatsapp-bridge source files."
+    ),
+    output_name="whatsapp_code.txt",
+    path_tokens=(
+        "whatsapp-bridge/",
+        "backend/routes/whatsapp_integrations.py",
+        "backend/routes/whatsapp_webhook.py",
+        "backend/services/whatsapp_integration_service.py",
+        "backend/services/whatsapp_webhook_service.py",
+        "backend/tasks/whatsapp_query.py",
+        "backend/tasks/whatsapp_outbox.py",
+        "backend/database/models.py",
+        "frontend-next/src/app/(company)/whatsapp-bots/",
+        "frontend-next/src/components/whatsapp-bots/",
+        "frontend-next/src/lib/api/whatsappIntegrations.ts",
+    ),
+    patterns=(
+        r"\bwhatsapp\b",
+        r"\bwa_integration\b",
+        r"\bwhatsapp_bridge\b",
+    ),
+)
+
 PROFILES = {
     DATABASE_PROFILE.name: DATABASE_PROFILE,
     RUNTIME_PROFILE.name: RUNTIME_PROFILE,
+    WHATSAPP_PROFILE.name: WHATSAPP_PROFILE,
 }
 
 

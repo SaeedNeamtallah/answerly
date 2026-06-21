@@ -59,6 +59,7 @@ from backend.routes import (
     auth_oauth,
     bot_config,
     bot_integrations,
+    whatsapp_integrations,
     conversations,
     documents,
     health,
@@ -68,6 +69,7 @@ from backend.routes import (
     security,
     stats,
     telegram_webhook,
+    whatsapp_webhook,
 )
 
 
@@ -175,8 +177,10 @@ app.include_router(admin_console.router)
 app.include_router(admin_observability.router)
 app.include_router(admin_roles.router)
 app.include_router(bot_integrations.router)
+app.include_router(whatsapp_integrations.router)
 app.include_router(conversations.router)
 app.include_router(telegram_webhook.router)
+app.include_router(whatsapp_webhook.router)
 app.include_router(bot_config.router)
 app.include_router(app_config.router)
 app.include_router(auth.router)

@@ -34,6 +34,11 @@ class ProviderUpdate(BaseModel):
     retrieval_rerank_top_k: int | None = Field(default=None, ge=1)
     query_rewrite_enabled: bool | None = None
     retrieval_hnsw_ef_search: int | None = Field(default=None, ge=1)
+    gemini_api_key: str | None = None
+    cohere_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    groq_api_key: str | None = None
+    cerebras_api_key: str | None = None
 
 
 def _normalize_provider_choice(raw_value: object, *, available: list[str], fallback_value: str) -> str:
@@ -93,6 +98,12 @@ def normalize_provider_runtime_config() -> Dict[str, object]:
     }
 
 
+def _mask_api_key(key: str | None) -> str:
+    if not key:
+        return ""
+    return "••••••••"
+
+
 @router.get("/providers")
 async def get_providers(
     _current_user: User = Depends(get_current_db_user),
@@ -127,6 +138,11 @@ async def get_providers(
         "retrieval_rerank_top_k": get_runtime_value("retrieval_rerank_top_k", settings.retrieval_rerank_top_k),
         "query_rewrite_enabled": get_runtime_value("query_rewrite_enabled", settings.query_rewrite_enabled),
         "retrieval_hnsw_ef_search": get_runtime_value("retrieval_hnsw_ef_search", settings.retrieval_hnsw_ef_search),
+        "gemini_api_key": _mask_api_key(get_runtime_value("gemini_api_key", settings.gemini_api_key)),
+        "cohere_api_key": _mask_api_key(get_runtime_value("cohere_api_key", settings.cohere_api_key)),
+        "openrouter_api_key": _mask_api_key(get_runtime_value("openrouter_api_key", settings.openrouter_api_key)),
+        "groq_api_key": _mask_api_key(get_runtime_value("groq_api_key", settings.groq_api_key)),
+        "cerebras_api_key": _mask_api_key(get_runtime_value("cerebras_api_key", settings.cerebras_api_key)),
     }
 
 
@@ -198,6 +214,15 @@ async def update_providers(
         updates["query_rewrite_enabled"] = payload.query_rewrite_enabled
     if payload.retrieval_hnsw_ef_search is not None:
         updates["retrieval_hnsw_ef_search"] = payload.retrieval_hnsw_ef_search
+
+    # Extract dynamic API keys if provided
+    for field_name in ["gemini_api_key", "cohere_api_key", "openrouter_api_key", "groq_api_key", "cerebras_api_key"]:
+        val = getattr(payload, field_name)
+        if val is not None:
+            val_stripped = val.strip()
+            if val_stripped != "••••••••":
+                updates[field_name] = val_stripped
+
     config = update_runtime_config(updates)
 
     return {
@@ -217,5 +242,10 @@ async def update_providers(
         "retrieval_rerank_top_k": config.get("retrieval_rerank_top_k", settings.retrieval_rerank_top_k),
         "query_rewrite_enabled": config.get("query_rewrite_enabled", settings.query_rewrite_enabled),
         "retrieval_hnsw_ef_search": config.get("retrieval_hnsw_ef_search", settings.retrieval_hnsw_ef_search),
+        "gemini_api_key": _mask_api_key(config.get("gemini_api_key") or settings.gemini_api_key),
+        "cohere_api_key": _mask_api_key(config.get("cohere_api_key") or settings.cohere_api_key),
+        "openrouter_api_key": _mask_api_key(config.get("openrouter_api_key") or settings.openrouter_api_key),
+        "groq_api_key": _mask_api_key(config.get("groq_api_key") or settings.groq_api_key),
+        "cerebras_api_key": _mask_api_key(config.get("cerebras_api_key") or settings.cerebras_api_key),
     }
 

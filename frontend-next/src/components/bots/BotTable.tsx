@@ -73,7 +73,13 @@ export function BotTable({ bots, projects }: { bots: BotIntegration[], projects:
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-slate-600">{bot.telegram_username ? `@${bot.telegram_username}` : "—"}</span>
+                    <span className="text-slate-600">
+                      {bot.telegram_username ? (
+                        <a href={`https://t.me/${bot.telegram_username}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
+                          @{bot.telegram_username}
+                        </a>
+                      ) : "—"}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="font-medium text-slate-700">{project?.name || "Unknown KB"}</div>

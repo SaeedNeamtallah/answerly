@@ -8,7 +8,7 @@ export interface SecurityEvent {
   message: string;
   ip_address?: string | null;
   is_simulation: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SecurityEventPage {
@@ -20,10 +20,9 @@ export interface SecurityEventPage {
 
 export interface SecurityStats {
   total_events: number;
-  active_incidents: number;
-  simulations_run: number;
-  events_by_severity: Record<string, number>;
-  events_by_type: Record<string, number>;
+  login_failures: number;
+  brute_force_attempts: number;
+  blocked_uploads: number;
 }
 
 export interface Incident {
@@ -42,9 +41,29 @@ export interface Incident {
   updated_at: string;
 }
 
-export interface AttackSimulationResponse {
-  success: boolean;
-  simulation_id: string;
-  events_generated: number;
-  message: string;
+export interface SecuritySimulationResponse {
+  generated_count: number;
+  escalation_applied: boolean;
+  escalation_result: string;
+  target_user_id: number | null;
+  stats: SecurityStats;
+  events: SecurityEvent[];
+}
+
+export interface SecurityUserStatusSummary {
+  total_active: number;
+  total_suspended: number;
+  total_blocked: number;
+}
+
+export interface SecurityUserStatusEvent {
+  id: number;
+  timestamp: string;
+  event_type: string;
+  user_id: number | null;
+  actor: string | null;
+  reason: string | null;
+  metadata: Record<string, unknown>;
+  is_simulation: boolean;
+  delivery_status: string;
 }

@@ -6,7 +6,7 @@ This is the working map for agents in this repository. Read it before broad expl
 
 Primary goal: save tokens by searching first, using the code-review graph for structure, and recording durable repo knowledge here instead of rediscovering it every turn.
 
-Last refreshed: 2026-06-19 after local runtime availability fixes and `code-review-graph status --repo .`.
+Last refreshed: 2026-06-20 after MFA removal cleanup, frontend API-base fixes, and WhatsApp bridge status persistence.
 
 ## Workflow
 
@@ -41,7 +41,7 @@ Last refreshed: 2026-06-19 after local runtime availability fixes and `code-revi
 - Frontend API bindings:
   - `rg -n "apiRequest|queryKeys|useQuery|useMutation|localStorage|Authorization" frontend-next/src`
 - Runtime flags/config:
-  - `rg -n "get_runtime_value|settings\\.|ENVIRONMENT|CONTEXT_TOKEN_BUDGET|AUTH_MFA|SECURITY_EVENT_RETENTION_DAYS|SECURITY_SIMULATION_DESTRUCTIVE_ENABLED|TELEGRAM_OUTBOX|TELEGRAM_WEBHOOK|TELEGRAM_RATE_LIMIT|TELEGRAM_REPLY_GENERATION|PROMETHEUS_BASE_URL|GRAFANA_|CORS_ORIGINS" backend .env.example docker/docker-compose.yml infra/azure`
+  - `rg -n "get_runtime_value|settings\\.|ENVIRONMENT|CONTEXT_TOKEN_BUDGET|SECURITY_EVENT_RETENTION_DAYS|SECURITY_SIMULATION_DESTRUCTIVE_ENABLED|TELEGRAM_OUTBOX|WHATSAPP_OUTBOX|TELEGRAM_WEBHOOK|TELEGRAM_RATE_LIMIT|TELEGRAM_REPLY_GENERATION|PROMETHEUS_BASE_URL|GRAFANA_|CORS_ORIGINS" backend .env.example docker/docker-compose.yml infra/azure`
 
 ## Code Review Graph
 
@@ -157,11 +157,10 @@ Frontend:
 - Production frontend source is `frontend-next/`; do not recreate the deleted `frontend/` directory.
 - Run with `scripts/dev/newstart.bat` or `cd frontend-next; pnpm dev`.
 - URL: `http://localhost:3001/login`.
-- API base: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`.
+- API base: local direct dev may use `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`; Docker/browser runtime uses `/api` through the Next.js rewrite so browser code never resolves Docker-only hosts such as `backend`.
 - Production container image builds from `frontend-next/Dockerfile` and binds Next.js to `0.0.0.0:3001`.
 - Auth is still Bearer-token compatible and stored by the current frontend store; HttpOnly cookie migration is planned/historical, not current runtime.
-- Privileged login can return `mfa_required` or `mfa_setup_required`; the Next login page stores the setup token and sends users to `/mfa/setup`.
-- Setup-pending MFA tokens are detected client-side and redirected to `/mfa/setup`; they must not hydrate into admin/company shells and trigger privileged API `403` errors.
+- MFA is removed from the current runtime. Login returns standard bearer tokens; do not add `/mfa/*` frontend routes, MFA JWT claims, or MFA service dependencies without a new feature plan.
 - `frontend-next/AGENTS.md` warns that local Next.js docs under `node_modules/next/dist/docs/` must be checked before Next.js API changes.
 
 ## Critical Flows
@@ -223,6 +222,21 @@ Rules:
 - Manual agent replies are saved as pending messages and delivered by the same outbox worker.
 - Outbox retries use `delivery_next_attempt_at` with exponential backoff configured by `TELEGRAM_OUTBOX_RETRY_BASE_SECONDS` and `TELEGRAM_OUTBOX_RETRY_MAX_SECONDS`.
 
+### Production WhatsApp Customer Query
+
+1. Company users create `WhatsAppIntegration` records under `/whatsapp-integrations`.
+2. `POST /whatsapp-integrations/{integration_id}/connect` asks the `whatsapp_bridge` service to initialize a Baileys session.
+3. Bridge status changes are posted to `POST /whatsapp/webhook/{session_id}/status` and persisted on `WhatsAppIntegration.status`.
+4. Customer messages are forwarded from the bridge to `POST /whatsapp/webhook/{session_id}`.
+5. `WhatsAppWebhookService` persists the customer message and enqueues `backend.tasks.whatsapp_query.generate_whatsapp_reply`.
+6. Reply delivery uses `backend.tasks.whatsapp_outbox.deliver_pending_whatsapp_messages`.
+
+Rules:
+
+- WhatsApp session files live in the bridge `WHATSAPP_SESSION_DIR` volume; Docker sets it to `/app/sessions`.
+- Bridge QR generation and reconnects are bounded by `WHATSAPP_QR_MAX_ATTEMPTS`, `WHATSAPP_QR_TTL_MS`, `WHATSAPP_RECONNECT_MAX_ATTEMPTS`, and `WHATSAPP_RECONNECT_DELAY_MS`.
+- Persisted statuses include `pending`, `initializing`, `qr_ready`, `connected`, `disconnected`, `expired`, and `error`.
+
 ### Project Reindex
 
 1. `POST /projects/{project_id}/index`
@@ -236,8 +250,7 @@ Rules:
 - Product role is DB-backed on `users.role`; default role is `company_admin`.
 - `PLATFORM_OWNER_USERNAME` promotes a matching DB user to `platform_owner` after login.
 - `/admin/*` and `/admin/observability/*` require `require_platform_owner_access()`.
-- Privileged dependencies (`require_platform_owner_access`, `require_admin_access`, `require_security_center_access`, and `require_incident_access`) also enforce MFA enrollment and an `mfa_verified` JWT claim.
-- MFA recovery codes are returned once, stored as hashes, and consumed/invalidated on use.
+- Privileged dependencies are role-based in the current runtime; MFA enforcement has been removed from active auth code.
 - Company SaaS routes must filter by `owner_id == current_user.id`.
 - Any route calling `ProjectController.get_project()` or `DocumentController.get_document()` must pass `owner_id`.
 - `/stats/` is tenant-scoped in code; platform-wide stats are under `/admin/stats`.
@@ -344,8 +357,8 @@ Monitoring:
 Validation commands:
 
 ```powershell
-python tools/test_all.py
-python tools/frontend_backend_binding_audit.py
+.venv\Scripts\python.exe tools/test_all.py
+.venv\Scripts\python.exe tools/frontend_backend_binding_audit.py
 .venv\Scripts\python.exe -m pytest -q backend/tests
 cd frontend-next; pnpm lint
 cd frontend-next; pnpm typecheck
@@ -416,6 +429,21 @@ Telegram SaaS:
 - `backend/tasks/telegram_query.py`
 - `backend/tasks/telegram_outbox.py`
 
+WhatsApp SaaS:
+
+- `whatsapp-bridge/src/index.ts`
+- `whatsapp-bridge/src/whatsappClient.ts`
+- `backend/routes/whatsapp_integrations.py`
+- `backend/routes/whatsapp_webhook.py`
+- `backend/routes/conversations.py`
+- `backend/services/whatsapp_integration_service.py`
+- `backend/services/whatsapp_webhook_service.py`
+- `backend/services/conversation_service.py`
+- `backend/services/customer_bot_query_service.py`
+- `backend/tasks/whatsapp_query.py`
+- `backend/tasks/whatsapp_outbox.py`
+- `frontend-next/src/app/(company)/whatsapp-bots/*`
+
 Admin/observability:
 
 - `backend/routes/admin_console.py`
@@ -463,5 +491,5 @@ Keep updates compact, path-based, and code-grounded.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/004-add-security-features/plan.md`
+`specs/007-whatsapp-integration/plan.md`
 <!-- SPECKIT END -->

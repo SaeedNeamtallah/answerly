@@ -1,13 +1,14 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Settings2, Save } from "lucide-react";
 
+import { getApiErrorMessage } from "@/lib/api/client";
 import { getProviders, updateProviders } from "@/lib/api/config";
 import { queryKeys } from "@/lib/api/queryKeys";
-import type { ProviderConfigUpdatePayload } from "@/lib/types/config";
+import type { ProviderConfigResponse, ProviderConfigUpdatePayload } from "@/lib/types/config";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,54 +18,71 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
 
+const DEFAULT_FORM_DATA: ProviderConfigUpdatePayload = {
+  llm_provider: "",
+  embedding_provider: "",
+  vector_db_provider: "",
+  retrieval_top_k: 5,
+  chunk_size: 1000,
+  chunk_overlap: 200,
+  retrieval_hybrid_enabled: false,
+  query_rewrite_enabled: false,
+};
+
+function toFormData(config: ProviderConfigResponse | undefined): ProviderConfigUpdatePayload {
+  return {
+    ...DEFAULT_FORM_DATA,
+    llm_provider: config?.llm_provider || "",
+    embedding_provider: config?.embedding_provider || "",
+    vector_db_provider: config?.vector_db_provider || "",
+    retrieval_top_k: config?.retrieval_top_k || DEFAULT_FORM_DATA.retrieval_top_k,
+    chunk_size: config?.chunk_size || DEFAULT_FORM_DATA.chunk_size,
+    chunk_overlap: config?.chunk_overlap || DEFAULT_FORM_DATA.chunk_overlap,
+    retrieval_hybrid_enabled: config?.retrieval_hybrid_enabled || false,
+    query_rewrite_enabled: config?.query_rewrite_enabled || false,
+  };
+}
+
 export default function PlatformSettingsPage() {
-  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: queryKeys.providers,
     queryFn: getProviders,
   });
 
-  const [formData, setFormData] = useState<ProviderConfigUpdatePayload>({
-    llm_provider: "",
-    embedding_provider: "",
-    vector_db_provider: "",
-    retrieval_top_k: 5,
-    chunk_size: 1000,
-    chunk_overlap: 200,
-    retrieval_hybrid_enabled: false,
-    query_rewrite_enabled: false,
-  });
+  if (query.isLoading) return <LoadingState label="Loading platform settings..." />;
+  if (query.isError) return <ErrorState description="Failed to load settings." />;
 
-  useEffect(() => {
-    if (query.data) {
-      setFormData({
-        llm_provider: query.data.llm_provider || "",
-        embedding_provider: query.data.embedding_provider || "",
-        vector_db_provider: query.data.vector_db_provider || "",
-        retrieval_top_k: query.data.retrieval_top_k || 5,
-        chunk_size: query.data.chunk_size || 1000,
-        chunk_overlap: query.data.chunk_overlap || 200,
-        retrieval_hybrid_enabled: query.data.retrieval_hybrid_enabled || false,
-        query_rewrite_enabled: query.data.query_rewrite_enabled || false,
-      });
-    }
-  }, [query.data]);
+  const initialFormData = toFormData(query.data);
+  const formKey = JSON.stringify(initialFormData);
 
+  return (
+    <PlatformSettingsForm
+      key={formKey}
+      available={query.data?.available || {}}
+      initialFormData={initialFormData}
+    />
+  );
+}
+
+function PlatformSettingsForm({
+  available,
+  initialFormData,
+}: {
+  available: NonNullable<ProviderConfigResponse["available"]>;
+  initialFormData: ProviderConfigUpdatePayload;
+}) {
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState<ProviderConfigUpdatePayload>(initialFormData);
   const mutation = useMutation({
     mutationFn: updateProviders,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.providers });
       toast.success("Platform settings updated successfully");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update platform settings");
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to update platform settings"));
     },
   });
-
-  if (query.isLoading) return <LoadingState label="Loading platform settings..." />;
-  if (query.isError) return <ErrorState description="Failed to load settings." />;
-
-  const available = query.data?.available || {};
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

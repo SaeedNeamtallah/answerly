@@ -88,6 +88,8 @@ celery_app = Celery(
         "backend.tasks.maintenance",
         "backend.tasks.telegram_outbox",
         "backend.tasks.telegram_query",
+        "backend.tasks.whatsapp_outbox",
+        "backend.tasks.whatsapp_query",
         "backend.tasks.security",
     ],
 )
@@ -140,6 +142,12 @@ task_routes = {
     "backend.tasks.telegram_query.generate_bot_reply": {
         "queue": "default"
     },
+    "backend.tasks.whatsapp_outbox.deliver_pending_messages": {
+        "queue": "default"
+    },
+    "backend.tasks.whatsapp_query.generate_whatsapp_reply": {
+        "queue": "default"
+    },
     "backend.tasks.security.persist_security_event_task": {
         "queue": "default"
     },
@@ -156,6 +164,11 @@ task_routes = {
         "deliver-pending-telegram-messages": {
             "task": "backend.tasks.telegram_outbox.deliver_pending_messages",
             "schedule": settings.telegram_outbox_poll_interval_seconds,
+            "args": (),
+        },
+        "deliver-pending-whatsapp-messages": {
+            "task": "backend.tasks.whatsapp_outbox.deliver_pending_messages",
+            "schedule": settings.whatsapp_outbox_poll_interval_seconds,
             "args": (),
         },
         "cleanup-expired-telegram-raw-payloads": {

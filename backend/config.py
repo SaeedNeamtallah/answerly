@@ -325,7 +325,7 @@ class Settings(BaseSettings):
         alias="SECURITY_SIMULATION_DESTRUCTIVE_ENABLED",
     )
     telegram_outbox_poll_interval_seconds: int = Field(
-        default=2,
+        default=15,
         alias="TELEGRAM_OUTBOX_POLL_INTERVAL_SECONDS",
     )
     telegram_outbox_max_delivery_attempts: int = Field(
@@ -347,6 +347,30 @@ class Settings(BaseSettings):
     telegram_reply_generation_claim_timeout_seconds: int = Field(
         default=600,
         alias="TELEGRAM_REPLY_GENERATION_CLAIM_TIMEOUT_SECONDS",
+    )
+    whatsapp_outbox_poll_interval_seconds: int = Field(
+        default=15,
+        alias="WHATSAPP_OUTBOX_POLL_INTERVAL_SECONDS",
+    )
+    whatsapp_outbox_max_delivery_attempts: int = Field(
+        default=3,
+        alias="WHATSAPP_OUTBOX_MAX_DELIVERY_ATTEMPTS",
+    )
+    whatsapp_outbox_claim_timeout_seconds: int = Field(
+        default=120,
+        alias="WHATSAPP_OUTBOX_CLAIM_TIMEOUT_SECONDS",
+    )
+    whatsapp_outbox_retry_base_seconds: int = Field(
+        default=30,
+        alias="WHATSAPP_OUTBOX_RETRY_BASE_SECONDS",
+    )
+    whatsapp_outbox_retry_max_seconds: int = Field(
+        default=15 * 60,
+        alias="WHATSAPP_OUTBOX_RETRY_MAX_SECONDS",
+    )
+    whatsapp_reply_generation_claim_timeout_seconds: int = Field(
+        default=600,
+        alias="WHATSAPP_REPLY_GENERATION_CLAIM_TIMEOUT_SECONDS",
     )
 
     model_config = SettingsConfigDict(

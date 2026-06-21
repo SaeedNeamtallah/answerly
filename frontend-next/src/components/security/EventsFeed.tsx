@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { AlertCircle, Download, RefreshCw, Activity, ShieldAlert, Wifi } from "lucide-react";
+import { Download, RefreshCw, Wifi } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { securityApi } from "@/lib/api/security";
+import { getApiUrl } from "@/lib/api/client";
 import type { SecurityEvent } from "@/lib/types/security";
 import { readAccessToken } from "@/store/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,7 +51,7 @@ export function EventsFeed() {
   ].slice(0, 50);
 
   useEffect(() => {
-    let abortController = new AbortController();
+    const abortController = new AbortController();
 
     async function connectSSE() {
       const token = readAccessToken();
@@ -58,12 +59,17 @@ export function EventsFeed() {
 
       try {
         setIsLive(false);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}/security/events/stream`, {
+        const res = await fetch(getApiUrl("/security/events/stream"), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
           signal: abortController.signal,
         });
+
+        if (res.status === 401 || res.status === 403) {
+          setIsLive(false);
+          return;
+        }
 
         if (!res.ok || !res.body) throw new Error("Failed to connect");
 
@@ -87,7 +93,7 @@ export function EventsFeed() {
                 const dataStr = dataLine.replace("data: ", "").trim();
                 if (dataStr === "keepalive") continue;
 
-                const event = JSON.parse(dataStr);
+                const event = JSON.parse(dataStr) as { type?: string; data?: SecurityEvent };
                 if (event.type === "event" && event.data) {
                   setLiveEvents(prev => [event.data as SecurityEvent, ...prev].slice(0, 50));
                 }
@@ -118,9 +124,8 @@ export function EventsFeed() {
 
   const handleExport = () => {
     const token = readAccessToken();
-    const url = `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}/security/events/export`;
 
-    fetch(url, {
+    fetch(getApiUrl("/security/events/export"), {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.blob())

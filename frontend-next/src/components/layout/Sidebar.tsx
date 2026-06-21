@@ -33,6 +33,7 @@ export const companyNav: NavItem[] = [
   { href: "/knowledge-bases", label: "Knowledge Bases", icon: FolderKanban },
   { href: "/smart-chat", label: "Smart Chat", icon: MessageCircle },
   { href: "/telegram-bots", label: "Telegram Bots", icon: Bot },
+  { href: "/whatsapp-bots", label: "WhatsApp Bots", icon: MessageSquareText },
   { href: "/conversations", label: "Conversations", icon: MessageSquareText },
   { href: "/ai-settings", label: "AI Settings", icon: Settings2 },
   { href: "/account", label: "Account", icon: UserRound },

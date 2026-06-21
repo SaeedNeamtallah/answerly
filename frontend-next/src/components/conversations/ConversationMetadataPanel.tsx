@@ -1,7 +1,7 @@
 import { Conversation } from "@/lib/types/conversation";
 
 import { formatDateTime } from "@/lib/utils/dates";
-import { Info, User, Bot, AlertCircle, Clock, Hash, ShieldAlert } from "lucide-react";
+import { Info, User, Bot, AlertCircle, Clock, Hash, ShieldAlert, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export function ConversationMetadataPanel({ conversation }: { conversation?: Conversation | null }) {
@@ -47,8 +47,18 @@ export function ConversationMetadataPanel({ conversation }: { conversation?: Con
             <Bot className="size-4" />
           </div>
           <div>
-            <p className="font-medium text-slate-900">{conversation.bot_name || `Bot #${conversation.bot_integration_id}`}</p>
+            <p className="font-medium text-slate-900">{conversation.bot_name || `Bot #${conversation.bot_integration_id || conversation.whatsapp_integration_id}`}</p>
             <p className="text-xs text-slate-500 mt-0.5">Assigned Bot</p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 rounded-lg bg-indigo-50 p-1.5 text-indigo-600">
+            <MessageCircle className="size-4" />
+          </div>
+          <div>
+            <p className="font-medium text-slate-900 capitalize">{conversation.channel === 'whatsapp' ? 'WhatsApp' : 'Telegram'}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Channel</p>
           </div>
         </div>
 

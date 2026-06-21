@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ShieldAlert, Zap, AlertTriangle, UserX } from "lucide-react";
+import { Activity, AlertTriangle, ShieldAlert, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { securityApi } from "@/lib/api/security";
 import { Skeleton } from "@/components/ui/skeleton";

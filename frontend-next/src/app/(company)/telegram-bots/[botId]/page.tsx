@@ -102,7 +102,11 @@ export default function TelegramBotDetailPage() {
       <PageHeader
         eyebrow="Telegram bot"
         title={bot.name}
-        description={bot.telegram_username || "Telegram username pending"}
+        description={bot.telegram_username ? (
+          <a href={`https://t.me/${bot.telegram_username}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+            @{bot.telegram_username}
+          </a>
+        ) : "Telegram username pending"}
         actions={<RotateTokenDialog onSubmit={(token) => rotateMutation.mutate(token)} isPending={rotateMutation.isPending} />}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

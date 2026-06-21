@@ -63,16 +63,19 @@ class LLMProviderFactory:
 
     @staticmethod
     def _build_gemini_provider() -> LLMInterface:
-        return GeminiProvider()
+        api_key = get_runtime_value("gemini_api_key", settings.gemini_api_key)
+        return GeminiProvider(api_key=api_key)
 
     @staticmethod
     def _build_gemini_lite_provider() -> LLMInterface:
-        return GeminiProvider(model_name=settings.gemini_lite_model)
+        api_key = get_runtime_value("gemini_api_key", settings.gemini_api_key)
+        return GeminiProvider(api_key=api_key, model_name=settings.gemini_lite_model)
 
     @classmethod
     def _build_openrouter_gemini_2_flash_provider(cls) -> LLMInterface:
+        api_key = get_runtime_value("openrouter_api_key", settings.openrouter_api_key)
         return OpenAICompatProvider(
-            api_key=settings.openrouter_api_key,
+            api_key=api_key,
             base_url=settings.openrouter_base_url,
             model_name=settings.openrouter_gemini_2_flash_model,
             provider_label="OpenRouter",
@@ -81,8 +84,9 @@ class LLMProviderFactory:
 
     @classmethod
     def _build_openrouter_free_provider(cls) -> LLMInterface:
+        api_key = get_runtime_value("openrouter_api_key", settings.openrouter_api_key)
         return OpenAICompatProvider(
-            api_key=settings.openrouter_api_key,
+            api_key=api_key,
             base_url=settings.openrouter_base_url,
             model_name=settings.openrouter_free_model,
             provider_label="OpenRouter",
@@ -91,8 +95,9 @@ class LLMProviderFactory:
 
     @classmethod
     def _build_openrouter_gemma_4_26b_a4b_provider(cls) -> LLMInterface:
+        api_key = get_runtime_value("openrouter_api_key", settings.openrouter_api_key)
         return OpenAICompatProvider(
-            api_key=settings.openrouter_api_key,
+            api_key=api_key,
             base_url=settings.openrouter_base_url,
             model_name=settings.openrouter_gemma_4_26b_a4b_model,
             provider_label="OpenRouter",
@@ -101,8 +106,9 @@ class LLMProviderFactory:
 
     @staticmethod
     def _build_groq_llama_3_3_70b_versatile_provider() -> LLMInterface:
+        api_key = get_runtime_value("groq_api_key", settings.groq_api_key)
         return OpenAICompatProvider(
-            api_key=settings.groq_api_key,
+            api_key=api_key,
             base_url=settings.groq_base_url,
             model_name=settings.groq_llama_3_3_70b_versatile_model,
             provider_label="Groq",
@@ -110,8 +116,9 @@ class LLMProviderFactory:
 
     @staticmethod
     def _build_cerebras_llama_3_1_8b_provider() -> LLMInterface:
+        api_key = get_runtime_value("cerebras_api_key", settings.cerebras_api_key)
         return OpenAICompatProvider(
-            api_key=settings.cerebras_api_key,
+            api_key=api_key,
             base_url=settings.cerebras_base_url,
             model_name=settings.cerebras_llama_3_1_8b_model,
             provider_label="Cerebras",
@@ -120,8 +127,8 @@ class LLMProviderFactory:
     @staticmethod
     def _build_cohere_provider() -> LLMInterface:
         from backend.providers.llm.cohere_provider import CohereProvider
-
-        return CohereProvider()
+        api_key = get_runtime_value("cohere_api_key", settings.cohere_api_key)
+        return CohereProvider(api_key=api_key)
 
     @classmethod
     def create_provider(cls, provider_name: str = None) -> LLMInterface:

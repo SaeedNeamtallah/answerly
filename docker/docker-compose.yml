@@ -10,6 +10,8 @@ x-app-environment: &app-environment
   GRAFANA_EMBED_ENABLED: "true"
   RAGMIND_SHARED_CONFIG_DIR: /app/uploads/config
   SECURITY_ENGINEER_USERNAMES: ${SECURITY_ENGINEER_USERNAMES:-codex_security_smoke}
+  TELEGRAM_OUTBOX_POLL_INTERVAL_SECONDS: "15"
+  WHATSAPP_OUTBOX_POLL_INTERVAL_SECONDS: "15"
 
 x-app-depends-on: &app-depends-on
   postgres:
@@ -275,6 +277,26 @@ services:
         condition: service_started
     volumes:
       - ../uploads:/app/uploads
+    restart: always
+
+  # 8. WhatsApp Baileys Bridge
+  whatsapp_bridge:
+    build:
+      context: ../whatsapp-bridge
+      dockerfile: Dockerfile
+    image: ragmind-whatsapp-bridge:local
+    container_name: ragmind-whatsapp-bridge
+    ports:
+      - "127.0.0.1:3002:3002"
+    environment:
+      PORT: 3002
+      BACKEND_URL: http://backend:8000
+      WHATSAPP_SESSION_DIR: /app/sessions
+    depends_on:
+      backend:
+        condition: service_started
+    volumes:
+      - ../uploads/whatsapp_sessions:/app/sessions
     restart: always
 
 volumes:

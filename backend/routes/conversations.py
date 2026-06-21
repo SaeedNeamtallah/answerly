@@ -28,9 +28,12 @@ def get_conversation_service() -> ConversationService:
 class ConversationResponse(BaseModel):
     id: int
     owner_id: int
-    bot_integration_id: int
+    bot_integration_id: Optional[int] = None
     bot_name: Optional[str] = None
-    telegram_customer_id: int
+    telegram_customer_id: Optional[int] = None
+    whatsapp_integration_id: Optional[int] = None
+    whatsapp_customer_id: Optional[int] = None
+    channel: Optional[str] = "telegram"
     customer_label: str
     project_id: int
     status: str
@@ -61,23 +64,38 @@ class ManualReplyRequest(BaseModel):
 
 
 def _customer_label(conversation: Conversation) -> str:
-    customer = getattr(conversation, "customer", None)
-    if customer is None:
-        return "Telegram customer"
-    if customer.username:
-        return f"@{customer.username}"
-    name = " ".join(part for part in [customer.first_name, customer.last_name] if part)
-    return name or f"Chat {customer.chat_id}"
+    if conversation.channel == "whatsapp":
+        customer = getattr(conversation, "whatsapp_customer", None)
+        if customer is None:
+            return "WhatsApp customer"
+        if customer.name:
+            return customer.name
+        return f"Phone {customer.phone_number}"
+    else:
+        customer = getattr(conversation, "customer", None)
+        if customer is None:
+            return "Telegram customer"
+        if customer.username:
+            return f"@{customer.username}"
+        name = " ".join(part for part in [customer.first_name, customer.last_name] if part)
+        return name or f"Chat {customer.chat_id}"
 
 
 def _serialize_conversation(conversation: Conversation) -> ConversationResponse:
-    integration = getattr(conversation, "bot_integration", None)
+    if conversation.channel == "whatsapp":
+        integration = getattr(conversation, "whatsapp_integration", None)
+    else:
+        integration = getattr(conversation, "bot_integration", None)
+        
     return ConversationResponse(
         id=int(conversation.id),
         owner_id=int(conversation.owner_id),
-        bot_integration_id=int(conversation.bot_integration_id),
+        bot_integration_id=int(conversation.bot_integration_id) if conversation.bot_integration_id else None,
         bot_name=getattr(integration, "name", None),
-        telegram_customer_id=int(conversation.telegram_customer_id),
+        telegram_customer_id=int(conversation.telegram_customer_id) if conversation.telegram_customer_id else None,
+        whatsapp_integration_id=int(conversation.whatsapp_integration_id) if conversation.whatsapp_integration_id else None,
+        whatsapp_customer_id=int(conversation.whatsapp_customer_id) if conversation.whatsapp_customer_id else None,
+        channel=str(conversation.channel) if conversation.channel else "telegram",
         customer_label=_customer_label(conversation),
         project_id=int(conversation.project_id),
         status=str(conversation.status),

@@ -3,19 +3,19 @@ export type StatusVariant = "default" | "secondary" | "success" | "warning" | "d
 export function getStatusVariant(status?: string | null): StatusVariant {
   const normalized = String(status || "").toLowerCase();
 
-  if (["success", "completed", "ready", "active", "enabled", "resolved"].includes(normalized)) {
+  if (["success", "completed", "ready", "active", "enabled", "resolved", "connected"].includes(normalized)) {
     return "success";
   }
 
-  if (["warning", "queued", "pending", "escalated", "processing"].includes(normalized)) {
+  if (["warning", "queued", "pending", "escalated", "processing", "initializing", "qr_ready"].includes(normalized)) {
     return "warning";
   }
 
-  if (["failure", "failed", "error", "blocked", "suspended", "disabled"].includes(normalized)) {
+  if (["failure", "failed", "error", "blocked", "suspended", "disabled", "expired"].includes(normalized)) {
     return "danger";
   }
 
-  if (["draft", "open", "new"].includes(normalized)) {
+  if (["draft", "open", "new", "disconnected"].includes(normalized)) {
     return "secondary";
   }
 

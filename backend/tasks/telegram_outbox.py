@@ -77,6 +77,7 @@ async def _deliver_pending_messages() -> dict[str, object]:
                         ),
                     ),
                     ConversationMessage.delivery_attempts < max_attempts,
+                    ConversationMessage.bot_integration_id.is_not(None),
                 )
                 .order_by(ConversationMessage.created_at.asc())
                 .limit(50)

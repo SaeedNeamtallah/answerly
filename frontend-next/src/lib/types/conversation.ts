@@ -11,6 +11,9 @@ export interface Conversation {
   assigned_to_user_id?: number | null;
   last_message_at?: string | null;
   last_error?: string | null;
+  channel?: string | null;
+  whatsapp_integration_id?: number | null;
+  whatsapp_customer_id?: number | null;
   created_at?: string;
   updated_at?: string;
 }

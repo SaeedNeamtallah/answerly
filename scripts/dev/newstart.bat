@@ -35,17 +35,26 @@ if not exist "%NEXT_FRONTEND_DIR%\package.json" (
     goto :fail
 )
 
+where node.exe >nul 2>&1
+if errorlevel 1 (
+    call :log "[ERROR] Node.js is not available in PATH."
+    call :log "[HINT] Install Node.js 20+ and open a new terminal before running newstart.bat."
+    goto :fail
+)
+
+for /f "delims=" %%V in ('node --version 2^>nul') do call :log "[INFO] Detected Node.js %%V"
+
+call :resolve_package_manager
+if not defined NEXT_CMD (
+    call :log "[ERROR] Neither pnpm nor npm is available in PATH."
+    goto :fail
+)
+
 call :log "[INFO] Starting backend stack via scripts\dev\start.bat"
 set "SKIP_SCRIPT_PAUSE=1"
 call "%ROOT%\scripts\dev\start.bat" %*
 if errorlevel 1 (
     call :log "[ERROR] Base stack startup failed."
-    goto :fail
-)
-
-call :resolve_package_manager
-if not defined NEXT_CMD (
-    call :log "[ERROR] Neither pnpm nor npm is available in PATH."
     goto :fail
 )
 

@@ -13,6 +13,11 @@ export const queryKeys = {
     detail: (botId: string | number) => ["botIntegration", String(botId)] as const,
     readiness: (botId: string | number) => ["botReadiness", String(botId)] as const,
   },
+  whatsappBots: {
+    all: ["whatsappIntegrations"] as const,
+    detail: (botId: string | number) => ["whatsappIntegration", String(botId)] as const,
+    status: (botId: string | number) => ["whatsappSessionStatus", String(botId)] as const,
+  },
   conversations: {
     all: ["conversations"] as const,
     filtered: (status?: string) => ["conversations", status || "all"] as const,

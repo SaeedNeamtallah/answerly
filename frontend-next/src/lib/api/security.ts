@@ -1,52 +1,11 @@
 import { apiRequest } from "./client";
-
-export interface SecurityStats {
-  total_events: number;
-  login_failures: number;
-  brute_force_attempts: number;
-  blocked_uploads: number;
-}
-
-export interface SecurityEvent {
-  id: number;
-  timestamp: string;
-  event_type: string;
-  severity: string;
-  user_id: number | null;
-  username: string | null;
-  ip_address: string | null;
-  message: string;
-  metadata: Record<string, any>;
-  is_simulation: boolean;
-  delivery_status: string;
-}
-
-export interface SecuritySimulationResponse {
-  generated_count: number;
-  escalation_applied: boolean;
-  escalation_result: string;
-  target_user_id: number | null;
-  stats: SecurityStats;
-  events: SecurityEvent[];
-}
-
-export interface SecurityUserStatusSummary {
-  total_active: number;
-  total_suspended: number;
-  total_blocked: number;
-}
-
-export interface SecurityUserStatusEvent {
-  id: number;
-  timestamp: string;
-  event_type: string;
-  user_id: number | null;
-  actor: string | null;
-  reason: string | null;
-  metadata: Record<string, any>;
-  is_simulation: boolean;
-  delivery_status: string;
-}
+import type {
+  SecurityEvent,
+  SecuritySimulationResponse,
+  SecurityStats,
+  SecurityUserStatusEvent,
+  SecurityUserStatusSummary,
+} from "@/lib/types/security";
 
 export const securityApi = {
   getStats: () => {

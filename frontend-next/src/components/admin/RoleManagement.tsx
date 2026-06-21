@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/auth-store';
+import { getApiErrorMessage } from '@/lib/api/client';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Shield } from 'lucide-react';
 
@@ -67,8 +68,8 @@ export function RoleManagement() {
       setNewRole('');
       setReason('');
     },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to update role');
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to update role'));
     },
   });
 

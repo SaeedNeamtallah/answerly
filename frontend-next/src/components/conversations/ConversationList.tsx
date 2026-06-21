@@ -57,7 +57,12 @@ export function ConversationList({ conversations }: { conversations: Conversatio
                   <div className="flex items-center gap-3 mt-1.5">
                     <p className="flex items-center gap-1.5 text-sm text-slate-500">
                       <Bot className="size-3.5" />
-                      <span className="truncate">{conversation.bot_name || `Bot #${conversation.bot_integration_id}`}</span>
+                      <span className="truncate">{conversation.bot_name || `Bot #${conversation.bot_integration_id || conversation.whatsapp_integration_id}`}</span>
+                    </p>
+                    <span className="text-slate-300">•</span>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-500 capitalize">
+                      <MessageCircle className="size-3.5" />
+                      {conversation.channel === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
                     </p>
                     <span className="text-slate-300">•</span>
                     <p className="text-sm text-slate-500">

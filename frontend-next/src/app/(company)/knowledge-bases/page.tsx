@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Search, Filter, BookOpen, Bot, LayoutGrid, List, Info, RefreshCw, TrendingUp, Link as LinkIcon, Plus } from "lucide-react";
+import { BookOpen, Bot, ExternalLink, Info, MessageSquareText, Plus, RefreshCw, TrendingUp } from "lucide-react";
 
 import { listProjects, normalizeProjectListResponse } from "@/lib/api/projects";
 import { listBotIntegrations } from "@/lib/api/botIntegrations";
@@ -42,7 +42,7 @@ export default function KnowledgeBasesPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Knowledge Bases</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Organize and manage your company's knowledge repositories.
+            Organize and manage company knowledge repositories.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -155,6 +155,3 @@ export default function KnowledgeBasesPage() {
     </div>
   );
 }
-
-// Ensure icons used in render are imported
-import { MessageSquareText, ExternalLink } from "lucide-react";

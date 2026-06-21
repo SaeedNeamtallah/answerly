@@ -1,6 +1,7 @@
 import { clearAuthSession, readAccessToken } from "@/store/auth-store";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const BROWSER_API_BASE_URL = "/api";
 
 export class ApiError extends Error {
   status: number;
@@ -32,15 +33,21 @@ export function getApiErrorMessage(error: unknown, fallback = "Request failed") 
   return fallback;
 }
 
-function getApiBaseUrl() {
-  const url = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!url && typeof window !== "undefined") {
-    console.warn(
-      "[RAGMind] NEXT_PUBLIC_API_BASE_URL is not set. Falling back to localhost:8000. " +
-      "This should not happen in production."
-    );
+export function getApiBaseUrl() {
+  const url = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  const isBrowser = typeof window !== "undefined";
+
+  if (isBrowser) {
+    if (!url || /^https?:\/\/backend(?::|\/|$)/i.test(url)) {
+      return BROWSER_API_BASE_URL;
+    }
   }
+
   return (url || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+}
+
+export function getApiUrl(path: string) {
+  return `${getApiBaseUrl()}${path}`;
 }
 
 function redirectToLogin() {
@@ -70,7 +77,7 @@ export async function apiRequest<T>(
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    const response = await fetch(getApiUrl(path), {
       ...rest,
       headers: finalHeaders,
       body,

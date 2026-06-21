@@ -1,41 +1,59 @@
 "use client";
 
-import { useState } from "react";
-import { Shield, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { LoadingState } from "@/components/shared/LoadingState";
 import { OverviewStats } from "@/components/security/OverviewStats";
 import { EventsFeed } from "@/components/security/EventsFeed";
 import { IncidentsTab } from "@/components/security/IncidentsTab";
 import { securityApi } from "@/lib/api/security";
+import { getApiErrorMessage } from "@/lib/api/client";
+import { canAccessSecurityCenter } from "@/lib/auth/permissions";
+import type { SecuritySimulationResponse } from "@/lib/types/security";
+import { useAuthStore } from "@/store/auth-store";
 
 export default function SecurityCenterPage() {
   const queryClient = useQueryClient();
-  const [isSimulating, setIsSimulating] = useState(false);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
 
   const simulateMutation = useMutation({
     mutationFn: () => securityApi.simulateAttack(),
-    onSuccess: (data: any) => {
+    onSuccess: (data: SecuritySimulationResponse) => {
       toast.success(`Simulation complete. Generated ${data.generated_count} events.`);
       queryClient.invalidateQueries({ queryKey: ["security-stats"] });
       queryClient.invalidateQueries({ queryKey: ["security-events"] });
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      setIsSimulating(false);
     },
-    onError: (err: any) => {
-      toast.error(err.message || "Simulation failed.");
-      setIsSimulating(false);
+    onError: (error: Error) => {
+      toast.error(getApiErrorMessage(error, "Simulation failed."));
     }
   });
 
+  if (!isHydrated) {
+    return <LoadingState label="Checking permissions..." />;
+  }
+
+  if (!canAccessSecurityCenter(currentUser)) {
+    return (
+      <ErrorState
+        title="Access forbidden"
+        description="Your current role does not have access to the security center."
+      />
+    );
+  }
+
   const handleSimulate = () => {
-    setIsSimulating(true);
     simulateMutation.mutate();
   };
+
+  const isSimulating = simulateMutation.isPending;
 
   return (
     <div className="flex flex-col gap-6 max-w-[1400px] mx-auto w-full">

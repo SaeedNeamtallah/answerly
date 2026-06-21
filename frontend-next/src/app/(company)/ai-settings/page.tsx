@@ -28,6 +28,11 @@ const schema = z.object({
   embedding_provider: z.string().min(1),
   vector_db_provider: z.string().optional(),
   retrieval_top_k: z.coerce.number().min(1).max(100),
+  gemini_api_key: z.string().optional(),
+  cohere_api_key: z.string().optional(),
+  openrouter_api_key: z.string().optional(),
+  groq_api_key: z.string().optional(),
+  cerebras_api_key: z.string().optional(),
 });
 
 type FormInput = z.input<typeof schema>;
@@ -46,6 +51,11 @@ export default function AiSettingsPage() {
       embedding_provider: "",
       vector_db_provider: "",
       retrieval_top_k: 5,
+      gemini_api_key: "",
+      cohere_api_key: "",
+      openrouter_api_key: "",
+      groq_api_key: "",
+      cerebras_api_key: "",
     },
   });
 
@@ -58,6 +68,11 @@ export default function AiSettingsPage() {
       embedding_provider: query.data.embedding_provider || "",
       vector_db_provider: query.data.vector_db_provider || "",
       retrieval_top_k: query.data.retrieval_top_k || 5,
+      gemini_api_key: query.data.gemini_api_key || "",
+      cohere_api_key: query.data.cohere_api_key || "",
+      openrouter_api_key: query.data.openrouter_api_key || "",
+      groq_api_key: query.data.groq_api_key || "",
+      cerebras_api_key: query.data.cerebras_api_key || "",
     });
   }, [form, query.data]);
 
@@ -97,52 +112,83 @@ export default function AiSettingsPage() {
         <MetricCard title="Vector DB" value={query.data?.vector_db_provider || "Unset"} icon={<Database className="size-4" />} tone="success" />
         <MetricCard title="Retrieval Top K" value={query.data?.retrieval_top_k || 0} icon={<Rows3 className="size-4" />} tone="warning" />
       </div>
-      <FormSection title="Provider selections">
-        <form
-          className="grid gap-4 md:grid-cols-2"
-          onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-        >
-          <div className="space-y-2">
-            <label className="text-sm font-medium">LLM provider</label>
-            <Select value={llmProvider} onValueChange={(value) => form.setValue("llm_provider", value)}>
-              <SelectTrigger><SelectValue placeholder="Choose provider" /></SelectTrigger>
-              <SelectContent>
-                {(available.llm || []).map((item) => (
-                  <SelectItem key={item} value={item}>{item}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+      <form
+        className="space-y-6"
+        onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
+      >
+        <FormSection title="Provider selections">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">LLM provider</label>
+              <Select value={llmProvider} onValueChange={(value) => form.setValue("llm_provider", value)}>
+                <SelectTrigger><SelectValue placeholder="Choose provider" /></SelectTrigger>
+                <SelectContent>
+                  {(available.llm || []).map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Embedding provider</label>
+              <Select value={embeddingProvider} onValueChange={(value) => form.setValue("embedding_provider", value)}>
+                <SelectTrigger><SelectValue placeholder="Choose provider" /></SelectTrigger>
+                <SelectContent>
+                  {(available.embedding || []).map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Vector DB provider</label>
+              <Select value={vectorDbProvider || ""} onValueChange={(value) => form.setValue("vector_db_provider", value)}>
+                <SelectTrigger><SelectValue placeholder="Choose provider" /></SelectTrigger>
+                <SelectContent>
+                  {(available.vector_db || []).map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Retrieval top K</label>
+              <Input type="number" {...form.register("retrieval_top_k")} />
+              <p className="text-xs text-muted-foreground">This value is submitted to `/config/providers` with the selected providers.</p>
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Embedding provider</label>
-            <Select value={embeddingProvider} onValueChange={(value) => form.setValue("embedding_provider", value)}>
-              <SelectTrigger><SelectValue placeholder="Choose provider" /></SelectTrigger>
-              <SelectContent>
-                {(available.embedding || []).map((item) => (
-                  <SelectItem key={item} value={item}>{item}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        </FormSection>
+
+        <FormSection title="API Credentials" description="Enter the API keys for the providers. Masked keys are shown as ••••••••. Enter new keys to update, or leave them as is to keep existing keys.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Gemini API Key</label>
+              <Input type="password" {...form.register("gemini_api_key")} placeholder="Enter Gemini API key" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Cohere API Key</label>
+              <Input type="password" {...form.register("cohere_api_key")} placeholder="Enter Cohere API key" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">OpenRouter API Key</label>
+              <Input type="password" {...form.register("openrouter_api_key")} placeholder="Enter OpenRouter API key" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Groq API Key</label>
+              <Input type="password" {...form.register("groq_api_key")} placeholder="Enter Groq API key" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Cerebras API Key</label>
+              <Input type="password" {...form.register("cerebras_api_key")} placeholder="Enter Cerebras API key" />
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Vector DB provider</label>
-            <Select value={vectorDbProvider || ""} onValueChange={(value) => form.setValue("vector_db_provider", value)}>
-              <SelectTrigger><SelectValue placeholder="Choose provider" /></SelectTrigger>
-              <SelectContent>
-                {(available.vector_db || []).map((item) => (
-                  <SelectItem key={item} value={item}>{item}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Retrieval top K</label>
-            <Input type="number" {...form.register("retrieval_top_k")} />
-            <p className="text-xs text-muted-foreground">This value is submitted to `/config/providers` with the selected providers.</p>
-          </div>
-          <Button type="submit" className="md:col-span-2" disabled={mutation.isPending}>Save settings</Button>
-        </form>
-      </FormSection>
+        </FormSection>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={mutation.isPending}>Save settings</Button>
+        </div>
+      </form>
     </div>
   );
 }

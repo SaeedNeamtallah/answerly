@@ -22,6 +22,11 @@ export interface ProviderConfigResponse {
   retrieval_rerank_top_k?: number;
   query_rewrite_enabled?: boolean;
   retrieval_hnsw_ef_search?: number;
+  gemini_api_key?: string;
+  cohere_api_key?: string;
+  openrouter_api_key?: string;
+  groq_api_key?: string;
+  cerebras_api_key?: string;
 }
 
 export interface ProviderConfigUpdatePayload {
@@ -41,4 +46,10 @@ export interface ProviderConfigUpdatePayload {
   retrieval_rerank_top_k?: number;
   query_rewrite_enabled?: boolean;
   retrieval_hnsw_ef_search?: number;
+  gemini_api_key?: string;
+  cohere_api_key?: string;
+  openrouter_api_key?: string;
+  groq_api_key?: string;
+  cerebras_api_key?: string;
 }
+

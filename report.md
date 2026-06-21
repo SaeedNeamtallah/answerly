@@ -1,171 +1,336 @@
-# Project Review Report
+# RAGMind Failure Audit Report
 
-Date: 2026-05-01
+Date: 2026-06-20  
+Branch/worktree: dirty local checkout with WhatsApp integration in progress  
+Scope: code-review graph context, repo docs, backend/frontend validation, Docker logs, live API checks, and Chrome browser automation through Python Playwright.
 
-Scope: repository-wide review of backend routes/services/tasks/providers, frontend API/auth flows, runtime scripts, Docker config, and dependency audit results.
+## Executive Summary
 
-## Findings
+The application is running locally, but it is not in a healthy release state.
 
-### High - Fresh document processing can complete without pgvector embeddings
+The highest-impact failures are:
 
-Evidence:
-- `backend/tasks/file_processing.py:281-320` flushes new `Chunk` rows, then calls `vector_db.add_vectors(...)` before the worker session commits those rows.
-- `backend/providers/vectordb/pgvector_provider.py:255-264` opens a separate session and runs `UPDATE chunks SET embedding=... WHERE id = ...`.
+1. Backend tests cannot collect because `backend.routes.auth_mfa` is missing while security regression tests still import it.
+2. Frontend validation is failing: `pnpm lint` has 14 errors and `pnpm typecheck` cannot resolve `qrcode`.
+3. Browser runtime calls are trying to reach `http://backend:8000/conversations`, which only resolves inside Docker, not in a user's browser.
+4. WhatsApp session persistence is wired to the wrong path. Compose mounts `/app/sessions`, but the bridge writes under `/uploads/whatsapp_sessions`.
+5. WhatsApp integration status is split between DB and bridge memory. The DB remains `pending` while the bridge reports `qr_ready`.
+6. Security Center is reachable as a route for a company-admin smoke user and then repeatedly fires forbidden security requests and SSE retries.
+7. The outbox schedulers poll every 2 seconds even when idle, creating noisy logs and avoidable load.
 
-Impact: with the default `pgvector` provider, the separate update transaction cannot see the uncommitted chunk rows. Upload processing can mark an asset `completed` while the new chunks keep `embedding = NULL`, so project queries and bot readiness find no usable context.
+## Evidence Collected
 
-Suggested fix: either store embeddings on the same `AsyncSession`/transaction that created the chunks, or commit chunks before the pgvector update and verify update row counts. Add a regression test that processes a document with pgvector and asserts all created chunks have non-null embeddings.
+- `code-review-graph` incremental refresh completed.
+- Graph risk: 18 changed files, 26 changed symbols/classes, 26 test gaps, overall risk score `0.40`.
+- Architecture warnings: high coupling between `backend-config` and `routes-admin`; large `ui-admin` frontend community.
+- Live containers were up: backend, frontend, worker, scheduler, WhatsApp bridge, Postgres, Redis, Qdrant, Prometheus, Grafana, nginx.
+- Backend health: `GET http://127.0.0.1:8000/health/live` returned `200`.
+- Frontend login: `GET http://127.0.0.1:3001/login` returned `200`.
+- Browser automation used installed Chrome via Python Playwright. A Chrome DevTools MCP tool was not available in this session.
 
-### High - Alembic unknown-revision recovery can silently stamp production databases
+## Critical Findings
 
-Evidence:
-- `backend/database/connection.py:67-95` catches unknown Alembic revision errors, deletes `alembic_version`, stamps the current head, and retries without checking `settings.environment`.
-
-Impact: this is documented as a local/dev recovery behavior, but the code runs in every environment. In production, a bad Alembic stamp could be treated as success while missing migrations are skipped, leaving schema drift hidden until runtime failures or data corruption.
-
-Suggested fix: gate this path to `ENVIRONMENT != production` or behind an explicit one-shot recovery flag. Production should fail closed and require an operator migration/stamp decision.
-
-### High - Client-supplied `X-Forwarded-For` is trusted for rate limiting and login abuse controls
-
-Evidence:
-- `backend/security/middleware.py:121-144`
-- `backend/routes/auth.py:140-142`
-- `backend/security/auth.py:209-211`
-- `docker/docker-compose.yml:157-158` exposes the backend as `8000:8000`.
-
-Impact: direct clients can spoof `X-Forwarded-For` to rotate the apparent IP address. That weakens unauthenticated endpoint throttling and login brute-force controls. This matters more because the backend port is exposed on all interfaces in compose.
-
-Suggested fix: only honor forwarded headers from a configured trusted proxy list, otherwise use `request.client.host`. Prefer binding local compose ports to `127.0.0.1` unless deliberately deploying behind a real proxy.
-
-### High - Telegram outbox messages can be stuck forever in `sending`
+### 1. Backend Test Suite Is Broken At Collection
 
 Evidence:
-- `backend/tasks/telegram_outbox.py:48-56` only selects `delivery_status == "pending"`.
-- `backend/tasks/telegram_outbox.py:90-94` commits `delivery_status = "sending"` before the external Telegram API call.
 
-Impact: if the worker crashes or is killed after the claim commit, the message remains `sending` and will never be selected again. Customer replies can be permanently lost from the delivery loop.
+- `.venv\Scripts\python.exe -m pytest -q backend/tests` fails during collection.
+- Error: `ImportError: cannot import name 'auth_mfa' from 'backend.routes'`.
+- `backend/tests/test_security_regressions.py:16` imports `auth_mfa`.
+- `backend/tests/test_security_regressions.py:194-198` patches and calls `auth_mfa.verify_mfa(...)`.
+- `backend/routes/auth_mfa.py` is absent.
+- `backend/main.py:186-187` registers only `auth` and `auth_oauth`, not an MFA route.
 
-Suggested fix: add a lease timestamp/claim owner and requeue stale `sending` rows, or select both `pending` and expired `sending` messages. Add a test for recovering a stale claimed message.
+Impact:
 
-### High - Dependency audits report known vulnerabilities
+No backend regression suite can run until collection is fixed. This blocks reliable security, auth, and WhatsApp validation.
 
-Evidence:
-- `uvx pip-audit --path .venv\Lib\site-packages` reported:
-  - `fastapi 0.109.0` / `PYSEC-2024-38`, fixed in `0.109.1`
-  - `python-dotenv 1.0.0` / `CVE-2026-28684`, fixed in `1.2.2`
-  - `python-multipart 0.0.6` / multiple advisories, fixed by `0.0.26`
-  - `starlette 0.35.1` / `CVE-2024-47874` and `CVE-2025-54121`, fixed by `0.47.2`
-- `pnpm audit --prod --audit-level moderate` reported `postcss <8.5.10` through `next -> postcss@8.4.31`.
-- Direct requirement lines include `backend/requirements.txt:2`, `backend/requirements.txt:4`, and `backend/requirements.txt:39`.
+Best fix:
 
-Impact: request parsing, framework, env parsing, and CSS serialization dependencies include known security issues.
+Decide whether MFA was intentionally removed or accidentally deleted.
 
-Suggested fix: upgrade FastAPI/Starlette together, bump `python-multipart` and `python-dotenv`, and resolve the Next/PostCSS tree with a Next upgrade or a pnpm override if compatible.
+- If MFA should remain: restore `backend/routes/auth_mfa.py`, register it in `backend/main.py`, and make tests match the current MFA API.
+- If MFA was intentionally removed: delete or rewrite the stale MFA route tests and update `AGENTS.md` because it still describes MFA-enforced privileged access.
 
-### Medium - Legacy frontend defaults to a public API host instead of localhost
+### 2. Frontend Build Readiness Is Broken
 
 Evidence:
-- `frontend/app.js:7`
-- `frontend/login.html:79`
-- `frontend/signup.html:113`
-- `frontend/index.html:897`
-- AGENTS says legacy frontend autodiscovery should default to `http://localhost:8000`.
 
-Impact: users opening the legacy frontend can send login/signup/API traffic to `http://52.188.226.80:8000` unless autodiscovery finds another backend first. This contradicts repo docs and can leak credentials/tokens to the wrong host.
+- `pnpm lint` fails with 14 errors and 48 warnings.
+- Representative lint failures:
+  - `frontend-next/src/app/(admin)/admin/settings/page.tsx:40`: synchronous `setState` in effect.
+  - `frontend-next/src/app/(admin)/admin/settings/page.tsx:59`: `any`.
+  - `frontend-next/src/app/(company)/knowledge-bases/page.tsx:45`: unescaped apostrophe.
+  - `frontend-next/src/app/(company)/security/page.tsx:22,29`: `any`.
+  - `frontend-next/src/app/(company)/whatsapp-bots/[botId]/page.tsx:57`: synchronous `setState` in effect.
+  - `frontend-next/src/components/security/EventsFeed.tsx:53`: `let` should be `const`.
+  - `frontend-next/src/components/security/IncidentDetailsDrawer.tsx:52,70`: `any`.
+  - `frontend-next/src/lib/api/security.ts:19,46`, `frontend-next/src/lib/api/incidents.ts:46`, `frontend-next/src/lib/types/security.ts:11`: `any`.
+- `pnpm typecheck` fails:
+  - `src/app/(company)/whatsapp-bots/[botId]/page.tsx(28,20): Cannot find module 'qrcode' or its corresponding type declarations.`
+- `frontend-next/package.json` declares `qrcode` and `@types/qrcode`, but local `frontend-next/node_modules/qrcode` and `frontend-next/node_modules/@types/qrcode` are missing.
 
-Suggested fix: change hardcoded defaults/placeholders to `http://localhost:8000`, then keep query-string and localStorage overrides for remote deployments.
+Impact:
 
-### Medium - `/stats/` exposes global tenant counts to every authenticated user
+The frontend cannot be treated as build-clean. The WhatsApp detail page is currently typecheck-blocking in the local install.
 
-Evidence:
-- `backend/routes/stats.py:20-33` depends on `get_current_db_user` but counts all `Project`, `Asset`, and `Chunk` rows.
+Best fix:
 
-Impact: any company user can see global platform counts. That violates the AGENTS rule that company SaaS routes should filter by `owner_id == current_user.id`, unless this endpoint is intentionally platform-owner-only.
+Run a clean install from `frontend-next` and commit/update the lockfile if needed:
 
-Suggested fix: either scope counts through `Project.owner_id == current_user.id`, or require `require_platform_owner_access()` and treat it as an admin metric endpoint.
+```powershell
+cd frontend-next
+pnpm install
+pnpm typecheck
+pnpm lint
+```
 
-### Medium - Invalid settings can fall back to insecure defaults
+Then fix the actual lint errors rather than suppressing them. For the QR effect, prefer deriving QR data with React Query/select or a guarded async effect that does not synchronously clear state inside the effect body.
 
-Evidence:
-- `backend/config.py:127-132` defines demo defaults for JWT/admin credentials.
-- `backend/config.py:324-339` catches settings load errors and retries with default settings.
-
-Impact: a malformed `.env` can make the app start with fallback settings instead of failing. If `ENVIRONMENT=production` was only in the bad `.env`, production secret validation is also bypassed.
-
-Suggested fix: fail startup on settings parsing errors, or only allow fallback defaults under an explicit local/dev flag.
-
-### Medium - Local runtime surfaces bind beyond localhost
-
-Evidence:
-- `docker/docker-compose.yml:157-158` publishes backend as `8000:8000`.
-- `docker/backend.Dockerfile:37` runs uvicorn on `0.0.0.0`.
-- `scripts/dev/start.bat:160-162` starts `python -m http.server` without `--bind 127.0.0.1`.
-
-Impact: local backend and frontend can be reachable from the LAN. With signup/login enabled and default local credentials in several services, accidental exposure increases attack surface.
-
-Suggested fix: use `127.0.0.1:8000:8000` for local compose and start the static frontend with `--bind 127.0.0.1`. Keep wider binding only for an explicit deployment profile.
-
-### Medium - Bot fallback messages cannot be cleared through update APIs
+### 3. Browser Runtime Uses Docker-Internal Backend Host
 
 Evidence:
-- `backend/routes/bot_integrations.py:39-47` models `fallback_message` as optional.
-- `backend/routes/bot_integrations.py:169-178` passes `payload.fallback_message` to the service.
-- `backend/services/bot_integration_service.py:202` and `backend/services/bot_integration_service.py:217-218` only update when the value is not `None`.
-- Legacy frontend sends `fallback_message: ... || null` at `frontend/app.js:3512` and `frontend/app.js:4072`.
 
-Impact: clients cannot remove an existing fallback message. Sending JSON `null` is indistinguishable from omitting the field, so the old value stays.
+- Chrome automation with a fresh valid company-admin token loaded protected pages.
+- Browser console/network repeatedly showed:
+  - `http://backend:8000/conversations`
+  - `net::ERR_NAME_NOT_RESOLVED`
+- Affected routes included `/dashboard`, `/conversations`, `/onboarding`, and navigation between company pages.
+- `frontend-next/next.config.ts:7-15` rewrites `/api/*` to `process.env.BACKEND_URL || http://localhost:8000`.
+- `docker/docker-compose.yml:46-54` sets `NEXT_PUBLIC_API_BASE_URL=/api` and `BACKEND_URL=http://backend:8000`.
+- `frontend-next/src/components/security/EventsFeed.tsx:61` and `:121` manually build URLs from `NEXT_PUBLIC_API_BASE_URL`.
 
-Suggested fix: use `payload.model_fields_set` in the route, or pass a sentinel to the service so explicit `null` clears the value.
+Impact:
 
-### Medium - Next bot form wires hidden settings but does not render controls
+Some frontend requests are leaking an internal Docker hostname into browser-side fetches. Browser clients cannot resolve `backend`, so key pages hang, produce console errors, and can fail `networkidle` waits.
 
-Evidence:
-- `frontend-next/src/components/bots/BotFormDrawer.tsx:18-24` includes `show_sources_to_customer` and `human_handoff_enabled`.
-- `frontend-next/src/components/bots/BotFormDrawer.tsx:83-116` renders only name, token, project, and fallback message.
-- Create/update pages pass those hidden values at `frontend-next/src/app/(company)/telegram-bots/page.tsx:35-44` and `frontend-next/src/app/(company)/telegram-bots/[botId]/page.tsx:51-59`.
+Best fix:
 
-Impact: Next.js users cannot configure source visibility or human handoff, despite backend support and frontend payload wiring.
+Keep browser-facing API URLs relative (`/api`) and keep Docker-internal hostnames only in server-side rewrites.
 
-Suggested fix: add explicit controls for both settings in the bot drawer and preserve existing values on edit.
+- Audit all direct `fetch(...)` calls and route them through `apiRequest` or a helper that normalizes `/api`.
+- Never expose `http://backend:8000` through `NEXT_PUBLIC_*`.
+- For SSE/export paths in `EventsFeed`, use `/api/security/events/stream` and `/api/security/events/export`, or a shared `getBrowserApiBaseUrl()` that returns `/api` in browser builds.
+- Rebuild the frontend image after changing env/build args because `NEXT_PUBLIC_*` is baked into client bundles.
 
-### Low - Extra tracked dev script contradicts AGENTS script guidance
-
-Evidence:
-- `scripts/dev/tempCodeRunnerFile.bat` is tracked and duplicates `newstart.bat` behavior.
-- AGENTS says only `setup.bat`, `start.bat`, `stop.bat`, plus the explicit `newstart.bat` exception should exist under `scripts/dev/`.
-
-Impact: future agents/users can pick the wrong script and drift behavior from the supported launch path.
-
-Suggested fix: remove `scripts/dev/tempCodeRunnerFile.bat` from the repo.
-
-### Low - Project graph documentation path is out of sync
+### 4. WhatsApp Session Persistence Is Pointed At The Wrong Path
 
 Evidence:
-- AGENTS references `docs/project-graph.md`.
-- The tracked file is root `project-graph.md`, and `.gitignore:124` ignores that path for new generated output.
 
-Impact: future agents following AGENTS will look in the wrong location or regenerate an ignored root artifact.
+- `docker/docker-compose.yml:296` mounts `../uploads/whatsapp_sessions:/app/sessions`.
+- `whatsapp-bridge/src/whatsappClient.ts:15` uses:
+  - `path.join(__dirname, '../../uploads/whatsapp_sessions')`
+- In the container, compiled `__dirname` is `/app/dist`, so the code resolves to `/uploads/whatsapp_sessions`, not `/app/sessions`.
+- Container inspection showed `/app/sessions` exists but the session directories are under `/uploads/whatsapp_sessions`.
 
-Suggested fix: move the tracked graph to `docs/project-graph.md` or update AGENTS to point to the root file.
+Impact:
 
-### Low - Deprecation warnings remain in backend tests
+Baileys auth state is not using the mounted persistent volume. Sessions may not survive container rebuilds/restarts as intended, violating `specs/007-whatsapp-integration/spec.md` FR-002.
+
+Best fix:
+
+Make the session directory explicit and environment-driven:
+
+```ts
+const sessionsDir = process.env.WHATSAPP_SESSION_DIR || "/app/sessions";
+```
+
+Set `WHATSAPP_SESSION_DIR=/app/sessions` in compose and production infrastructure. Add a bridge health/debug endpoint or startup log showing the resolved session path.
+
+### 5. WhatsApp DB Status Does Not Track Bridge Status
 
 Evidence:
-- `python -m pytest backend/tests` reports:
-  - SQLAlchemy `declarative_base()` deprecation in `backend/database/models.py:17`
-  - Pydantic class-based config deprecations in `backend/routes/documents.py:110` and `backend/routes/projects.py:50`
 
-Impact: not breaking today, but these will become upgrade friction for future SQLAlchemy/Pydantic versions.
+- Created a smoke project and WhatsApp integration under an isolated audit user.
+- `POST /whatsapp-integrations/{id}/connect` returned `200`.
+- `GET /whatsapp-integrations/{id}/session-status` later returned `{"status":"qr_ready","qr":"..."}`.
+- `GET /whatsapp-integrations/{id}` still returned `"status":"pending"`.
+- `backend/services/whatsapp_integration_service.py:48` initializes `status="pending"`.
+- `backend/routes/whatsapp_integrations.py:214-229` reads status from the bridge but does not persist it.
+- `whatsapp-bridge/src/whatsappClient.ts:53-74` updates only in-memory bridge status.
 
-Suggested fix: switch to `sqlalchemy.orm.declarative_base()` and Pydantic `ConfigDict`.
+Impact:
 
-## Validation Run
+The UI and backend API can disagree about integration truth. Lists and dashboards that read the DB can show stale status even when the bridge has a QR ready or is connected/disconnected.
 
-- `.venv\Scripts\python.exe -m pytest backend/tests`: 72 passed, 3 warnings.
-- `pnpm typecheck` in `frontend-next`: passed.
-- `pnpm lint` in `frontend-next`: passed.
-- `python -m pip check`: passed.
-- `.venv\Scripts\python.exe -m pip check`: passed.
-- `pnpm audit --prod --audit-level moderate`: failed with 1 moderate PostCSS advisory.
-- `uvx pip-audit -r backend/requirements.txt`: could not build the isolated audit environment because `pg_config` was missing for `psycopg2-binary`.
-- `uvx pip-audit --path .venv\Lib\site-packages`: completed and found 8 vulnerabilities across 4 packages.
+Best fix:
+
+Introduce a backend status update contract from the bridge to FastAPI:
+
+- On QR ready: persist `status="qr_ready"` or `status="connecting"` plus optional `last_qr_at`.
+- On open: persist `status="connected"`.
+- On close/logged out: persist `status="disconnected"` and `last_error`.
+- Keep QR payload out of the DB unless there is a short-lived encrypted cache requirement.
+
+### 6. WhatsApp Bridge Reconnect Loop Can Run Forever For Unpaired Sessions
+
+Evidence:
+
+- `docker logs ragmind-whatsapp-bridge` repeatedly shows `Error: QR refs attempts ended`.
+- The same old session reconnects continuously:
+  - `Connection closed for session 2398ff62-f930-441e-8f96-849aa46a7999. Reconnecting: true`
+- `whatsapp-bridge/src/whatsappClient.ts:68-72` deletes the in-memory session and reconnects after 5 seconds whenever `shouldReconnect` is true.
+
+Impact:
+
+An abandoned QR flow can create endless reconnect churn and noisy logs. At scale this can become resource waste and makes real bridge failures harder to spot.
+
+Best fix:
+
+Add session lifecycle limits:
+
+- Track QR attempt count and last activity time.
+- Stop reconnecting after a configurable expiry window, e.g. 5-10 minutes unpaired.
+- Persist a backend `last_error`/`disconnected` status when QR expires.
+- Require the user to click "Connect WhatsApp" again to restart a fresh QR session.
+
+### 7. Security Center Is Not Properly Gated In The Company Workspace
+
+Evidence:
+
+- A fresh company-admin smoke user could navigate directly to `/security`.
+- The page rendered `Security Center`.
+- It repeatedly requested:
+  - `/api/security/stats` -> `403`
+  - `/api/security/events?limit=30` -> `403`
+  - `/api/security/events/stream` -> `403`
+- Console repeatedly logged SSE disconnected errors.
+- `frontend-next/src/lib/auth/permissions.ts` says `canAccessSecurityCenter()` is only platform owner, admin, or security engineer.
+- `frontend-next/src/components/layout/Sidebar.tsx` hides the nav item for company admins, but direct route access still renders the page.
+
+Impact:
+
+Users without access see a broken page instead of a clear forbidden state. The SSE retry loop keeps hammering forbidden endpoints.
+
+Best fix:
+
+Apply a route-level guard to `/security`, not just sidebar hiding. If the user lacks security-center access, redirect to `/forbidden` before mounting `OverviewStats`, `EventsFeed`, or `IncidentsTab`.
+
+Also stop SSE retry loops on `401`/`403`; retries should only happen for transient network or `5xx` failures.
+
+### 8. Outbox Schedulers Are Too Aggressive By Default
+
+Evidence:
+
+- Worker logs show Telegram and WhatsApp outbox tasks firing every 2 seconds while claiming zero messages.
+- `backend/celery_app.py:164-171` schedules both outbox tasks from settings.
+- `backend/config.py:327-353` default outbox poll intervals are 2 seconds.
+
+Impact:
+
+This is acceptable for a short local demo, but it creates noisy logs and unnecessary DB/Celery traffic in production, especially as worker count grows.
+
+Best fix:
+
+Raise production defaults or split local/demo defaults from production:
+
+- Local/demo: 2 seconds.
+- Production: 10-30 seconds, or event-driven enqueue for immediate delivery plus slower recovery sweep for stale `sending` rows.
+
+## Medium Findings
+
+### 9. Host Tooling Was Broken Until Node Path Was Repaired
+
+Evidence:
+
+- Initial `pnpm lint` and `pnpm typecheck` failed because `node.exe` was not on PATH.
+- Workaround used `.venv\Lib\site-packages\playwright\driver\node.exe` on PATH.
+
+Impact:
+
+Developer validation commands in `AGENTS.md` can fail misleadingly on this machine.
+
+Best fix:
+
+Install Node.js normally or update local dev scripts to check and report missing Node clearly. Do not rely on Playwright's private driver Node for normal development.
+
+### 10. `python` Alias Is Broken On Host
+
+Evidence:
+
+- `python tools/frontend_backend_binding_audit.py` failed with Microsoft Store alias error.
+- `.venv\Scripts\python.exe tools\frontend_backend_binding_audit.py` passed.
+
+Impact:
+
+Docs that say `python ...` may fail on this Windows machine unless the venv Python is used.
+
+Best fix:
+
+Use `.venv\Scripts\python.exe` in Windows validation docs/scripts, or ensure Python launcher/PATH is configured.
+
+### 11. Security Types Are Duplicated And Drifting
+
+Evidence:
+
+- `frontend-next/src/lib/api/security.ts` defines local `SecurityEvent`/`SecurityStats`.
+- `frontend-next/src/lib/types/security.ts` defines similar but different `SecurityEvent`/`SecurityStats`.
+- Lint errors exist in both files for `Record<string, any>`.
+
+Impact:
+
+Security UI, API clients, and incident components can silently diverge on field shape.
+
+Best fix:
+
+Keep canonical security types in `src/lib/types/security.ts`; API files should import them. Replace `any` metadata with `Record<string, unknown>` or a narrower discriminated metadata type.
+
+## Browser Audit Notes
+
+Chrome automation with a fresh company-admin account confirmed:
+
+- `/knowledge-bases`, `/telegram-bots`, `/whatsapp-bots`, `/smart-chat`, `/account`, and `/security` render top-level routes.
+- Admin routes redirect to `/forbidden` for company-admin users, as expected.
+- Mobile spot checks rendered `/knowledge-bases`, `/telegram-bots`, `/whatsapp-bots`, and `/security`; `/dashboard` timed out waiting for `networkidle` due to unresolved `http://backend:8000/conversations`.
+- The audit clicked safe navigation/menu controls. It intentionally skipped destructive or state-changing actions such as delete, upload, send, connect, save, rotate, reset, logout, and create in the general browser pass.
+
+Because the app had no existing projects/bots/conversations for the fresh user, deep detail pages were only exercised through an isolated smoke WhatsApp integration created for this audit.
+
+## Validation Results
+
+- Backend health: passed.
+- Frontend login HTTP availability: passed.
+- Docker containers: running.
+- Code-review graph refresh: passed.
+- `detect_changes`: risk `0.40`, 26 test gaps.
+- Backend pytest: failed at collection due missing `auth_mfa`.
+- Frontend binding audit: passed with static-page warnings.
+- Frontend lint: failed with 14 errors.
+- Frontend typecheck: failed because `qrcode` package/types are missing from local install.
+- Chrome browser audit: found unresolved `http://backend:8000` requests, security route forbidden loops, and stale-token redirect when using old `auth.json`.
+- WhatsApp smoke API: project create passed, integration create passed, connect passed, session status reached `qr_ready`, DB integration status remained `pending`. The temporary smoke integration and project were deleted after validation.
+
+## Recommended Fix Order
+
+1. Restore or remove MFA route/test expectations so backend tests collect.
+2. Fix frontend dependency install and typecheck failure for `qrcode`.
+3. Fix browser API base leakage: no browser request should target `http://backend:8000`.
+4. Add route-level guard for `/security` and stop SSE retry on 403.
+5. Fix WhatsApp session persistence path to use `/app/sessions`.
+6. Add bridge-to-backend status synchronization for WhatsApp integrations.
+7. Add QR expiry/reconnect limits in the WhatsApp bridge.
+8. Raise production outbox polling intervals or make outbox delivery event-driven plus recovery sweep.
+9. Clean lint errors and reduce duplicated security types.
+10. Add tests for WhatsApp create/connect/status/outbox and frontend route guards.
+
+## Tests To Add
+
+- Backend:
+  - WhatsApp integration create/list/get/update/delete tenant scoping.
+  - WhatsApp connect route handles bridge success/failure.
+  - Bridge status callback updates DB status.
+  - WhatsApp webhook idempotency by message ID.
+  - WhatsApp outbox stale `sending` recovery and bridge failure backoff.
+  - Security route permissions for company admin vs security engineer/platform owner.
+
+- Frontend:
+  - `/security` redirects or forbidden-renders before mounting queries for unauthorized users.
+  - Browser API base is `/api`, never `http://backend:8000`.
+  - WhatsApp detail page renders QR status without typecheck or lint failures.
+  - Mobile smoke for dashboard/conversations once API base is fixed.
+
+- Bridge:
+  - Resolved session path uses `WHATSAPP_SESSION_DIR`.
+  - QR expiry stops reconnect loop.
+  - `/api/sessions/:id/status` returns stable states.
+  - Send endpoint rejects disconnected sessions with a typed error.

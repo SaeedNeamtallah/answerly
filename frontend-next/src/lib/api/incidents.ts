@@ -43,7 +43,7 @@ export const incidentsApi = {
   reopenIncident: (id: number) =>
     apiRequest<Incident>(`/incidents/${id}/reopen`, { method: "POST" }),
 
-  takeAction: (id: number, action_type: string, metadata?: Record<string, any>) =>
+  takeAction: (id: number, action_type: string, metadata?: Record<string, unknown>) =>
     apiRequest<Incident>(`/incidents/${id}/action`, {
       method: "POST",
       body: JSON.stringify({ action_type, metadata }),

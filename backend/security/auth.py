@@ -72,12 +72,20 @@ def _configured_platform_owner_username() -> str:
 
 def get_product_role_for_user(user: User | None) -> str:
     """Return the DB-backed product role used for SaaS authorization."""
-    role = _normalize_role(str(getattr(user, "role", "") or ""))
-    if role == ROLE_PLATFORM_OWNER:
-        return ROLE_PLATFORM_OWNER
-    if role == "security_engineer" or role == "cybersecurity_engineer":
+    role = sanitize_text(
+        str(getattr(user, "role", "") or ""),
+        max_length=64,
+        strip_html=True,
+        allow_newlines=False,
+    ).strip().lower()
+    if role in {
+        ROLE_PLATFORM_OWNER,
+        ROLE_COMPANY_ADMIN,
+        ROLE_SECURITY_ENGINEER,
+        ROLE_CYBERSECURITY_ENGINEER,
+    }:
         return role
-    return role or ROLE_COMPANY_ADMIN
+    return ROLE_COMPANY_ADMIN
 
 
 async def _sync_bootstrap_platform_owner_role(db: AsyncSession, user: User) -> User:

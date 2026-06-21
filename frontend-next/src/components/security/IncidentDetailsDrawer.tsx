@@ -30,7 +30,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { incidentsApi } from "@/lib/api/incidents";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type IncidentAction =
+  | { type: "assign" }
+  | { type: "updateNotes"; meta: string }
+  | { type: "status"; meta: string }
+  | { type: "falsePositive"; meta: boolean }
+  | { type: "reopen" }
+  | { type: "suspend" }
+  | { type: "block" };
 
 export function IncidentDetailsDrawer({
   incidentId,
@@ -49,12 +59,12 @@ export function IncidentDetailsDrawer({
   });
 
   const actionMutation = useMutation({
-    mutationFn: ({ type, meta }: { type: string, meta?: any }) => {
-      switch (type) {
+    mutationFn: (action: IncidentAction) => {
+      switch (action.type) {
         case "assign": return incidentsApi.assignIncident(incidentId);
-        case "updateNotes": return incidentsApi.updateNotes(incidentId, meta);
-        case "status": return incidentsApi.updateStatus(incidentId, meta);
-        case "falsePositive": return incidentsApi.markFalsePositive(incidentId, meta);
+        case "updateNotes": return incidentsApi.updateNotes(incidentId, action.meta);
+        case "status": return incidentsApi.updateStatus(incidentId, action.meta);
+        case "falsePositive": return incidentsApi.markFalsePositive(incidentId, action.meta);
         case "reopen": return incidentsApi.reopenIncident(incidentId);
         case "suspend": return incidentsApi.takeAction(incidentId, "suspend_user", { reason: "Suspicious activity detected", duration_minutes: 60 });
         case "block": return incidentsApi.takeAction(incidentId, "block_user", { reason: "Confirmed malicious behavior" });
@@ -67,7 +77,7 @@ export function IncidentDetailsDrawer({
       onUpdated();
       setNotes("");
     },
-    onError: (err: any) => toast.error(err.message || "Failed to apply action."),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Failed to apply action.")),
   });
 
   return (
