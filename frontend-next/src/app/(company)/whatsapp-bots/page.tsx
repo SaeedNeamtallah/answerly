@@ -36,6 +36,7 @@ export default function WhatsAppBotsPage() {
         name: values.name,
         phone_number: values.phone_number,
         fallback_message: values.fallback_message,
+        system_prompt: values.system_prompt,
         human_handoff_enabled: values.human_handoff_enabled,
         show_sources_to_customer: values.show_sources_to_customer,
       }),

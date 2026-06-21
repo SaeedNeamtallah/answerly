@@ -145,6 +145,7 @@ export default function WhatsAppBotDetailPage() {
         name: values.name,
         project_id: values.project_id,
         fallback_message: values.fallback_message,
+        system_prompt: values.system_prompt,
         show_sources_to_customer: values.show_sources_to_customer,
         human_handoff_enabled: values.human_handoff_enabled,
       }),

@@ -152,6 +152,9 @@ class AnswerService:
         Returns:
             System instruction text
         """
+        if custom_system_prompt and custom_system_prompt.strip():
+            return custom_system_prompt.strip()
+
         if language == "ar":
             return """أنت مساعد احترافي على مستوى الشركات للإجابة بدقة اعتمادًا على سياق المستندات فقط.
 اتّبع القواعد التالية بدقة:
