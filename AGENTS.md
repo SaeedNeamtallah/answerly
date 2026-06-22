@@ -476,6 +476,21 @@ Update immediately when:
 
 Keep updates compact, path-based, and code-grounded.
 
+## Developer Rules & Pitfalls
+
+- **Celery Auto-Reload Issue**:
+  - **Problem**: When changing backend code that runs inside Celery background tasks (such as `whatsapp_query.py`, `telegram_query.py`, or `answer_service.py`), the changes do not take effect immediately because Celery workers do not auto-reload like FastAPI does with `uvicorn --reload`. This leads to confusion where fixes appear not to work.
+  - **Solution/Rule**: Always manually restart the background services using `stop.bat` followed by `newstart.bat` (or `start.bat`) after modifying any code executed by Celery tasks. Do not assume the code is broken if it doesn't run immediately; check if it requires a worker restart first.
+- **Trailing Slash API Redirect Proxy Pitfall**:
+  - **Problem**: In a Dockerized/proxied setup, if the client makes a request to a URL with a trailing slash (e.g. `/api/conversations/`), and the backend (FastAPI/Starlette) has the route registered without a trailing slash (e.g. `/conversations`), the backend responds with a `307 Temporary Redirect` to the canonical URL (e.g., `http://backend:8000/conversations`). The browser client receives this redirect and attempts to fetch from the internal docker hostname `backend:8000`, which is unresolvable outside the container, throwing a `Network/Connection Error: Failed to fetch`.
+  - **Solution/Rule**: Always ensure that frontend API calls constructed with suffix query params do not resolve to paths ending with a trailing slash when the parameters are empty. For example, use `/conversations${suffix}` instead of `/conversations/${suffix}` where suffix might be empty.
+- **Message Language Detection Inconsistency**:
+  - **Problem**: When a bot (Telegram or WhatsApp) replies, the language parameter passed to the LLM query was resolved purely using either the customer's Telegram interface language code (`language_code`) or was hardcoded to `"en"` (for WhatsApp). This meant that if an Arabic customer sent a message to a WhatsApp bot or had their Telegram app interface set to English, the LLM prompt was constructed in English (under the hood), which caused the LLM to either generate answers in English, mix both languages, or reply inappropriately.
+  - **Solution/Rule**: Always detect the language code dynamically from the incoming message content (using simple regex checks for Arabic Unicode range `\u0600-\u06FF` vs English alphabet `a-zA-Z`) before querying the RAG system to ensure the generated system prompt and user query align with the customer's input language.
+- **psycopg2 URL Connection Option Pitfall (ssl=require vs sslmode=require)**:
+  - **Problem**: When SQLAlchemy is used in a synchronous context (such as in Alembic migrations or database initialization) with the `psycopg2` driver, passing a connection string containing `ssl=require` (which is accepted by `asyncpg` and some other drivers) throws a `psycopg2.ProgrammingError: invalid dsn: invalid connection option "ssl"`. This is because `psycopg2` (and the underlying C-library `libpq`) expects `sslmode=require` instead of `ssl=require`.
+  - **Solution/Rule**: In `get_sync_database_url()` in `backend/database/connection.py` and `_sync_database_url()` in `backend/alembic/env.py`, always explicitly check if `ssl=require` is present in the URL query string, and replace it with `sslmode=require` to prevent gunicorn worker boot failures and database connection errors.
+
 ## MCP And Tooling
 
 - Use code-review-graph for repo structure, hotspots, and impact context.

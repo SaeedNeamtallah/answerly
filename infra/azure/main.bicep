@@ -56,6 +56,10 @@ param cohereApiKey string
 param brevoApiKey string
 
 @secure()
+@description('Gemini API key used by the Gemini provider.')
+param geminiApiKey string
+
+@secure()
 @description('Google Client ID for OAuth.')
 param googleClientId string
 
@@ -80,7 +84,7 @@ param workerMaxReplicas int = 3
 var normalizedPrefix = toLower(replace(namePrefix, '_', '-'))
 var uniqueSuffix = uniqueString(resourceGroup().id, normalizedPrefix)
 var apiHostName = 'api.${rootDomain}'
-var webHostName = 'app.${rootDomain}'
+var webHostName = rootDomain
 var acrName = take(toLower(replace('${normalizedPrefix}${uniqueSuffix}acr', '-', '')), 50)
 var storageName = take(toLower(replace('${normalizedPrefix}${uniqueSuffix}st', '-', '')), 24)
 var environmentName = '${normalizedPrefix}-aca-env'
@@ -313,6 +317,10 @@ var backendSecrets = [
     name: 'brevo-api-key'
     value: brevoApiKey
   }
+  {
+    name: 'gemini-api-key'
+    value: geminiApiKey
+  }
 ]
 
 var commonBackendEnv = [
@@ -359,6 +367,10 @@ var commonBackendEnv = [
   {
     name: 'BREVO_API_KEY'
     secretRef: 'brevo-api-key'
+  }
+  {
+    name: 'GEMINI_API_KEY'
+    secretRef: 'gemini-api-key'
   }
   {
     name: 'LLM_PROVIDER'

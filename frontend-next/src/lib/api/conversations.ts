@@ -14,7 +14,7 @@ export function listConversations(params?: Record<string, string | number | bool
   });
 
   const suffix = search.toString() ? `?${search.toString()}` : "";
-  return apiRequest<Conversation[]>(`/conversations/${suffix}`);
+  return apiRequest<Conversation[]>(`/conversations${suffix}`);
 }
 
 export function getConversation(id: string | number) {

@@ -35,11 +35,17 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('mfa_secret', sa.String(length=255), nullable=True))
     op.add_column('users', sa.Column('mfa_enabled', sa.Boolean(), server_default='false', nullable=False))
     op.add_column('users', sa.Column('mfa_recovery_codes', sa.JSON(), nullable=True))
-    op.alter_column('users', 'status',
-               existing_type=sa.VARCHAR(length=32),
-               server_default=None,
-               type_=sa.Enum('ACTIVE', 'BLOCKED', 'SUSPENDED', name='user_account_status', native_enum=False),
-               existing_nullable=False)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = [col["name"] for col in inspector.get_columns("users")]
+    if "status" not in columns:
+        op.add_column('users', sa.Column('status', sa.Enum('ACTIVE', 'BLOCKED', 'SUSPENDED', name='user_account_status', native_enum=False), nullable=False, server_default='ACTIVE'))
+    else:
+        op.alter_column('users', 'status',
+                   existing_type=sa.VARCHAR(length=32),
+                   server_default=None,
+                   type_=sa.Enum('ACTIVE', 'BLOCKED', 'SUSPENDED', name='user_account_status', native_enum=False),
+                   existing_nullable=False)
     # ### end Alembic commands ###
 
 

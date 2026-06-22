@@ -35,9 +35,22 @@ def _mark_generation_status(message: ConversationMessage, status: str, **extra: 
     flag_modified(message, "retrieval_metadata_json")
 
 
-def _language_for_customer(customer: TelegramCustomer | None) -> str:
-    language_code = str(getattr(customer, "language_code", "") or "").lower()
-    return "en" if language_code.startswith("en") else "ar"
+import re
+
+def _detect_language(query_text: str, customer: TelegramCustomer | None) -> str:
+    # If the text has Arabic characters, it is Arabic
+    if re.search(r"[\u0600-\u06FF]", query_text):
+        return "ar"
+    # If the text has English characters, it is English
+    if re.search(r"[a-zA-Z]", query_text):
+        return "en"
+    # Otherwise, fallback to the customer's language code if present
+    if customer:
+        language_code = str(getattr(customer, "language_code", "") or "").lower()
+        if language_code.startswith("en"):
+            return "en"
+    # Default fallback
+    return "ar"
 
 
 async def _claim_customer_message(db: AsyncSession, customer_message_id: int) -> ConversationMessage | None:
@@ -169,7 +182,7 @@ async def _generate_bot_reply(customer_message_id: int) -> dict[str, object]:
             query_service = CustomerBotQueryService()
             conversation_service = ConversationService()
             reply_metadata = {"reply_to_customer_message_id": int(customer_message.id)}
-            language = _language_for_customer(customer)
+            language = _detect_language(str(customer_message.text or ""), customer)
 
             try:
                 answer_result = await query_service.answer(

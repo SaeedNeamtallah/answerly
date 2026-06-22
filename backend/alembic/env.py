@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from logging.config import fileConfig
 from pathlib import Path
@@ -21,10 +21,13 @@ if config.config_file_name is not None:
 
 
 def _sync_database_url() -> str:
-    return settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+    url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+    if "ssl=require" in url:
+        url = url.replace("ssl=require", "sslmode=require")
+    return url
 
 
-config.set_main_option("sqlalchemy.url", _sync_database_url())
+config.set_main_option("sqlalchemy.url", _sync_database_url().replace("%", "%%"))
 target_metadata = Base.metadata
 
 

@@ -63,11 +63,14 @@ async def init_db():
     from sqlalchemy import text
 
     def get_sync_database_url() -> str:
-        return settings.database_url.replace(
+        url = settings.database_url.replace(
             "postgresql+asyncpg://",
             "postgresql+psycopg2://",
             1,
         )
+        if "ssl=require" in url:
+            url = url.replace("ssl=require", "sslmode=require")
+        return url
 
     def run_alembic_upgrade() -> None:
         project_root = Path(__file__).resolve().parents[2]

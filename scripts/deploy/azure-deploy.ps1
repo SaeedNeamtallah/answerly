@@ -81,13 +81,14 @@ function New-ParameterFile {
       authJwtSecretKey = @{ value = (Require-Env "AUTH_JWT_SECRET_KEY") }
       authAdminPassword = @{ value = (Require-Env "AUTH_ADMIN_PASSWORD") }
       botTokenEncryptionKey = @{ value = (Require-Env "BOT_TOKEN_ENCRYPTION_KEY") }
-      groqApiKey = @{ value = (Require-Env "GROQ_API_KEY") }
-      cohereApiKey = @{ value = (Require-Env "COHERE_API_KEY") }
+      groqApiKey = @{ value = $(if ([Environment]::GetEnvironmentVariable("GROQ_API_KEY")) { [Environment]::GetEnvironmentVariable("GROQ_API_KEY") } else { "none" }) }
+      cohereApiKey = @{ value = $(if ([Environment]::GetEnvironmentVariable("COHERE_API_KEY")) { [Environment]::GetEnvironmentVariable("COHERE_API_KEY") } else { "none" }) }
       platformOwnerUsername = @{ value = $platformOwnerValue }
-      llmProvider = @{ value = "groq-llama-3.3-70b-versatile" }
+      llmProvider = @{ value = "gemini" }
       embeddingProvider = @{ value = "cohere" }
-      googleClientId = @{ value = (Require-Env "GOOGLE_CLIENT_ID") }
-      brevoApiKey = @{ value = (Require-Env "BREVO_API_KEY") }
+      googleClientId = @{ value = $(if ([Environment]::GetEnvironmentVariable("GOOGLE_CLIENT_ID")) { [Environment]::GetEnvironmentVariable("GOOGLE_CLIENT_ID") } else { "none" }) }
+      brevoApiKey = @{ value = $(if ([Environment]::GetEnvironmentVariable("BREVO_API_KEY")) { [Environment]::GetEnvironmentVariable("BREVO_API_KEY") } else { "none" }) }
+      geminiApiKey = @{ value = $(if ([Environment]::GetEnvironmentVariable("GEMINI_API_KEY")) { [Environment]::GetEnvironmentVariable("GEMINI_API_KEY") } else { "none" }) }
       answerMaxTokens = @{ value = 1024 }
       apiMaxReplicas = @{ value = 3 }
       workerMaxReplicas = @{ value = 3 }
@@ -182,11 +183,12 @@ function Try-BindHostName {
     [string]$AppName,
     [string]$HostName,
     [string]$DefaultFqdn,
-    [string]$EnvironmentName
+    [string]$EnvironmentName,
+    [string]$ValidationMethod = "CNAME"
   )
 
-  Write-Host "Binding $HostName to $AppName..."
-  Write-Host "DNS prerequisite: create CNAME $HostName -> $DefaultFqdn before running with -BindCustomDomains."
+  Write-Host "Binding $HostName to $AppName using validation method $ValidationMethod..."
+  Write-Host "DNS prerequisite: create CNAME/ALIAS $HostName -> $DefaultFqdn before running with -BindCustomDomains."
   Write-Host "If Azure requests domain ownership validation, add the TXT record it prints for asuid.$HostName."
 
   try {
@@ -215,7 +217,7 @@ function Try-BindHostName {
         --name $EnvironmentName `
         --certificate-name $certificateName `
         --hostname $HostName `
-        --validation-method CNAME `
+        --validation-method $ValidationMethod `
         --query "id" `
         --output tsv
     }
@@ -226,11 +228,11 @@ function Try-BindHostName {
       --hostname $HostName `
       --environment $EnvironmentName `
       --certificate $certificateId `
-      --validation-method CNAME `
+      --validation-method $ValidationMethod `
       --output none
   }
   catch {
-    Write-Warning "Custom domain binding failed for $HostName. Configure the CNAME record and rerun with -BindCustomDomains. $($_.Exception.Message)"
+    Write-Warning "Custom domain binding failed for $HostName. Configure the CNAME/TXT record and rerun with -BindCustomDomains. $($_.Exception.Message)"
   }
 }
 
@@ -298,8 +300,12 @@ $effectiveApiUrl = $finalOutputs.publicWebhookBaseUrl.value
 $effectiveWebUrl = $finalOutputs.effectiveWebOrigin.value
 
 if ($BindCustomDomains) {
-  Try-BindHostName -AppName $apiAppName -HostName $apiCustomHostName -DefaultFqdn $apiDefaultFqdn -EnvironmentName $containerAppEnvironmentName
-  Try-BindHostName -AppName $webAppName -HostName $webCustomHostName -DefaultFqdn $webDefaultFqdn -EnvironmentName $containerAppEnvironmentName
+  $webValidation = "CNAME"
+  if ($webCustomHostName -eq $RootDomain) {
+    $webValidation = "TXT"
+  }
+  Try-BindHostName -AppName $apiAppName -HostName $apiCustomHostName -DefaultFqdn $apiDefaultFqdn -EnvironmentName $containerAppEnvironmentName -ValidationMethod "CNAME"
+  Try-BindHostName -AppName $webAppName -HostName $webCustomHostName -DefaultFqdn $webDefaultFqdn -EnvironmentName $containerAppEnvironmentName -ValidationMethod $webValidation
 }
 
 Write-Host "Checking API liveness on default Container Apps hostname..."
