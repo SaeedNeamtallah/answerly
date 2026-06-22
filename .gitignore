@@ -128,6 +128,7 @@ __pycache__
 # Generated output files
 all_project_code.txt
 server_output.txt
+load_env.ps1
 /project-graph.md
 newplan.md
 tmp/
